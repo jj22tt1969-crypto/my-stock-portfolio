@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 주식 포트폴리오 의사결정 시스템</title>
+    <!-- Google Fonts & Chart.js CDN -->
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="navbar">
+            <div class="logo-area">
+                <span class="logo-icon">⚡</span>
+                <div class="logo-text">
+                    <h1>QUANT AI PORTFOLIO</h1>
+                    <span class="sub-title">외국인 수급 사이클 & AI 투자 의사결정 엔진</span>
+                </div>
+            </div>
+            
+            <!-- Live Market Indices Banner -->
+            <div class="market-bar" id="marketBar">
+                <div class="market-item clickable-index" onclick="openIndexChartModal('KOSPI', '코스피 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스피</span> <span class="m-val" id="kospiVal">-</span></div>
+                <div class="market-item clickable-index" onclick="openIndexChartModal('KOSDAQ', '코스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스닥</span> <span class="m-val" id="kosdaqVal">-</span></div>
+                <div class="market-item clickable-index" onclick="openIndexChartModal('USDKRW', '원/달러 환율')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">USD/KRW</span> <span class="m-val" id="usdVal">-</span></div>
+                <div class="market-item clickable-index" onclick="openIndexChartModal('SP500', 'S&P 500 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">S&P 500</span> <span class="m-val" id="sp500Val">-</span></div>
+                <div class="market-item clickable-index" onclick="openIndexChartModal('NASDAQ', '나스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">나스닥</span> <span class="m-val" id="nasdaqVal">-</span></div>
+
+            </div>
+
+            <div class="nav-actions" id="navActionsGroup">
+                <!-- Theme Switcher Button (Dark Midnight vs Eye-Care Off-White) -->
+                <div class="theme-toggle-container">
+                    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="클릭하여 화면 색상을 다크 모드 또는 눈 피로 감소 회백색 모드로 전환합니다">
+                        <span class="theme-icon" id="themeIcon">🌙</span>
+                        <span class="theme-text" id="themeText">다크 모드</span>
+                    </button>
+                </div>
+                <div class="water-calculator-btn-group">
+                    <button class="btn btn-secondary" onclick="openSimModal()">➕ 물타기 계산기</button>
+                    <div class="tooltip-container">
+                        <span class="tooltip-icon">?</span>
+                        <div class="tooltip-box">
+                            <h4>💡 물타기(추가매수) 계산기란?</h4>
+                            <p>보유 중인 종목의 추가 매수 가격과 수량을 입력하면 매수 후 <strong>변경되는 목표 평단가, 총 투자금액</strong>, 그리고 <strong>원금 회복(손익분기)에 필요한 반등 상승률 단축 효과</strong>를 미리 시뮬레이션해 줍니다.</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="openAddStockModal()">+ 종목 추가</button>
+            </div>
+        </header>
+
+        <!-- Main Layout with Left Vertical Sidebar Bar (STOCK vs ETF) -->
+        <div class="app-body">
+            <!-- Left Side Navigation Bar (2 Bars) -->
+            <aside class="sidebar-nav">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">ASSET PORTFOLIOS</span>
+                </div>
+                <nav class="sidebar-menu">
+                    <button class="nav-item active" id="navStock" onclick="switchAssetType('STOCK')">
+                        <span class="nav-icon">📈</span>
+                        <div class="nav-text">
+                            <span class="nav-label">개별종목 포트폴리오</span>
+                            <span class="nav-sub">STOCK PORTFOLIO</span>
+                        </div>
+                    </button>
+                    <button class="nav-item" id="navEtf" onclick="switchAssetType('ETF')">
+                        <span class="nav-icon">🧺</span>
+                        <div class="nav-text">
+                            <span class="nav-label">ETF 포트폴리오</span>
+                            <span class="nav-sub">ETF PORTFOLIO</span>
+                        </div>
+                    </button>
+                    <button class="nav-item" id="navQna" onclick="switchAssetType('QNA')">
+                        <span class="nav-icon">🤖</span>
+                        <div class="nav-text">
+                            <span class="nav-label">AI Q&A</span>
+                            <span class="nav-sub">AI INTERACTIVE ASSISTANT</span>
+                        </div>
+                    </button>
+                </nav>
+            </aside>
+
+            <!-- Right Main Content Area -->
+            <div class="dashboard-main">
+                <!-- 1. Portfolio Dashboard View (STOCK / ETF) -->
+                <div id="portfolioDashboardView">
+                    <!-- Main Dashboard Header (PORTFOLIO SUMMARY) -->
+                    <section class="summary-section">
+                        <div class="summary-card">
+                            <span class="card-label">총 투자금액</span>
+                            <span class="card-val" id="totalInvested">- 원</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">총 평가금액</span>
+                            <span class="card-val highlight" id="totalEval">- 원</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">총 평가손익</span>
+                            <span class="card-val" id="totalProfitLoss">- 원</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">총 수익률</span>
+                            <span class="card-val" id="totalReturnRate">- %</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">오늘 손익</span>
+                            <span class="card-val" id="todayProfitLoss">- 원</span>
+                        </div>
+                    </section>
+
+                    <!-- Risk & Portfolio Analytics Bar -->
+                    <section class="analytics-bar">
+                        <div class="risk-badge-box">
+                            <span class="badge-title">위험 집중도 평가:</span>
+                            <span class="risk-badge" id="riskLevelBadge">분석 중...</span>
+                            <span class="risk-desc" id="riskDesc"></span>
+                        </div>
+                        <div class="sector-info" id="sectorInfo">
+                            <!-- 업종별 비중 태그들 -->
+                        </div>
+                    </section>
+
+                    <!-- Stock Cards Section -->
+                    <main class="main-content">
+                        <div class="section-title-area">
+                            <h2 id="currentDashboardTitle">📊 개별종목 PORTFOLIO & TODAY ACTION</h2>
+                            <div class="realtime-controls">
+                                <label class="toggle-switch" title="15초마다 실시간 시세를 자동 갱신합니다">
+                                    <input type="checkbox" id="autoRefreshToggle" checked onchange="toggleAutoRefresh(this.checked)">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="refresh-timer" id="refreshTimer">⚡ 실시간 갱신 ON (15s)</span>
+                                <button class="btn-refresh" id="btnRefresh" onclick="manualRefreshPortfolio()" title="즉시 실시간 시세 갱신">
+                                    🔄 실시간 새로고침
+                                </button>
+                                <span class="update-info" id="lastUpdatedInfo">최신 업데이트: -</span>
+                            </div>
+                        </div>
+
+                        <div class="stock-grid" id="stockGrid">
+                            <!-- 동적으로 종목 카드들이 삽입됩니다 -->
+                            <div class="loading-box">포트폴리오 및 외국인/기관 수급 데이터를 분석 중입니다...</div>
+                        </div>
+                    </main>
+                </div>
+
+                <!-- 2. AI Q&A Dashboard View -->
+                <div id="qaDashboardView" style="display: none; width: 100%;">
+                    <div class="qna-dashboard-container">
+                        <!-- Q&A Context Header -->
+                        <div class="qna-header-card">
+                            <div class="qna-header-title">
+                                <h2>🤖 AI Q&A 투자 의사결정 어시스턴트</h2>
+                                <p class="qna-subtitle">개별종목 및 ETF에 대해 수급, 기술적 분석, 공시, 시장 영향에 관한 질문을 입력해보세요.</p>
+                            </div>
+
+                            <!-- Target Context Selector Search -->
+                            <div class="qna-context-bar" style="position: relative;">
+                                <span class="context-label">📌 질문 대상 종목/ETF:</span>
+                                <div class="context-search-box" style="position: relative;">
+                                    <input type="text" id="qaTickerInput" placeholder="종목명 또는 코드 검색 (예: 삼성전자, SK하이닉스, TIGER 미국S&P500)" oninput="handleQaSearch(this.value)" autocomplete="off">
+                                    <span class="context-badge" id="qaTargetBadge">삼성전자 (005930) | KOSPI</span>
+                                    <div id="qaCandidateList" class="qa-candidate-list" style="display: none;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Search Suggestion Tags -->
+                            <div class="quick-tags-row">
+                                <span class="tags-label">빠른 선택:</span>
+                                <button class="tag-btn highlight-tag" onclick="setQaContext('전체 시황', 'MARKET', 'MACRO', 'MARKET', '')" style="background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #38bdf8; font-weight: bold;">🌐 전체 시황 / 매크로</button>
+                                <button class="tag-btn" onclick="setQaContext('삼성전자', '005930')">삼성전자 (005930)</button>
+                                <button class="tag-btn" onclick="setQaContext('SK하이닉스', '000660')">SK하이닉스 (000660)</button>
+                                <button class="tag-btn" onclick="setQaContext('TIGER 미국S&P500', '360750')">TIGER 미국S&P500</button>
+                                <button class="tag-btn" onclick="setQaContext('KODEX 반도체', '091160')">KODEX 반도체</button>
+                            </div>
+
+                            <!-- Government & Financial Platform Main Shortcuts for Login -->
+                            <div class="quick-tags-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                                <span class="tags-label">🏛️ 주요 기관 &amp; 금융 플랫폼 바로가기:</span>
+                                <a href="https://www.fsc.go.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 금융위원회 🔗
+                                </a>
+                                <a href="https://www.fss.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 금융감독원 🔗
+                                </a>
+                                <a href="https://www.bok.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 한국은행 🔗
+                                </a>
+                                <a href="https://saveticker.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(168, 85, 247, 0.12); border-color: #a855f7; color: #c084fc; font-weight: 500;">
+                                    💡 SAVE (세이브) 🔗
+                                </a>
+                                <a href="https://seibro.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(56, 189, 248, 0.12); border-color: #38bdf8; color: #38bdf8; font-weight: 500;">
+                                    📊 SEIBro (세이브로) 🔗
+                                </a>
+                                <a href="https://kr.investing.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.12); border-color: #f59e0b; color: #fbbf24; font-weight: 500;">
+                                    📈 Investing (인베스팅) 🔗
+                                </a>
+                                <a href="https://www.yna.co.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #f87171; font-weight: 500;">
+                                    📰 연합뉴스 🔗
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 📅 주요 경제 이벤트 캘린더 카드 (향후 7일) -->
+                        <div class="calendar-event-card" id="calendarEventCard">
+                            <div class="calendar-card-header">
+                                <div class="calendar-title-row">
+                                    <span class="calendar-icon">📅</span>
+                                    <h3 class="calendar-title">이번 주 주요 경제 이벤트</h3>
+                                    <span class="calendar-period" id="calendarPeriodLabel">로딩 중...</span>
+                                </div>
+                                <div class="calendar-category-tabs" id="calendarCategoryTabs">
+                                    <button class="cal-tab active" onclick="filterCalendarEvents('ALL')">전체</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('미국 경제지표')">🇺🇸 미국 지표</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 경제지표')">🇰🇷 국내 지표</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('빅테크 실적')">🏢 빅테크 실적</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 주요 실적')">🇰🇷 국내 실적</button>
+                                </div>
+                            </div>
+                            <div class="calendar-events-list" id="calendarEventsList">
+                                <div class="calendar-loading">📡 경제 이벤트 일정을 불러오는 중...</div>
+                            </div>
+                        </div>
+
+                        <!-- Question Input Box & Quick Prompts -->
+                        <div class="qna-input-card">
+                            <div class="quick-prompts-row">
+                                <span class="prompts-label">💡 추천 질문:</span>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('최근 글로벌 매크로 동향과 시장 전망은?')">"글로벌 매크로 동향과 시장 전망은?"</button>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('미국 금리 인하 기대감이 국내 증시에 미치는 영향은?')">"미국 금리가 국내 증시에 미치는 영향은?"</button>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('최근 주가가 오른 이유가 뭐야?')">"최근 주가가 오른 이유가 뭐야?"</button>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('최근 외국인이 매수하는 이유는?')">"최근 외국인이 매수하는 이유는?"</button>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('최근 중요한 공시는?')">"최근 중요한 공시는?"</button>
+                                <button class="prompt-chip" onclick="selectQuickPrompt('정부 정책 수혜가 있나?')">"정부 정책 수혜가 있나?"</button>
+                            </div>
+
+                            <div class="qna-input-form">
+                                <textarea id="qaQuestionText" placeholder="질문을 입력하세요... (예: 최근 외국인 수급이 개선되는 이유와 지지선 위치는?)" rows="3"></textarea>
+                                <button class="btn btn-primary btn-qna-submit" onclick="submitQaQuestion()">
+                                    ⚡ AI 질문하기
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Structured AI Answer UI Component (6 Sections) -->
+                        <div class="qna-answer-card" id="qaAnswerCard">
+                            <div class="answer-header">
+                                <div class="answer-target-info">
+                                    <span class="ai-badge">🤖 AI ANSWER REPORT</span>
+                                    <span class="action-opinion-badge" id="ansActionOpinion">관망</span>
+                                    <h3 id="ansTargetTitle">삼성전자 (005930) 수급 & 주가 동향 분석</h3>
+                                </div>
+                                <div class="confidence-box">
+                                    <span class="conf-lbl">최종 신뢰도</span>
+                                    <span class="conf-badge high" id="ansConfidence">높음</span>
+                                </div>
+                            </div>
+
+                            <!-- 기존 앱 보유 데이터 & 퀀트 지표 카드 (STEP 8) -->
+                            <div id="qaAppDataContainer" class="app-data-card" style="margin-bottom: 12px;">
+                                <div class="app-data-row" id="appDataRow">
+                                    <span class="app-data-badge">📱 [앱 포트폴리오] 조회 중...</span>
+                                </div>
+                            </div>
+
+                            <!-- 교차검증 결과 브리핑 카드 (STEP 7) -->
+                            <div id="qaCrossValidationContainer" class="cross-val-card" style="margin-bottom: 12px;">
+                                <div class="cross-val-status-badge status-success" id="crossValStatusBadge">
+                                    🛡️ 독립 출처 교차 검증 완료 (일치)
+                                </div>
+                            </div>
+
+                            <div class="answer-grid">
+                                <!-- 1. 핵심 답변 (Executive Summary Answer) -->
+                                <div class="ans-section-box full-width">
+                                    <h4>📝 핵심 답변 (Executive Summary)</h4>
+                                    <div class="ans-content" id="ansText">
+                                        삼성전자는 최근 반도체 업항 회복 기대감과 외국인의 지속적인 순매수세로 강한 지지대를 형성하고 있습니다.
+                                    </div>
+                                </div>
+
+                                <!-- 2. 확인된 사실 (Verified Facts) -->
+                                <div class="ans-section-box">
+                                    <h4>✅ 확인된 사실 (Verified Facts)</h4>
+                                    <ul class="fact-list" id="ansFacts">
+                                        <li>최근 5일간 외국인 순매수 우위 흐름 유지</li>
+                                    </ul>
+                                </div>
+
+                                <!-- 3. AI 분석 (AI Quantitative Analysis) -->
+                                <div class="ans-section-box">
+                                    <h4>📊 AI 수급 &amp; 기술적 분석 (AI Analysis)</h4>
+                                    <div class="ans-analysis-content" id="ansAnalysis">
+                                        <p>• <strong>FFCS 수급 사이클:</strong> 수급 엔진 분석 결과 <code>[매집/보유]</code> 지표 유지.</p>
+                                    </div>
+                                </div>
+
+                                <!-- 4. 불확실한 부분 및 리스크 (Uncertainties & Risk) -->
+                                <div class="ans-section-box full-width">
+                                    <h4>⚠️ 불확실한 부분 및 리스크 (Uncertainties &amp; Risk)</h4>
+                                    <div class="ans-caution-content" id="ansCaution">
+                                        단기 매크로 환율 변동성 및 글로벌 지수 조정 가능성이 있으므로 모니터링이 필요합니다.
+                                    </div>
+                                </div>
+
+                                <!-- 5. 출처 및 근거 자료 인용 (STEP 5 — Citations System) -->
+                                <div class="ans-section-box full-width citation-section" style="margin-top: 15px;">
+                                    <div class="citation-header">
+                                        <h4>📌 근거 자료 출처 &amp; 인용 (Citations System)</h4>
+                                        <span class="citation-sub">AI 답변의 모든 주장 및 수치는 수집된 공식 공시 및 실시간 뉴스에 근거합니다.</span>
+                                    </div>
+                                    <div id="qaCitationContainer" class="qna-citation-container">
+                                        <div class="loading-box" style="padding: 12px; font-size: 13px;">근거자료 및 출처 인용 목록을 생성하고 있습니다...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. 종목 상세 차트 & 종합 분석 모달 -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modalStockTitle">삼성전자 (005930) 상세 수급 & 차트</h3>
+                    <span class="modal-sub" id="modalStockSub"></span>
+                </div>
+                <button class="close-btn" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Action Highlight Card -->
+                <div class="modal-action-box" id="modalActionBox">
+                    <div class="action-top">
+                        <span class="action-tag" id="modalActionTag">HOLD</span>
+                        <div class="score-pills">
+                            <span class="pill">FFCS: <strong id="modalFfcs">0</strong>점</span>
+                            <span class="pill">Buy Score: <strong id="modalBuyScore">0</strong>점</span>
+                            <span class="pill">Sell Score: <strong id="modalSellScore">0</strong>점</span>
+                            <span class="pill">Water Score: <strong id="modalWaterScore">0</strong>점</span>
+                        </div>
+                    </div>
+                    <div class="action-reasons">
+                        <h4>💡 AI 판단 주요 근거 ("왜 그렇게 판단했는가?")</h4>
+                        <ul id="modalReasonList"></ul>
+                    </div>
+                </div>
+
+                <!-- Combined Chart -->
+                <div class="chart-container">
+                    <canvas id="stockDetailChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 종목 추가 모달 -->
+    <div class="modal-overlay" id="addStockModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>+ 포트폴리오 종목 추가</h3>
+                <button class="close-btn" onclick="closeAddStockModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addStockForm" onsubmit="handleAddStock(event)">
+                    <div class="form-group">
+                        <label>자산 분류</label>
+                        <div class="asset-type-radio-group" style="display: flex; gap: 20px; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #38bdf8; font-weight: 600;">
+                                <input type="radio" name="addAssetType" value="STOCK" checked style="accent-color: #38bdf8;"> 📈 개별종목
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #a855f7; font-weight: 600;">
+                                <input type="radio" name="addAssetType" value="ETF" style="accent-color: #a855f7;"> 🧺 ETF
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>시장 구분</label>
+                        <select id="addMarketInput" style="background: rgba(15, 23, 42, 0.8); color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 12px; border-radius: 8px; width: 100%; font-weight: 600;">
+                            <option value="KOSPI">🟢 KOSPI (코스피)</option>
+                            <option value="KOSDAQ">🔵 KOSDAQ (코스닥)</option>
+                            <option value="ETF">🟣 ETF (상장지수펀드)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="position: relative;">
+                        <label>종목명 또는 종목코드</label>
+                        <input type="text" id="addTickerInput" placeholder="예: 삼성전자(005930) 또는 KODEX 200(069500)" autocomplete="off" required>
+                        <div id="addTickerSuggestions" class="suggestions-dropdown" style="display:none;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>평균매수가 (원)</label>
+                        <input type="number" id="addPriceInput" placeholder="예: 70000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>보유수량 (주)</label>
+                        <input type="number" id="addQtyInput" placeholder="예: 100" required>
+                    </div>
+                    <div class="form-group">
+                        <label>매수일 (선택)</label>
+                        <input type="date" id="addDateInput">
+                    </div>
+                    <div class="form-group">
+                        <label>투자 목적</label>
+                        <select id="addPurposeInput">
+                            <option value="장기투자">장기투자</option>
+                            <option value="단기스윙">단기스윙</option>
+                            <option value="배당">배당</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>업종 선택</label>
+                        <select id="addSectorInput" style="background: rgba(15, 23, 42, 0.8); color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 12px; border-radius: 8px; width: 100%;">
+                            <option value="반도체">💻 반도체</option>
+                            <option value="2차전지/배터리">🔋 2차전지 / 배터리</option>
+                            <option value="자동차/모빌리티">🚗 자동차 / 모빌리티</option>
+                            <option value="IT/인터넷">🌐 IT / 인터넷 / 플랫폼</option>
+                            <option value="바이오/제약">🧬 바이오 / 제약</option>
+                            <option value="금융/지주">🏦 금융 / 지주 / 증권</option>
+                            <option value="화학/소재">🧪 화학 / 소재</option>
+                            <option value="조선/중공업">🚢 조선 / 중공업</option>
+                            <option value="엔터/미디어">🎬 엔터 / 미디어 / 게임</option>
+                            <option value="건설/엔지니어링">🏗️ 건설 / 엔지니어링</option>
+                            <option value="기타" selected>📁 기타 / 일반</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">포트폴리오에 저장</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 추가매수(물타기) 시뮬레이션 모달 -->
+    <div class="modal-overlay" id="simModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3>➕ 추가매수 (물타기) 시뮬레이션</h3>
+                    <div class="tooltip-container">
+                        <span class="tooltip-icon">?</span>
+                        <div class="tooltip-box">
+                            <h4>💡 물타기(추가매수) 계산기란?</h4>
+                            <p>추가 매수를 진행할 때 변경될 평균 단가를 계산하고, 원금 회복까지 필요한 주가 반등 비율이 얼마나 단축되는지 알려주는 시뮬레이터입니다.</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="close-btn" onclick="closeSimModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="simForm" onsubmit="handleSimulateAddBuy(event)">
+                    <div class="form-group">
+                        <label>대상 종목 선택</label>
+                        <select id="simStockSelect" onchange="onSimStockChange()">
+                            <!-- 동적 채움 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>추가매수가 (원)</label>
+                        <input type="number" id="simPriceInput" placeholder="예: 65000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>추가 수량 (주)</label>
+                        <input type="number" id="simQtyInput" placeholder="예: 50" required>
+                    </div>
+                    <button type="submit" class="btn btn-secondary btn-block">새 평단가 & 원금회복률 계산</button>
+                </form>
+
+                <div class="sim-result-box" id="simResultBox" style="display: none;">
+                    <h4>📊 시뮬레이션 계산 결과</h4>
+                    <div class="sim-res-row">
+                        <span>현재가 대비 기존 원금회복 상승필요폭:</span>
+                        <strong id="simPrevRate" class="text-danger">0%</strong>
+                    </div>
+                    <div class="sim-res-row">
+                        <span>새로운 평균매수가:</span>
+                        <strong id="simNewAvg">0원</strong>
+                    </div>
+                    <div class="sim-res-row">
+                        <span>물타기 후 원금회복 상승필요폭:</span>
+                        <strong id="simNewRate" class="text-success">0%</strong>
+                    </div>
+                    <div class="sim-res-row highlight-box">
+                        <span>회복 필요 상승폭 단축 효과:</span>
+                        <strong id="simImprovement" class="text-primary">+0%p 단축</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 지수/환율 6개월 추이 차트 모달 -->
+    <div class="modal-overlay" id="indexChartModal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 id="indexModalTitle">지수 6개월 추이 차트</h3>
+                    <span class="modal-sub" id="indexModalSub">최저: - | 최고: - | 기간 변동: -</span>
+                </div>
+                <button class="close-btn" onclick="closeIndexChartModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-container" style="height: 380px;">
+                    <canvas id="indexHistoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 개별 종목 6개월 가격/추세선/거래량/MFI 3단 차트 모달 -->
+    <div class="modal-overlay" id="stockHistoryModal">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <div>
+                    <h3 id="stockHistoryTitle">종목 6개월 추세선 & MFI 분석</h3>
+                    <span class="modal-sub">이동평균 추세선(MA5/20/60), 거래량 및 MFI(Money Flow Index 자금흐름지수) 분석</span>
+                </div>
+                <div class="timeframe-tab-group">
+                    <button class="timeframe-btn active" id="tfBtnDay" onclick="changeStockTimeframe('day')">📅 일간</button>
+                    <button class="timeframe-btn" id="tfBtnMonth" onclick="changeStockTimeframe('month')">🗓️ 월간</button>
+                </div>
+                <button class="close-btn" onclick="closeStockHistoryModal()">&times;</button>
+            </div>
+            <div class="modal-body multi-chart-body">
+                <!-- 1. 주가 & 이동평균 추세선 차트 -->
+                <div class="sub-chart-box">
+                    <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 6px;">📈 주가 & 이동평균 추세선 (MA5 / MA20 / MA60)</h4>
+                    <div class="chart-container" style="height: 230px; position: relative;">
+                        <canvas id="stockPriceTrendChart" height="230"></canvas>
+                    </div>
+                </div>
+
+                <!-- 2. 거래량 차트 -->
+                <div class="sub-chart-box">
+                    <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 6px;">📊 거래량 (Volume)</h4>
+                    <div class="chart-container" style="height: 150px; position: relative;">
+                        <canvas id="stockVolumeChart" height="150"></canvas>
+                    </div>
+                </div>
+
+                <!-- 3. MFI (Money Flow Index) 차트 -->
+                <div class="sub-chart-box">
+                    <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 6px;">🌊 MFI (Money Flow Index - 자금흐름지수 14일) <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">(80 이상 과매수, 20 이하 과매도)</span></h4>
+                    <div class="chart-container" style="height: 150px; position: relative;">
+                        <canvas id="stockMfiChart" height="150"></canvas>
+                    </div>
+                </div>
+
+                <!-- 4. RMI (Relative Momentum Index) 차트 -->
+                <div class="sub-chart-box">
+                    <h4 style="font-size: 13px; color: #a855f7; margin-bottom: 6px;">🎯 RMI (Relative Momentum Index - 상대모멘텀지수 14일, 4일간격) <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">(70 이상 과매수, 30 이하 과매도)</span></h4>
+                    <div class="chart-container" style="height: 150px; position: relative;">
+                        <canvas id="stockRmiChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 개별 종목 매입단가 & 보유수량 수정 모달 -->
+    <div class="modal-overlay" id="editStockModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ 종목 정보 수정</h3>
+                <button class="close-btn" onclick="closeEditStockModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editStockForm" onsubmit="event.preventDefault(); submitEditStock();">
+                    <input type="hidden" id="editItemId">
+                    <div class="form-group">
+                        <label>종목명</label>
+                        <input type="text" id="editStockName" readonly style="background: rgba(255,255,255,0.05); color: #94a3b8; cursor: not-allowed;">
+                    </div>
+                    <div class="form-group">
+                        <label for="editAvgPrice">평균 매수가 (원)</label>
+                        <input type="number" id="editAvgPrice" step="any" required placeholder="예: 70000">
+                    </div>
+                    <div class="form-group">
+                        <label for="editQuantity">보유 수량 (주)</label>
+                        <input type="number" id="editQuantity" required min="1" placeholder="예: 100">
+                    </div>
+                    <div class="form-group">
+                        <label for="editBuyDate">매수일</label>
+                        <input type="date" id="editBuyDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="editPurpose">투자 목적</label>
+                        <select id="editPurpose">
+                            <option value="장기투자">장기투자</option>
+                            <option value="스윙">스윙</option>
+                            <option value="단기매매">단기매매</option>
+                            <option value="배당">배당</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editSector">업종 (섹터)</label>
+                        <input type="text" id="editSector" placeholder="예: 반도체, 자동차, IT서비스, 금융">
+                    </div>
+                    <div class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditStockModal()">취소</button>
+                        <button type="submit" class="btn btn-primary">수정 저장</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
