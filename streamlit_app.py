@@ -108,21 +108,24 @@ market_data = load_market_overview()
 col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 
 indices_config = [
-    ("KOSPI", "코스피", col_m1),
-    ("KOSDAQ", "코스닥", col_m2),
-    ("USDKRW", "USD/KRW", col_m3),
-    ("SP500", "S&P 500", col_m4),
-    ("NASDAQ", "나스닥", col_m5)
+    ("kospi", "코스피", col_m1),
+    ("kosdaq", "코스닥", col_m2),
+    ("exchange_rate", "USD/KRW", col_m3),
+    ("sp500", "S&P 500", col_m4),
+    ("nasdaq", "나스닥", col_m5)
 ]
+
+indices_dict = market_data.get("indices", {}) if isinstance(market_data, dict) else {}
 
 for key, label, col in indices_config:
     with col:
-        if key in market_data and market_data[key].get("price"):
-            item = market_data[key]
-            price_str = f"{item['price']:,}"
-            change_rate = item.get('change_rate', 0.0)
+        if key in indices_dict and indices_dict[key].get("value"):
+            item = indices_dict[key]
+            val = item['value']
+            price_str = f"{val:,.2f}" if isinstance(val, float) else f"{val:,}"
+            change_rate = item.get('rate', 0.0)
             change_str = f"{'+' if change_rate > 0 else ''}{change_rate:.2f}%"
-            delta_color = "normal" if change_rate == 0 else ("inverse" if key == "USDKRW" and change_rate > 0 else "normal")
+            delta_color = "normal" if change_rate == 0 else ("inverse" if key == "exchange_rate" and change_rate > 0 else "normal")
             st.metric(label=label, value=price_str, delta=change_str, delta_color=delta_color)
         else:
             st.metric(label=label, value="-", delta="-")
@@ -132,10 +135,10 @@ with st.expander("📈 주요 시장 지수 및 환율 6개월 추이 차트 보
     sel_idx = st.selectbox("지수 선택", ["KOSPI", "KOSDAQ", "USDKRW", "SP500", "NASDAQ"])
     if sel_idx:
         hist = fetch_market_index_history(sel_idx, count=180)
-        if hist.get("dates"):
+        if hist.get("status") == "success" and hist.get("dates") and hist.get("closes"):
             fig_idx = go.Figure()
             fig_idx.add_trace(go.Scatter(
-                x=hist["dates"], y=hist["prices"],
+                x=hist["dates"], y=hist["closes"],
                 mode='lines', name=sel_idx,
                 line=dict(color='#00E5FF', width=2)
             ))
