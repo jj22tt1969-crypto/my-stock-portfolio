@@ -130,10 +130,14 @@ body {
 }
 
 .sidebar-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: var(--text-secondary);
+    display: block;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
 }
 
 .sidebar-menu {
@@ -2701,6 +2705,1232 @@ input:checked + .slider:before {
 
 [data-theme="light"] .btn-delete:hover {
     color: #dc2626 !important;
+}
+
+/* ==========================================================================
+   QUANT AI PORTFOLIO — Responsive Design System & Mobile Optimization
+   ========================================================================== */
+
+/* Global Touch & Overflow Control (가로 스크롤 방지 및 44px 터치 타깃) */
+html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+    touch-action: manipulation;
+}
+
+* {
+    word-break: break-word;
+}
+
+button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip {
+    min-height: 44px;
+}
+
+.mobile-bottom-nav {
+    display: none;
+}
+
+.accordion-toggle-bar {
+    display: none;
+}
+
+.card-accordion-content {
+    display: block;
+}
+
+.card-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-action-btns {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.btn-edit {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    transition: all 0.2s;
+}
+
+.btn-delete {
+    min-height: 44px;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+.btn-detail {
+    min-height: 44px;
+    padding: 6px 14px;
+}
+
+/* ==========================================================================
+   MEDIA QUERIES (Breakpoints: Mobile < 768px, Tablet 768-1023px, Desktop 1024-1439px, Large Desktop ≥ 1440px)
+   ========================================================================== */
+
+/* --- 1. Large Desktop (≥ 1440px) --- */
+@media (min-width: 1440px) {
+    .app-container {
+        max-width: 1540px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .stock-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+    }
+}
+
+/* --- 2. Desktop (1024px ~ 1439px) --- */
+@media (min-width: 1024px) and (max-width: 1439px) {
+    .app-container {
+        max-width: 100%;
+        padding: 16px;
+    }
+    .sidebar-nav {
+        width: 220px;
+        min-width: 220px;
+    }
+    .stock-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+}
+
+/* --- 3. Tablet (768px ~ 1023px) --- */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .app-container {
+        max-width: 100%;
+        padding: 14px;
+    }
+    .app-body {
+        gap: 14px;
+    }
+    .sidebar-nav {
+        width: 200px;
+        min-width: 200px;
+        padding: 14px 10px;
+    }
+    .summary-section {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .stock-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+    }
+    .navbar {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .market-bar {
+        overflow-x: auto;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+}
+
+/* --- 4. Mobile (< 768px) --- */
+@media (max-width: 767px) {
+    body {
+        padding-bottom: 70px; /* Mobile Bottom Nav 공간 확보 */
+    }
+
+    .app-container {
+        padding: 10px 8px;
+        max-width: 100%;
+    }
+
+    /* Top Navbar Mobile Optimization */
+    .navbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px 10px;
+    }
+
+    .logo-area {
+        justify-content: center;
+    }
+
+    .logo-text h1 {
+        font-size: 18px;
+    }
+
+    .logo-text .sub-title {
+        font-size: 10px;
+    }
+
+    /* Live Market Banner Horizontal Scroll */
+    .market-bar {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding: 8px;
+        gap: 10px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .market-bar::-webkit-scrollbar {
+        display: none;
+    }
+    .market-item {
+        flex: 0 0 auto;
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+
+    .nav-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .theme-toggle-btn, .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+        font-size: 12px;
+        padding: 8px 10px;
+        min-height: 44px;
+    }
+
+    /* Hide PC Left Sidebar in Mobile */
+    .sidebar-nav {
+        display: none !important;
+    }
+
+    .dashboard-main {
+        width: 100%;
+    }
+
+    /* Portfolio Summary Mobile 2-Column Cards */
+    .summary-section {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .summary-card {
+        padding: 10px 12px;
+    }
+
+    .summary-card .card-label {
+        font-size: 11px;
+    }
+
+    .summary-card .card-val {
+        font-size: 15px;
+    }
+
+    /* Risk & Analytics Bar Mobile */
+    .analytics-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .sector-info {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    /* Section Title Controls */
+    .section-title-area {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .realtime-controls {
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+    }
+
+    /* Stock Cards Single Column Mobile (< 768px) */
+    .stock-grid {
+        display: grid;
+        grid-template-columns: 1fr !important;
+        gap: 14px;
+    }
+
+    .stock-card {
+        padding: 14px;
+        border-radius: 12px;
+    }
+
+/* TODAY ACTION Hero Banner (Card Top Banner) */
+.today-action-hero-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.hero-action-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.hero-action-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+}
+
+.hero-action-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hero-ffcs-pill {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hero-ffcs-pill strong {
+    color: var(--accent-cyan);
+    font-weight: 700;
+}
+
+.stock-name-text {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+/* ==========================================
+   Mobile Responsive Media Queries (< 768px)
+   ========================================== */
+@media (max-width: 768px) {
+    body {
+        min-height: 100dvh;
+    }
+
+    .app-container {
+        padding: 10px;
+        padding-bottom: 84px; /* 하단 탭 바 가림 방지 */
+        min-height: 100dvh;
+    }
+
+    /* Hide PC Sidebar, enable Bottom Nav */
+    .sidebar-nav {
+        display: none;
+    }
+
+    .navbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .logo-area {
+        justify-content: space-between;
+    }
+
+    .nav-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .market-bar {
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .market-item {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        font-size: 12px;
+        min-height: 44px;
+    }
+
+    .summary-section {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .summary-card {
+        padding: 12px;
+    }
+
+    .summary-card .card-val {
+        font-size: 16px;
+    }
+
+    .analytics-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .section-title-area {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .realtime-controls {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .stock-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .stock-card {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .stock-price-grid {
+        width: 100%;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+
+    /* Accordion Toggle on Mobile */
+    .accordion-toggle-bar {
+        display: block;
+        margin: 10px 0 6px 0;
+    }
+
+    .btn-accordion-toggle {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+        color: var(--text-secondary);
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        min-height: 44px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .card-accordion-content {
+        display: none; /* 접혀있는 상태 기본 */
+    }
+
+    .card-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .card-footer .btn-detail {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+        min-height: 44px;
+    }
+
+    .footer-action-btns {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+
+    .footer-action-btns .btn-edit,
+    .footer-action-btns .btn-delete {
+        flex: 1;
+        text-align: center;
+        justify-content: center;
+        min-height: 44px;
+    }
+
+    /* Mobile Bottom Navigation Bar (Fixed at bottom) */
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 62px;
+        background: var(--card-bg-solid);
+        border-top: 1px solid var(--card-border);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+        z-index: 9999;
+        backdrop-filter: blur(16px);
+        justify-content: space-around;
+        align-items: center;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .mobile-nav-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 6px 0;
+        min-height: 48px;
+        transition: all 0.2s;
+    }
+
+    .mobile-nav-btn .m-nav-icon {
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .mobile-nav-btn .m-nav-label {
+        font-size: 11px;
+        font-weight: 600;
+        margin-top: 3px;
+    }
+
+    .mobile-nav-btn.active {
+        color: #38bdf8;
+    }
+
+    .mobile-nav-btn.active .m-nav-label {
+        color: #38bdf8;
+        font-weight: 700;
+    }
+
+    /* AI Q&A Mobile Messenger Interface */
+    .qna-dashboard-container {
+        padding: 0;
+    }
+
+    .qna-header-card {
+        padding: 14px;
+    }
+
+    .qna-context-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .quick-tags-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .qna-input-card {
+        padding: 12px;
+    }
+
+    .qna-input-form {
+        flex-direction: column;
+    }
+
+    .qna-input-form textarea {
+        width: 100%;
+        min-height: 74px;
+        font-size: 14px;
+    }
+
+    .btn-qna-submit {
+        width: 100%;
+        min-height: 48px;
+    }
+
+    .answer-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Touch target expansion for buttons and prompts */
+    .prompt-chip, .tag-btn, .cal-tab {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Modals Responsive & Bottom Sheet for Mobile */
+    .modal-overlay {
+        padding: 10px;
+        align-items: flex-end; /* Mobile Bottom Sheet */
+    }
+
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 90dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+        overflow-y: auto !important;
+        margin: 0 !important;
+    }
+
+    .modal-body {
+        max-height: calc(90dvh - 70px);
+        overflow-y: auto;
+    }
+
+    .chart-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        position: relative !important;
+    }
+
+    .chart-container canvas {
+        max-width: 100% !important;
+    }
+}
+
+/* ==========================================
+   PWA Automatic Update Toast Component
+   ========================================== */
+.pwa-update-toast {
+    position: fixed;
+    bottom: 74px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+    border: 1px solid var(--accent-cyan);
+    box-shadow: 0 8px 32px rgba(6, 182, 212, 0.3);
+    padding: 12px 20px;
+    border-radius: 50px;
+    backdrop-filter: blur(12px);
+    animation: pwaSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 90vw;
+}
+
+@keyframes pwaSlideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.pwa-toast-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pwa-toast-icon {
+    font-size: 18px;
+}
+
+.pwa-toast-msg {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.btn-pwa-reload {
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    color: #ffffff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-pwa-reload:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 10px rgba(6, 182, 212, 0.4);
+}
+
+/* 대제목 & Inline 아코디언 버튼 바 */
+.quant-report-container {
+    margin-top: 14px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+
+.quant-report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.quant-report-main-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    letter-spacing: 0.2px;
+}
+
+/* 대제목 바로 오른쪽에 붙는 Inline 아코디언 버튼 */
+.btn-accordion-inline {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-accordion-inline:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: #38bdf8;
+    transform: translateY(-1px);
+}
+
+/* 카드 내부 2컬럼 균등 분할 그리드 */
+.card-body-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .card-body-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}
+
+/* 2차 하위 섹션 (Hierarchy 2 Depth) */
+.quant-sub-section {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+}
+
+.quant-sub-section.timing-sub-section {
+    border-color: rgba(168, 85, 247, 0.35);
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.8), rgba(24, 16, 44, 0.6));
+    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.12);
+}
+
+.quant-sub-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #38bdf8;
+    margin-top: 0;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.quant-sub-title.text-purple {
+    color: #c084fc;
+}
+
+/* 핀테크 전문 금융 단말기 스타일 시세 카드 */
+.fintech-price-card {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.85) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 220px;
+}
+
+.fintech-price-card:hover {
+    border-color: #38bdf8;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.25);
+}
+
+.fpc-item.cur-price-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.fpc-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.3px;
+}
+
+.fpc-val.cur-price-text {
+    font-size: 21px;
+    font-weight: 800;
+    color: #38bdf8;
+    filter: drop-shadow(0 2px 6px rgba(56, 189, 248, 0.3));
+    line-height: 1.2;
+    margin-top: 2px;
+}
+
+.fpc-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 8px 0;
+}
+
+.fpc-sub-grid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fpc-sub-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.fpc-sub-item:last-child {
+    align-items: flex-end;
+}
+
+.fpc-sub-label {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.fpc-sub-val {
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-top: 1px;
+}
+
+/* 매매 타이밍 배지 및 상세 사유 스타일 */
+.timing-header-flex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.timing-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.timing-badge.BUY {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid #10b981;
+    color: #34d399;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+}
+
+.timing-badge.AVERAGE {
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid #38bdf8;
+    color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+.timing-badge.HOLD {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid #f59e0b;
+    color: #fbbf24;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.timing-badge.REDUCE {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid #ef4444;
+    color: #f87171;
+}
+
+.timing-badge.TAKE_PROFIT {
+    background: rgba(220, 38, 38, 0.25);
+    border: 1px solid #dc2626;
+    color: #fca5a5;
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.35);
+}
+
+.timing-guide-banner {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    padding: 7px 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    word-break: keep-all;
+}
+
+.timing-reasons-list-box {
+    margin-top: 4px;
+}
+
+.timing-reasons-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #c084fc;
+    margin-bottom: 6px;
+}
+
+.timing-reasons-ul, .quant-reasons-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.timing-reasons-ul li, .quant-reasons-ul li {
+    font-size: 11.5px;
+    color: #cbd5e1;
+    line-height: 1.6;
+    position: relative;
+    padding-left: 14px;
+    margin-bottom: 5px;
+    word-break: keep-all;
+    font-weight: 500;
+}
+
+.timing-reasons-ul li::before {
+    content: "•";
+    position: absolute;
+    left: 2px;
+    color: #c084fc;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.quant-reasons-ul li::before {
+    content: "•";
+    position: absolute;
+    left: 2px;
+    color: #38bdf8;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.timing-chips-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+    .timing-chips-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.timing-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.timing-chip-lbl {
+    font-size: 10px;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.timing-chip-val {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+/* ==========================================
+ * 상단 5단계 액션 바 & ❓ 지표 도움말 버튼 CSS
+ * ========================================== */
+.action-5step-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(226, 232, 240, 0.16) !important;
+    border: 1px solid rgba(226, 232, 240, 0.3) !important;
+    padding: 4px 10px;
+    border-radius: 24px;
+    box-shadow: inset 0 1px 4px rgba(255, 255, 255, 0.05);
+}
+
+.action-step-item {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 12px;
+    color: #64748b;
+    opacity: 0.25;
+    filter: grayscale(0.8);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+/* 🎯 선택된 1건: 훨씬 크고 굵고 진하게 강조! */
+.action-step-item.active {
+    opacity: 1;
+    filter: none;
+    font-size: 13.5px;
+    font-weight: 800;
+    padding: 6px 14px;
+    border-radius: 16px;
+    transform: scale(1.12);
+    margin: 0 4px;
+    letter-spacing: 0.3px;
+}
+
+.action-step-item.active.BUY {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45));
+    border: 1px solid #10b981;
+    color: #34d399;
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+}
+
+.action-step-item.active.AVERAGE {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(14, 165, 233, 0.45));
+    border: 1px solid #38bdf8;
+    color: #38bdf8;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+}
+
+.action-step-item.active.HOLD {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(217, 119, 6, 0.45));
+    border: 1px solid #f59e0b;
+    color: #fbbf24;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.45);
+}
+
+.action-step-item.active.REDUCE {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.35), rgba(220, 38, 38, 0.45));
+    border: 1px solid #ef4444;
+    color: #f87171;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+}
+
+.action-step-item.active.TAKE_PROFIT {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.4), rgba(185, 28, 28, 0.5));
+    border: 1px solid #dc2626;
+    color: #fca5a5;
+    box-shadow: 0 0 18px rgba(220, 38, 38, 0.55);
+}
+
+/* ❓ 이쁜 정사각형 박스 스타일 도움말 버튼 */
+.btn-help-icon {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(14, 165, 233, 0.3) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: #38bdf8;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-left: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.btn-help-icon:hover {
+    background: #38bdf8;
+    color: #0f172a;
+    border-color: #38bdf8;
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 0 6px 18px rgba(56, 189, 248, 0.5);
+}
+
+/* ==========================================
+ * 스마트폰 모바일 전용 종목명 리스트 & 카카오톡 스타일 토글 CSS
+ * ========================================== */
+
+/* PC 데스크톱 환경 (769px 이상): 모바일 전용 종목명 리스트 바 숨김, 카드는 항상 항시 전체 노출 */
+@media (min-width: 769px) {
+    .mobile-stock-list-bar {
+        display: none !important;
+    }
+    .stock-card-body-wrapper {
+        display: block !important;
+    }
+}
+
+/* 스마트폰 모바일 환경 (최대 768px 이하): 종목명 리스트 바 먼저 노출 후 클릭 시 토글 */
+@media (max-width: 768px) {
+    .mobile-stock-list-bar {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+
+    .mobile-stock-list-bar:active {
+        background: rgba(56, 189, 248, 0.2);
+        transform: scale(0.99);
+    }
+
+    .m-stock-name {
+        font-size: 15px;
+        font-weight: 800;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .m-stock-code {
+        font-size: 11.5px;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
+    .m-stock-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .m-return-badge {
+        font-size: 12px;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 12px;
+    }
+
+    .m-arrow-icon {
+        font-size: 13px;
+        color: #38bdf8;
+        transition: transform 0.25s ease;
+    }
+
+    .m-arrow-icon.rotated {
+        transform: rotate(180deg);
+    }
+
+    /* 모바일에서는 초기 상태에 카드 본문 숨김 (클릭 시 펼침) */
+    .stock-card-body-wrapper {
+        display: none;
+        margin-top: 6px;
+    }
+}
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.85);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #f8fafc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+}
+
+.theme-text {
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
 }
 
 

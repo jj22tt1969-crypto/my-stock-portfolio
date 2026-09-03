@@ -4,10 +4,11 @@ from typing import List, Dict, Any, Optional
 
 from backend.data.collector import get_stock_flow_data
 from backend.engine.decision_engine import analyze_stock_decision
+from backend.engine.smart_flow_engine import analyze_smart_money_flow
+from backend.engine.cross_validation_engine import analyze_cross_indicators, perform_cross_validation
 from backend.engine.news_engine import fetch_qna_stock_news
 from backend.engine.official_engine import fetch_official_documents
 from backend.engine.citation_engine import generate_citations
-from backend.engine.cross_validation_engine import perform_cross_validation
 from backend.db import database as db
 
 # 금융 질문 의사결정 보조 키워드 매핑
@@ -16,6 +17,9 @@ DECISION_QUERY_KEYWORDS = {
     "SELL": ["팔아?", "팔아야", "매도", "익절", "손절", "팔까"],
     "WATERING": ["물타기", "추매", "추가매수", "평단가", "더 사"],
 }
+
+# 미래 예측 / 환각 유발 질문 감지 키워드
+PREDICTION_QUERY_KEYWORDS = ["확실히", "무조건", "얼마까지", "상향", "상장폐지", "대박", "보장", "내일 오르", "내일 떨어"]
 
 def get_user_portfolio_info(ticker: str, name: str) -> Optional[Dict[str, Any]]:
     """DB 포트폴리오에서 사용자의 해당 종목 보유 현황을 조회합니다."""
@@ -40,53 +44,51 @@ def classify_decision_query(query: str) -> Optional[str]:
 
 def determine_action_opinion(intent: Optional[str], decision_data: Dict[str, Any], user_stock: Optional[Dict[str, Any]] = None) -> str:
     """
-    확정적인 명령 대신 데이터와 수급, 사용자의 수익률 상태 기반 '의사결정 보조 의견'을 산출합니다.
+    기존 투자판단(TODAY ACTION)을 변경하지 않고 근거 중심 '의사결정 보조 의견'을 제시합니다.
     """
     decision = decision_data.get("decision", "HOLD")
     buy_score = decision_data.get("buy_score", 0)
     sell_score = decision_data.get("sell_score", 0)
     water_score = decision_data.get("watering_score", 0)
 
-    # 사용자 보유 시 수익률 고려
     return_rate = 0.0
     if user_stock and "return_rate" in user_stock:
         return_rate = user_stock["return_rate"]
 
     if intent == "BUY":
         if decision in ["BUY", "STRONG_BUY"] or buy_score >= 60:
-            return "매수 검토 (지지선 및 수급 개선 확인)"
+            return "현재 데이터상 매수 검토 우세 (지지선 및 수급 개선 확인)"
         elif buy_score >= 40:
-            return "분할매수 검토 (분할 접근 선호)"
+            return "현재 데이터상 분할 접근 검토 우세"
         else:
-            return "관망 (수급 모멘텀 확인 필요)"
+            return "현재 데이터상 관망 우세 (수급 모멘텀 확인 필요)"
 
     elif intent == "SELL":
         if return_rate > 20.0 and sell_score >= 40:
-            return "일부 익절 검토 (수익 구간 리스크 관리)"
+            return "현재 데이터상 일부 익절 검토 우세 (수익 구간 리스크 관리)"
         elif decision in ["SELL", "STRONG_SELL"] or sell_score >= 60:
-            return "일부 익절 검토 (저항선 및 매도 수급 경계)"
+            return "현재 데이터상 매도/익절 검토 우세 (저항선 및 수급 경계)"
         elif sell_score >= 40:
-            return "분할 매도 검토 (리스크 관리)"
+            return "현재 데이터상 분할 매도 검토 우세"
         else:
-            return "보유 및 관망 (추세 지속 확인)"
+            return "현재 데이터상 보유 및 관망 우세"
 
     elif intent == "WATERING":
         if return_rate < -10.0 and (water_score >= 40 or decision == "WATERING"):
-            return "분할 추가매수 검토 (손실 구간 분할 대응)"
+            return "현재 데이터상 분할 추가매수 검토 가능"
         elif water_score >= 50 or decision == "WATERING":
-            return "분할 추가매수 검토 (지지선 근접 분할 대응)"
+            return "현재 데이터상 분할 추가매수 검토 가능"
         else:
-            return "관망 (추가 진입 전 지지 확인)"
+            return "현재 데이터상 관망 우세 (추가 진입 전 지지 확인)"
 
-    # 기본 수급 판단 연동
     if decision in ["BUY", "STRONG_BUY"]:
-        return "매수 검토"
+        return "현재 근거 데이터상 긍정 요인 우세 (매수 검토)"
     elif decision == "WATERING":
-        return "분할매수 검토"
+        return "현재 근거 데이터상 분할매수 검토 우세"
     elif decision in ["SELL", "STRONG_SELL"]:
-        return "일부 익절 검토"
+        return "현재 근거 데이터상 매도/익절 검토 우세"
     
-    return "관망"
+    return "현재 근거 데이터상 중립/관망 우세"
 
 def generate_grounded_qna_answer(
     ticker: str,
@@ -96,34 +98,41 @@ def generate_grounded_qna_answer(
     manager: str = ""
 ) -> Dict[str, Any]:
     """
-    STEP 8 기존 STOCK 분석 데이터 연동 Q&A 파이프라인
-    - [앱 보유 데이터]: DB 사용자의 평단가, 보유수량, 수익률, 평가손익
-    - [앱 퀀트 지표]: 현재가, 외국인/기관 수급, FFCS, Buy/Sell/Water Score, 지지/저항선
-    - [웹 검색자료]: DART 공시, 정부 보도자료, 실시간 뉴스
-    - [AI 종합 분석]: 앱 데이터와 웹 검색자료를 결합한 종합 해석
-    - 데이터 미존재 종목 시 "현재 해당 데이터를 사용할 수 없습니다." 명시
+    3차-K 신뢰도 최우선 AI Q&A 엔진 (Fact-Only, Zero Hallucination, 5단계 구조화)
+    
+    ① 확인된 데이터 (기준일시, 출처, 수치)
+    ② 데이터에 근거한 AI 해석 (TODAY ACTION, FCS, RSI, Smart Money 연계)
+    ③ 위험요인 / 반대 신호 (충돌 지표, 수급 이탈 등)
+    ④ 데이터 부족 또는 불확실성 (미확인 데이터 명시 및 예측 불가 안내)
+    ⑤ 최종 요약 (단정적 추천 배지 대신 근거 중심 요약)
     """
-    if not name and not ticker:
+    current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 1. 예외 및 미래 예측 질문 감지
+    is_prediction_query = any(kw in query for kw in PREDICTION_QUERY_KEYWORDS)
+
+    if not name and not ticker and ticker != "MARKET":
         return {
             "status": "fail",
-            "message": "확인된 자료가 부족하여 확정적으로 판단하기 어렵습니다.",
+            "message": "데이터 부족으로 확인할 수 없습니다.",
             "is_grounded": False,
-            "executive_summary": "현재 확인 가능한 신뢰할 수 있는 자료만으로는 판단하기 어렵습니다.",
-            "verified_facts": [],
-            "ai_analysis": "검색 대상 종목/ETF 정보가 지정되지 않았습니다.",
-            "uncertainties": "확인 가능한 자료가 부재합니다.",
-            "app_user_data": {"has_user_stock": False, "message": "현재 해당 보유 포트폴리오 데이터를 사용할 수 없습니다."},
+            "executive_summary": "데이터 부족으로 확인할 수 없습니다. (검색 종목 미지정)",
+            "verified_facts": ["검색 대상 종목 또는 ETF 정보가 지정되지 않았습니다."],
+            "ai_analysis": "확인할 수 있는 데이터가 부재하여 AI 해석을 제공할 수 없습니다.",
+            "uncertainties": "데이터 부족으로 확인할 수 없습니다.",
+            "action_opinion": "확인 불가 / 관망",
+            "app_user_data": {"has_user_stock": False, "message": "현재 해당 데이터를 사용할 수 없습니다."},
             "citations": []
         }
 
-    # 1. DB 사용자 보유 데이터 연동 (STEP 8)
+    # 2. 사용자 보유 데이터 연동 (DB)
     user_stock_db = None
     if ticker != "MARKET":
         user_stock_db = get_user_portfolio_info(ticker, name)
     has_user_stock = user_stock_db is not None
     user_stock_info = {}
 
-    # 2. 주가 & 수급 & 퀀트 분석 데이터 수집
+    # 3. 주가, 수급, 퀀트 지표, Smart Money, Cross Analysis 수집
     flow_data = {}
     has_flow_data = False
     if ticker != "MARKET":
@@ -133,11 +142,19 @@ def generate_grounded_qna_answer(
     decision_res = {}
     tech_info = {}
     flow_info = {}
+    smart_flow = {}
+    cross_analysis = {}
+
     if has_flow_data:
-        res_full = analyze_stock_decision(flow_data["df"])
+        df = flow_data["df"]
+        res_full = analyze_stock_decision(df)
         decision_res = res_full.get("decision", {})
         tech_info = res_full.get("technical_analysis", {})
         flow_info = res_full.get("flow_analysis", {})
+
+        # Smart Money Flow 및 Cross Analysis 산출
+        smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
+        cross_analysis = analyze_cross_indicators(flow_info, tech_info, smart_flow, decision_res)
 
         # 보유 종목일 경우 평가액 & 수익률 계산
         if has_user_stock:
@@ -169,123 +186,121 @@ def generate_grounded_qna_answer(
             "message": "현재 해당 보유 포트폴리오 데이터를 사용할 수 없습니다. (미보유 종목)"
         }
 
-    # 3. 실시간 뉴스 및 공식자료 수집
+    # 4. 실시간 뉴스 및 공식자료 수집
     news_res = fetch_qna_stock_news(ticker=ticker, name=name, query=query)
     official_res = fetch_official_documents(ticker=ticker, name=name, query=query, asset_type=asset_type, manager=manager)
 
     news_items = news_res.get("items", []) if news_res.get("status") == "success" else []
     official_items = official_res.get("items", []) if official_res.get("status") == "success" else []
 
-    # 4. Citation 인용 데이터 생성
+    # 5. Citation 및 교차검증
     citations = generate_citations(news_items, official_items)
-
-    # 5. STEP 7 교차검증 연산
     cross_val = perform_cross_validation(news_items, official_items, has_flow_data=has_flow_data)
 
-    # 🛡️ Guardrail Check: 실제 수집된 뉴스/공시/주가 데이터가 모두 부재하고 단순 fallback 링크만 존재하는 경우
-    is_real_official = False
-    for o in official_items:
-        title = o.get("title", "")
-        summary = o.get("summary", "")
-        doc_type = o.get("doc_type", "")
-        if "바로가기" not in title and doc_type != "공시 검색" and "확인하세요" not in summary:
-            is_real_official = True
-            break
+    # 🛡️ Guardrail Check
+    is_real_official = any("바로가기" not in o.get("title", "") and o.get("doc_type") != "공시 검색" for o in official_items)
     
     if not has_flow_data and not news_items and not is_real_official:
         return {
             "status": "insufficient_data",
-            "message": "확인된 자료가 부족하여 확정적으로 판단하기 어렵습니다.",
+            "message": "데이터 부족으로 확인할 수 없습니다.",
             "is_grounded": False,
             "reliability_grade": "낮음",
-            "executive_summary": "확인된 자료가 부족하여 확정적으로 판단하기 어렵습니다.",
-            "verified_facts": ["검색된 최신 뉴스 및 DART/정부 공시 자료가 부재합니다."],
-            "ai_analysis": "확인된 주가 및 공시 데이터가 없어 판단할 수 없습니다.",
-            "uncertainties": "확인된 자료가 부족하여 확정적으로 판단하기 어렵습니다.",
+            "executive_summary": "데이터 부족으로 확인할 수 없습니다. (확인된 수급 및 공시/뉴스 부재)",
+            "verified_facts": ["검색된 최신 뉴스 및 DART/정부 공시 자료가 부재합니다. [상태: 미확인]"],
+            "ai_analysis": "확인된 주가 및 공시 데이터가 없어 AI 해석을 제공할 수 없습니다.",
+            "uncertainties": "데이터 부족으로 확인할 수 없습니다.",
             "action_opinion": "관망 (자료 미존재)",
             "app_user_data": user_stock_info,
             "cross_validation": cross_val,
             "citations": citations
         }
 
-    # 6. 의사결정 질문 처리 및 의사결정 보조 의견 생성
     query_intent = classify_decision_query(query)
     action_opinion = determine_action_opinion(query_intent, decision_res, user_stock_info if has_user_stock else None)
 
-    # 7. [확인된 사실 (Verified Facts)] 출처 구분 적용 (STEP 8)
+    # ① 확인된 데이터
     verified_facts = []
-
-    # [앱 보유 데이터]
     if has_user_stock:
         p_sign = "+" if user_stock_info["profit_loss"] >= 0 else ""
         verified_facts.append(
             f"[📱 앱 보유 데이터] {user_stock_info['name']}({user_stock_info['ticker']}) "
-            f"평단가 {user_stock_info['avg_price']:,}원 | 보유수량 {user_stock_info['quantity']:,}주 | "
-            f"평가손익 {p_sign}{user_stock_info['profit_loss']:,}원 (수익률 {p_sign}{user_stock_info['return_rate']:.2f}%)"
+            f"평단가 {user_stock_info['avg_price']:,}원 | 수량 {user_stock_info['quantity']:,}주 | "
+            f"손익 {p_sign}{user_stock_info['profit_loss']:,}원 ({p_sign}{user_stock_info['return_rate']:.2f}%) "
+            f"[기준일시: {current_time_str} / 출처: 사용자 포트폴리오 DB / 상태: 정상]"
         )
     else:
-        verified_facts.append("[📱 앱 보유 데이터] 현재 해당 보유 포트폴리오 데이터(평단가/보유수량)를 사용할 수 없습니다. (미보유 종목)")
+        verified_facts.append(
+            f"[📱 앱 보유 데이터] {name or ticker}: 현재 해당 보유 포트폴리오 데이터를 사용할 수 없습니다. (미보유 종목) "
+            f"[기준일시: {current_time_str} / 출처: 포트폴리오 DB / 상태: 미확인]"
+        )
 
-    # [앱 퀀트 엔진 데이터]
     if has_flow_data:
         latest_close = tech_info.get("latest_close", 0)
-        cycle_stage = flow_info.get("cycle_stage", "중립")
         ffcs_score = flow_info.get("ffcs_score", 50.0)
-        buy_s = decision_res.get("buy_score", 0)
-        sell_s = decision_res.get("sell_score", 0)
-        water_s = decision_res.get("watering_score", 0)
+        today_action = decision_res.get("decision", "HOLD")
+        rsi_val = tech_info.get("rsi", 50.0)
+        rmi_val = tech_info.get("rmi", 50.0)
+        smart_score = smart_flow.get("score") if smart_flow else None
+        smart_label = smart_flow.get("signal_label", "미확인") if smart_flow else "미확인"
+        smart_score_str = f"{smart_score}점 ({smart_label})" if smart_score is not None else "데이터 부족 (판단 보류)"
         
         verified_facts.append(
-            f"[📊 앱 퀀트 엔진 데이터] 최신 종가 {latest_close:,}원 (FFCS 수급: {ffcs_score}점 [{cycle_stage}] | "
-            f"Buy {buy_s}점, Sell {sell_s}점, Water {water_s}점)"
+            f"[📊 앱 퀀트 수급 데이터] 종가: {latest_close:,}원 | TODAY ACTION: {today_action} | "
+            f"FFCS: {ffcs_score}점 | RSI: {rsi_val} | RMI: {rmi_val} | Smart Money: {smart_score_str} "
+            f"[기준일시: {current_time_str} / 출처: QUANT AI 엔진 / 상태: 정상]"
         )
 
-    # [웹 검색자료] (공시 및 뉴스)
-    for off in official_items:
-        verified_facts.append(f"[🌐 웹 검색자료 - 공시] [{off['institution']}] {off['title']} ({off['pub_date']})")
+    if cross_analysis and cross_analysis.get("available"):
+        status_lbl = cross_analysis.get("status_label", "중립")
+        verified_facts.append(
+            f"[🔮 지표 교차 분석 (Cross Analysis)] 종합 진단: {status_lbl} "
+            f"[기준일시: {current_time_str} / 출처: Cross Validation Engine / 상태: 정상]"
+        )
 
-    for news in news_items[:3]:
-        verified_facts.append(f"[🌐 웹 검색자료 - 뉴스] [{news['source']}] {news['title']} ({news['pub_date']})")
+    for off in official_items[:2]:
+        verified_facts.append(f"[🌐 공시/보도자료] [{off['institution']}] {off['title']} ({off['pub_date']}) [출처: 공식 DART/정부기관 / 상태: 정상]")
 
-    # 8. [AI 종합 분석 (AI Quantitative & Portfolio Analysis)]
+    for news in news_items[:2]:
+        verified_facts.append(f"[🌐 실시간 뉴스] [{news['source']}] {news['title']} ({news['pub_date']}) [출처: 실시간 금융뉴스 / 상태: 정상]")
+
+    # ② AI 해석
     ai_analysis_paragraphs = []
-    
-    if has_user_stock:
-        ret_str = f"+{user_stock_info['return_rate']:.2f}%" if user_stock_info['return_rate'] >= 0 else f"{user_stock_info['return_rate']:.2f}%"
-        ai_analysis_paragraphs.append(
-            f"• [앱 포트폴리오 융합 분석]: 현재 평단가({user_stock_info['avg_price']:,}원) 대비 수익률은 {ret_str} 상태입니다."
-        )
-
     if has_flow_data:
-        ma20 = tech_info.get("ma20", 0)
-        rsi = tech_info.get("rsi", 50.0)
-        supp = tech_info.get("support_level", 0)
-        resis = tech_info.get("resistance_level", 0)
-
+        today_action = decision_res.get("decision", "HOLD")
+        ffcs_score = flow_info.get("ffcs_score", 50.0)
+        smart_score = smart_flow.get("score") if smart_flow else None
         ai_analysis_paragraphs.append(
-            f"• [앱 퀀트 수급 지표]: 20일선({ma20:,}원) 상회 및 RSI({rsi}) 지표 형성 중이며, 1차 지지선은 {supp:,}원, 저항선은 {resis:,}원입니다."
+            f"• [엔진 결과 및 수급 해석]: 기존 투자엔진의 판단은 '{today_action}'(FFCS {ffcs_score}점)이며, "
+            f"큰손 수급(Smart Money Score)은 {smart_score if smart_score is not None else '미확인'}점 수준을 기록하고 있습니다."
         )
+        if cross_analysis and cross_analysis.get("reasons"):
+            cross_reasons = " / ".join(cross_analysis.get("reasons", []))
+            ai_analysis_paragraphs.append(f"• [지표 일치/충돌 분석]: {cross_reasons}")
 
     if citations:
         top_pub = citations[0]['publisher']
-        ai_analysis_paragraphs.append(
-            f"• [웹 검색자료 융합 해석]: 최신 출처인 [{top_pub}] 뉴스 및 공시 검증 결과, 실적/업황 관련 모멘텀이 확인됩니다."
-        )
+        ai_analysis_paragraphs.append(f"• [실시간 보도 해석]: 최신 출처인 [{top_pub}] 뉴스 및 공시 검증 결과 관련 이슈가 확인됩니다.")
 
-    # 9. [불확실한 부분 (Uncertainties & Risk)]
+    # ③ ④ 불확실성 및 위험
     uncertainties = []
-    if cross_val.get("conflict_detected"):
-        uncertainties.append("⚠️ 자료 간 내용에 차이가 있습니다.")
+    if is_prediction_query:
+        uncertainties.append("⚠️ [예측 불가 안내] AI는 미래 주가나 확실한 상승/하락 여부를 단정적으로 예측할 수 없으며, 확인된 실시간 데이터에 근거한 정보만 제공합니다.")
+    if smart_flow and not smart_flow.get("is_detail_available"):
+        uncertainties.append("⚠️ [수급 미확인] 기관 세부 주체 수급 데이터가 미확인 상태이므로 기관 전체 합계 수급을 보조로 참조합니다.")
     
-    if ticker == "MARKET":
-        uncertainties.append("거시 경제 지표와 글로벌 증시 동향은 예상치 못한 글로벌 변수에 의해 급변할 수 있습니다.")
-    else:
-        if not has_user_stock:
-            uncertainties.append("현재 보유하지 않은 종목이므로 개인 계좌 평단가 및 수익률 연동이 미적용되어 있습니다.")
-        if not official_items:
-            uncertainties.append("DART 및 정부기관 공식 공시 보도자료의 추가 업데이트 확인이 필요합니다.")
-        if has_flow_data:
-            uncertainties.append("단기 환율 변동성 및 매크로 지수 조전에 따른 지지선 이탈 위험에 주의가 필요합니다.")
+    if asset_type == "ETF" or (smart_flow and smart_flow.get("is_etf")):
+        uncertainties.append("💡 [ETF 수급 특성] ETF 종목 특성상 LP/AP 유동성 공급 및 설정·환매 자금이 포함되어 있습니다.")
+        
+    if cross_val.get("conflict_detected"):
+        uncertainties.append("⚠️ [자료 상충] 수집된 출처 간 내용에 일부 차이가 존재하므로 주의가 필요합니다.")
+    
+    if not has_user_stock and ticker != "MARKET":
+        uncertainties.append("현재 보유하지 않은 종목이므로 계좌 평단가 및 수익률 연동이 미적용되어 있습니다.")
+    if not official_items:
+        uncertainties.append("DART 및 정부기관 공식 공시 보도자료의 추가 업데이트 확인이 필요합니다.")
+    if has_flow_data:
+        uncertainties.append("단기 환율 변동성 및 매크로 지수 조정에 따른 지지선 이탈 위험에 주의가 필요합니다.")
 
     # 10. [핵심 답변 (Executive Summary)]
     inline_citations = "".join([f" [{idx+1}]" for idx in range(min(len(citations), 3))])

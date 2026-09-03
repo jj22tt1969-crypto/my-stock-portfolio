@@ -120,3 +120,96 @@ def perform_cross_validation(
             "consistency": consistency_score
         }
     }
+
+
+def analyze_cross_indicators(
+    flow_analysis: Dict[str, Any],
+    technical_analysis: Dict[str, Any],
+    smart_flow_analysis: Dict[str, Any] = None,
+    decision_analysis: Dict[str, Any] = None
+) -> Dict[str, Any]:
+    """
+    3차-J FCS + RSI/RMI + Smart Money 종합분석 (Cross Analysis)
+    
+    - 기존 연산식/점수/신호 변형 0건
+    - 지표 간 방향(상승/하락/중립) 및 일치/충돌 설명 문구 도출
+    """
+    if not flow_analysis or not technical_analysis:
+        return {
+            "available": False,
+            "status_label": "데이터 부족 / 판단 보류",
+            "status_color": "#94a3b8",
+            "indicators": {},
+            "reasons": ["수급 및 기술적 지표 수집 대기 중 (판단 보류)"]
+        }
+
+    ffcs = flow_analysis.get("ffcs_score", 50.0)
+    rsi = technical_analysis.get("rsi", 50.0)
+    rmi = technical_analysis.get("rmi", 50.0)
+    
+    smart_available = smart_flow_analysis.get("available", False) if smart_flow_analysis else False
+    smart_score = smart_flow_analysis.get("score") if smart_available else None
+    
+    def get_direction(val, high_th=55.0, low_th=45.0):
+        if val is None: return "NEUTRAL", "➡️ 중립"
+        if val >= high_th: return "UP", "⬆️ 상승"
+        elif val <= low_th: return "DOWN", "⬇️ 하락"
+        return "NEUTRAL", "➡️ 중립"
+
+    fcs_dir, fcs_dir_label = get_direction(ffcs, 55.0, 45.0)
+    rsi_dir, rsi_dir_label = get_direction(rsi, 55.0, 45.0)
+    rmi_dir, rmi_dir_label = get_direction(rmi, 55.0, 45.0)
+    smart_dir, smart_dir_label = get_direction(smart_score, 60.0, 40.0) if smart_score is not None else ("NEUTRAL", "➡️ 중립")
+
+    reasons = []
+    
+    price_change_pct = technical_analysis.get("price_change_pct", 0.0)
+    is_contrarian = (price_change_pct < -2.0 and smart_score is not None and smart_score >= 60.0)
+    is_smart_risk = (ffcs >= 55.0 and smart_score is not None and smart_score < 35.0)
+
+    is_all_pos = (fcs_dir == "UP" and rsi_dir == "UP" and rmi_dir == "UP" and (smart_dir == "UP" or smart_score is None))
+    is_all_neg = (fcs_dir == "DOWN" and rsi_dir == "DOWN" and rmi_dir == "DOWN" and (smart_dir == "DOWN" or smart_score is None))
+
+    dirs = [fcs_dir, rsi_dir, rmi_dir]
+    if smart_score is not None: dirs.append(smart_dir)
+    has_up = "UP" in dirs
+    has_down = "DOWN" in dirs
+    is_conflict = (has_up and has_down)
+
+    if is_contrarian:
+        status_label = "⚡ 역발상 수급 유입 가능성"
+        status_color = "#3b82f6"
+        reasons.append("주가 하락에도 큰손 수급 유입 포착 (단기 반등 유효 구간)")
+    elif is_smart_risk:
+        status_label = "⚠️ 기존 신호 대비 수급 위험 증가"
+        status_color = "#f97316"
+        reasons.append("기존 FCS 수급은 긍정적이나 큰손 세부 수급(Smart Money) 지지 부재 (수급 경계 필요)")
+    elif is_all_pos:
+        status_label = "🟢 기술·수급 동시 긍정"
+        status_color = "#22c55e"
+        reasons.append("FCS 수급, 기술적 지표(RSI/RMI), 큰손 수급이 모두 긍정적 방향 (추세 지속 가능성 우수)")
+    elif is_all_neg:
+        status_label = "🔴 기술·수급 동시 약화"
+        status_color = "#ef4444"
+        reasons.append("FCS 수급, 기술적 지표, 큰손 자금이 동반 하향 약화 (위험 관리 및 관망 필요)")
+    elif is_conflict:
+        status_label = "⚠️ 지표 간 신호 충돌 / 추가 확인 필요"
+        status_color = "#eab308"
+        reasons.append("수급 지표와 기술적 차트 지표 간 방향성 상충 (단기 혼조세, 추세 확정 전 신중 접근)")
+    else:
+        status_label = "🟡 지표 중립 / 혼조"
+        status_color = "#94a3b8"
+        reasons.append("주요 수급 및 기술 지표 평이 수준 유지")
+
+    return {
+        "available": True,
+        "status_label": status_label,
+        "status_color": status_color,
+        "indicators": {
+            "ffcs": {"val": ffcs, "dir": fcs_dir, "label": fcs_dir_label},
+            "rsi": {"val": rsi, "dir": rsi_dir, "label": rsi_dir_label},
+            "rmi": {"val": rmi, "dir": rmi_dir, "label": rmi_dir_label},
+            "smart_money": {"val": smart_score, "dir": smart_dir, "label": smart_dir_label if smart_available else "미확인"}
+        },
+        "reasons": reasons
+    }

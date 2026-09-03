@@ -1,3 +1,4 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -64,7 +65,16 @@ def resolve_ticker(query: str, asset_type_hint: str = None) -> tuple[str, str]:
         if extracted_name:
             return extracted_code, extracted_name
 
-    # 1. STOCK_ETF_MASTER 마스터 데이터베이스 연동 (우선순위 1)
+    # 1. FinanceDataReader (KRX 2,870여개 전종목) 탐색 (우선순위 1)
+    try:
+        from backend.engine.krx_loader import search_krx_stocks
+        krx_m = search_krx_stocks(query, limit=1)
+        if krx_m and krx_m[0].get("score", 0) >= 80:
+            return krx_m[0]["ticker"], krx_m[0]["name"]
+    except Exception:
+        pass
+
+    # 1-2. STOCK_ETF_MASTER 마스터 데이터베이스 연동
     from backend.engine.stock_identifier import search_stock_or_etf, BRAND_ALIAS_MAP
     master_results = search_stock_or_etf(query, asset_type=asset_type_hint or "ALL")
     if master_results:
@@ -340,6 +350,40 @@ def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def fetch_fdr_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
+    """
+    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수
+    """
+    try:
+        import FinanceDataReader as fdr
+        start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
+        df_fdr = fdr.DataReader(ticker, start=start_date)
+        if df_fdr.empty:
+            return pd.DataFrame()
+
+        df = pd.DataFrame()
+        df['date'] = df_fdr.index.strftime("%Y-%m-%d")
+        df['close_price'] = df_fdr['Close'].values.astype(int)
+        
+        if 'Change' in df_fdr.columns:
+            prev_close = df_fdr['Close'].shift(1).fillna(df_fdr['Close'])
+            df['diff'] = (df_fdr['Close'] - prev_close).values.astype(int)
+        else:
+            df['diff'] = 0
+
+        df['volume'] = df_fdr['Volume'].values.astype(int) if 'Volume' in df_fdr.columns else 0
+        df['trading_value'] = df['volume'] * df['close_price']
+        df['foreign_net_buy'] = 0
+        df['institution_net_buy'] = 0
+        df['foreign_holding_ratio'] = 0.0
+        df['change_rate'] = (df['diff'] / (df['close_price'] - df['diff']) * 100).round(2)
+        
+        return df.tail(days).reset_index(drop=True)
+    except Exception as e:
+        logger.warning(f"FinanceDataReader fetch fallback failed for {ticker}: {e}")
+        return pd.DataFrame()
+
+
 import time
 
 _FLOW_DATA_CACHE = {}
@@ -368,7 +412,7 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
             "status_message": "데이터 없음",
             "error": f"'{ticker_or_name}' 종목을 찾을 수 없습니다.",
             "updated_at": now_str,
-            "source": "Naver Finance / KRX",
+            "source": "FinanceDataReader / KRX",
             "is_delayed": False
         }
         return err_res
@@ -379,10 +423,13 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
     pages_to_fetch = 1 if min_days <= 20 else 2
     df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
 
-
     if df.empty or len(df) < 5:
         source_name = "KRX Open Data (PyKRX)"
         df = fetch_pykrx_flow_data(ticker, days=min_days)
+
+    if df.empty or len(df) < 5:
+        source_name = "FinanceDataReader (KRX Data)"
+        df = fetch_fdr_flow_data(ticker, days=min_days)
 
     if df.empty or len(df) < 5:
         return {
@@ -436,10 +483,143 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
         "updated_at": now_str,
         "source": source_name,
         "is_delayed": False, # 실시간 체결가 융합 반영
-        "df": df
+        "df": df,
+        "investor_breakdown": fetch_investor_breakdown_data(ticker, days=min_days)
     }
     _FLOW_DATA_CACHE[cache_key] = (now_ts, res)
     return res
+
+
+def fetch_investor_breakdown_data(ticker: str, days: int = 20) -> dict:
+    """
+    외국인, 연기금 등, 금융투자, 투신, 사모, 개인 6개 주체별 세부 수급 데이터 수집 (최근 5/10/20일 누적)
+    기존 FCS/FFCS 및 수급 판단 엔진에는 영향을 주지 않으며 독립 데이터 객체로 반환함.
+    """
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://m.stock.naver.com/'
+    }
+    
+    daily_records = []
+    
+    # 1. 네이버 모바일 API 수급 트렌드 (외국인, 기관, 개인 일별 데이터)
+    try:
+        url = f"https://m.stock.naver.com/api/stock/{ticker}/trend?pageSize={max(days, 25)}&page=1"
+        resp = http_session.get(url, headers=headers, timeout=2.0, verify=False)
+        if resp.status_code == 200:
+            raw_items = resp.json()
+            if isinstance(raw_items, list):
+                for item in raw_items:
+                    bizdate = str(item.get("bizdate", ""))
+                    if len(bizdate) == 8:
+                        date_fmt = f"{bizdate[:4]}-{bizdate[4:6]}-{bizdate[6:8]}"
+                    else:
+                        date_fmt = bizdate
+
+                    close_p = float(str(item.get("closePrice", "0")).replace(',', ''))
+                    
+                    # 외국인, 기관, 개인 순매수 수량 및 거래대금(억원) 파싱
+                    frgn_qty = int(str(item.get("foreignerPureBuyQuant", "0")).replace(',', '').replace('+', ''))
+                    organ_qty = int(str(item.get("organPureBuyQuant", "0")).replace(',', '').replace('+', ''))
+                    indiv_qty = int(str(item.get("individualPureBuyQuant", "0")).replace(',', '').replace('+', ''))
+
+                    frgn_amt = round((frgn_qty * close_p) / 100000000.0, 2)
+                    organ_amt = round((organ_qty * close_p) / 100000000.0, 2)
+                    indiv_amt = round((indiv_qty * close_p) / 100000000.0, 2)
+
+                    daily_records.append({
+                        "date": date_fmt,
+                        "close_price": close_p,
+                        "foreign_qty": frgn_qty,
+                        "foreign_amount": frgn_amt,
+                        "institution_qty": organ_qty,
+                        "institution_amount": organ_amt,
+                        "individual_qty": indiv_qty,
+                        "individual_amount": indiv_amt,
+                        # 기관 세부 주체 (API 미제공 시 null 표기 - 임의 생성 금지)
+                        "pension_amount": None,
+                        "financial_investment_amount": None,
+                        "investment_trust_amount": None,
+                        "private_fund_amount": None
+                    })
+    except Exception as e:
+        logger.warning(f"Failed to fetch mobile investor trend for {ticker}: {e}")
+
+    # 2. KRX / 공공데이터 API Key 환경 변수 연동 (설정된 경우 세부 주체 보완)
+    krx_api_key = os.getenv("KRX_API_KEY") or os.getenv("PUBLIC_DATA_API_KEY")
+    if krx_api_key:
+        try:
+            # KRX / 공공데이터포털 주식투자자별매매동향 API 연동
+            krx_url = f"http://apis.data.go.kr/1160100/service/GetStockMarketInfoService/getInvestorTradingByStock?serviceKey={krx_api_key}&resultType=json&likeShtnIscd={ticker}&numOfRows=100"
+            k_resp = http_session.get(krx_url, timeout=2.5)
+            if k_resp.status_code == 200:
+                k_data = k_resp.json()
+                items = k_data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+                date_map = {r["date"]: r for r in daily_records}
+                for it in items:
+                    dt = it.get("basDt", "")
+                    if len(dt) == 8:
+                        dt_fmt = f"{dt[:4]}-{dt[4:6]}-{dt[6:8]}"
+                    else:
+                        dt_fmt = dt
+                    
+                    invst_nm = str(it.get("invstNm", ""))
+                    net_amt = float(it.get("ntbyTrdval", 0)) / 100000000.0 # 억원
+                    
+                    if dt_fmt in date_map:
+                        rec = date_map[dt_fmt]
+                        if "연기금" in invst_nm:
+                            rec["pension_amount"] = round(net_amt, 2)
+                        elif "금융투자" in invst_nm:
+                            rec["financial_investment_amount"] = round(net_amt, 2)
+                        elif "투신" in invst_nm:
+                            rec["investment_trust_amount"] = round(net_amt, 2)
+                        elif "사모" in invst_nm:
+                            rec["private_fund_amount"] = round(net_amt, 2)
+        except Exception as e:
+            logger.warning(f"KRX Open API fetch error for {ticker}: {e}")
+
+    # 일자 오름차순 정렬 (과거 -> 최근)
+    daily_records.sort(key=lambda x: x["date"])
+
+    if not daily_records:
+        return {
+            "available": False,
+            "message": "투자자별 세부 수급 데이터를 수집할 수 없습니다.",
+            "daily": [],
+            "cumulative": {}
+        }
+
+    # 최근 5일, 10일, 20일 누적 합계 연산
+    def calc_cum(days_n: int):
+        sub_records = daily_records[-days_n:] if len(daily_records) >= days_n else daily_records
+        
+        def safe_sum(key):
+            vals = [r[key] for r in sub_records if r.get(key) is not None]
+            return round(sum(vals), 2) if vals else None
+
+        return {
+            "foreign": safe_sum("foreign_amount"),
+            "institution": safe_sum("institution_amount"),
+            "pension": safe_sum("pension_amount"),
+            "financial_investment": safe_sum("financial_investment_amount"),
+            "investment_trust": safe_sum("investment_trust_amount"),
+            "private_fund": safe_sum("private_fund_amount"),
+            "individual": safe_sum("individual_amount")
+        }
+
+    return {
+        "available": True,
+        "updated_at": now_str,
+        "daily": daily_records[-20:],
+        "cumulative": {
+            "5d": calc_cum(5),
+            "10d": calc_cum(10),
+            "20d": calc_cum(20)
+        }
+    }
+
 
 
 def fetch_stock_chart_analysis(ticker_or_name: str, timeframe: str = 'day') -> dict:

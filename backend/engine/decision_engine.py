@@ -239,25 +239,47 @@ def make_final_decision(
     sell_score = sell_info["score"]
     water_action = water_info["action"]
 
-    # 최종 상태 판정
+    # 5가지 액션 단계 정밀 판정 (보조지표 및 수급/스코어 종합반영)
+    rsi = tech_res.get("rsi", 50.0)
+    macd = tech_res.get("macd", {})
+    
+    buy_signals = 0
+    sell_signals = 0
+
+    if rsi <= 38: buy_signals += 1
+    elif rsi >= 65: sell_signals += 1
+
+    if macd.get("is_golden_cross", False) or macd.get("histogram", 0) > 0: buy_signals += 1
+    elif macd.get("is_dead_cross", False) or macd.get("histogram", 0) < 0: sell_signals += 1
+
+    if tech_res.get("is_aligned_bullish", False): buy_signals += 1
+    elif tech_res.get("is_aligned_bearish", False): sell_signals += 1
+
+    # 종합 점수 계산 (Buy Score, Sell Score, 기술 지표 매수/매도 시그널 반영)
     if return_rate >= 15.0 and sell_score >= 50.0:
-        decision = "TAKE_PROFIT" # 일부 익절
-        decision_desc = "일부 익절 (수익 실현 및 위험 관리)"
+        decision = "TAKE_PROFIT"
+        decision_desc = "강력 매도 / 익절 (수익 실현 및 위험 관리)"
     elif return_rate < -5.0 and water_action in ["적극적 추가매수 검토", "분할매수"]:
-        decision = "AVERAGE" # 추가 매수 / 물타기
-        decision_desc = "추가 매수 / 물타기 (평단가 관리)"
+        decision = "AVERAGE"
+        decision_desc = "분할 매수 (평단가 관리)"
     elif return_rate < -10.0 and water_action in ["추가매수 금지", "비중축소"]:
-        decision = "REDUCE" # 비중 축소 / 손절
-        decision_desc = "비중 축소 (추가 손실 방지)"
-    elif buy_score >= 65.0:
-        decision = "BUY" # 매수
-        decision_desc = "매수 검토 (수급 및 기술적 모멘텀 양호)"
-    elif sell_score >= 70.0:
         decision = "REDUCE"
-        decision_desc = "비중 축소 (수급 유출 및 추세 약화)"
+        decision_desc = "매도 / 비중축소 (추가 손실 방지)"
+    elif buy_score >= 60.0 or (buy_score >= 48.0 and buy_signals >= 2) or (buy_score >= 50.0 and buy_score > sell_score + 15.0):
+        decision = "BUY"
+        decision_desc = "강력 매수 (수급 우위 및 기술적 모멘텀 양호)"
+    elif buy_score >= 40.0 or (buy_score >= 30.0 and buy_signals >= 1) or (buy_score > sell_score):
+        decision = "AVERAGE"
+        decision_desc = "매수 / 분할매수 (수급 개선 및 보조지표 반등)"
+    elif sell_score >= 60.0 or (sell_score >= 48.0 and sell_signals >= 2) or (sell_score >= 50.0 and sell_score > buy_score + 15.0):
+        decision = "TAKE_PROFIT"
+        decision_desc = "강력 매도 (수급 유출 및 주요 지지선 이탈)"
+    elif sell_score >= 40.0 or (sell_score >= 30.0 and sell_signals >= 1) or (sell_score > buy_score):
+        decision = "REDUCE"
+        decision_desc = "매도 / 비중축소 (추세 약화 및 하락 리스크)"
     else:
-        decision = "HOLD" # 보유
-        decision_desc = "보유 (관망 및 추세 지지 관찰)"
+        decision = "HOLD"
+        decision_desc = "관망 (추세 지지 및 방향성 관찰)"
 
     # AI 판단 이유 생성 (3~5개 간결한 이유)
     ai_reasons = []
@@ -333,9 +355,14 @@ def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[s
     # 4. 최종 종합 판단 & AI 이유 생성
     final_info = make_final_decision(buy_info, sell_info, water_info, flow_res, tech_res, return_rate=return_rate)
 
+    # 5. 매매 타이밍 보조지표 분석 (볼린저 밴드, MACD, 스토캐스틱 슬로우 + 판정 사유)
+    from backend.engine.timing_engine import analyze_trading_timing
+    timing_res = analyze_trading_timing(df)
+
     return {
         "data_available": True,
         "flow_analysis": flow_res,
         "technical_analysis": tech_res,
+        "timing_analysis": timing_res,
         "decision": final_info
     }

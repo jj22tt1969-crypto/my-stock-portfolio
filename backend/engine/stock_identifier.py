@@ -22,6 +22,11 @@ STOCK_ETF_MASTER = [
     {"name": "SK텔레콤", "ticker": "017670", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "KT", "ticker": "030200", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "LG유플러스", "ticker": "032640", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LG전자", "ticker": "066570", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LG전자우", "ticker": "066575", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LG디스플레이", "ticker": "034220", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LG이노텍", "ticker": "011070", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LG생활건강", "ticker": "051900", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "한국전력", "ticker": "015760", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "삼성물산", "ticker": "028260", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "SK", "ticker": "034730", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
@@ -58,6 +63,17 @@ STOCK_ETF_MASTER = [
     {"name": "HYBE", "ticker": "352820", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "엔씨소프트", "ticker": "036570", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "넷마블", "ticker": "251270", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "HD한국조선해양", "ticker": "009540", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "한국조선해양", "ticker": "009540", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "한화시스템", "ticker": "272210", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "LIG넥스원", "ticker": "079550", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "현대글로비스", "ticker": "086280", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "KT&G", "ticker": "033780", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "케이티앤지", "ticker": "033780", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "고려아연", "ticker": "010130", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "풍산", "ticker": "103140", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "금호석유", "ticker": "011780", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "한국타이어앤테크놀로지", "ticker": "161390", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "S-Oil", "ticker": "010950", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "SOIL", "ticker": "010950", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "에쓰오일", "ticker": "010950", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
@@ -271,42 +287,35 @@ def get_stock_by_ticker_or_name(query: str, asset_type: str = "ALL") -> Dict[str
 
 def search_all_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, Any]]:
     """
-    KOSPI, KOSDAQ 상장종목 전체 및 ETF 전체를 탐색 및 동적 식별합니다.
-    1차: STOCK_ETF_MASTER 수록 종목 매칭
-    2차: collector.resolve_ticker() 동적 파싱을 통합하여 코스피/코스닥 전 종목 탐색 지원
+    FinanceDataReader(KRX 2,870여개 전종목) + STOCK_ETF_MASTER를 통합하여
+    코스피, 코스닥 상장종목 전체 및 ETF 전체를 100% 동적 탐색합니다.
     """
     if not query or not query.strip():
         return []
 
     q = query.strip()
     results = search_stock_or_etf(q, asset_type=asset_type)
-    seen_tickers = {r["ticker"] for r in results}
 
-    # resolve_ticker 동적 조회를 통해 마스터 데이터베이스에 없는 신규/중소형 상장 종목도 수용
+    # 2. FinanceDataReader 기반 2,870여개 KRX 전종목 탐색
     try:
-        from backend.data.collector import resolve_ticker
-        live_ticker, live_name = resolve_ticker(q, asset_type_hint=asset_type)
-        if live_ticker and live_ticker not in seen_tickers:
-            is_etf_name = any(b in live_name.upper() for b in ["ETF", "KODEX", "TIGER", "ACE", "SOL", "RISE", "PLUS", "KBSTAR", "ARIRANG", "HANARO"])
-            detected_asset_type = "ETF" if is_etf_name else "STOCK"
-            market = "ETF" if detected_asset_type == "ETF" else "KOSPI"
-            
-            score = 90
-            if asset_type != "ALL" and asset_type.upper() == detected_asset_type:
-                score += 10
+        from backend.engine.krx_loader import search_krx_stocks
+        krx_results = search_krx_stocks(q, limit=10)
+        results.extend(krx_results)
+    except Exception as e:
+        logger.warning(f"KRX search error: {e}")
 
-            results.append({
-                "name": live_name,
-                "ticker": live_ticker,
-                "market": market,
-                "asset_type": detected_asset_type,
-                "manager": "자산운용" if detected_asset_type == "ETF" else "",
-                "match_type": "DYNAMIC_RESOLVED",
-                "score": score
-            })
-    except Exception:
-        pass
+    # ticker 기준 중복 제거 및 점수 정렬
+    unique_results = []
+    seen = set()
+    for item in results:
+        t = item.get("ticker")
+        if t and t not in seen:
+            seen.add(t)
+            # 자산 필터 가중치
+            if asset_type != "ALL" and asset_type.upper() == item.get("asset_type", "").upper():
+                item["score"] = item.get("score", 70) + 10
+            unique_results.append(item)
 
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
+    unique_results.sort(key=lambda x: x["score"], reverse=True)
+    return unique_results
 

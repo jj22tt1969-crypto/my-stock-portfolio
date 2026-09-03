@@ -18,6 +18,8 @@ from backend.data.collector import get_stock_flow_data, resolve_ticker, fetch_st
 from backend.data.market_collector import fetch_market_indices, fetch_stock_news, fetch_market_index_history
 from backend.engine.flow_engine import analyze_stock_flow
 from backend.engine.decision_engine import analyze_stock_decision
+from backend.engine.smart_flow_engine import analyze_smart_money_flow
+from backend.engine.cross_validation_engine import analyze_cross_indicators
 from backend.engine.stock_identifier import search_stock_or_etf, search_all_stock_or_etf
 from backend.engine.news_engine import fetch_qna_stock_news
 from backend.engine.official_engine import fetch_official_documents
@@ -45,11 +47,13 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_warmup_cache():
     """
-    서버 가동 시 백그라운드 비동기 스레드로 포트폴리오(STOCK & ETF) 데이터를 미리 사전 워밍업(Warm-up)하여
+    서버 가동 시 백그라운드 비동기 스레드로 포트폴리오(STOCK & ETF) 데이터 및 KRX 전종목 캐시를 미리 사전 워밍업(Warm-up)하여
     사용자가 최초 접속했을 때 화면 출력이 0.001초 만에 즉시 이뤄지도록 보장합니다.
     """
     loop = asyncio.get_event_loop()
     try:
+        from backend.engine.krx_loader import load_krx_all_stocks
+        loop.run_in_executor(None, load_krx_all_stocks)
         loop.run_in_executor(None, partial(pe.analyze_portfolio, "STOCK"))
         loop.run_in_executor(None, partial(pe.analyze_portfolio, "ETF"))
     except Exception:
@@ -185,6 +189,10 @@ def analyze_flow(ticker: str = Query(..., description="종목명 또는 6자리 
 
     df = flow_data["df"]
     analysis_result = analyze_stock_flow(df)
+    
+    m_info = search_stock_or_etf(flow_data["ticker"])
+    asset_type = m_info[0].get("asset_type", "STOCK") if m_info else "STOCK"
+    smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
 
     return {
         "status": "success",
@@ -196,7 +204,9 @@ def analyze_flow(ticker: str = Query(..., description="종목명 또는 6자리 
             "source": flow_data["source"],
             "is_delayed": flow_data["is_delayed"]
         },
-        "analysis": analysis_result
+        "analysis": analysis_result,
+        "investor_breakdown": flow_data.get("investor_breakdown"),
+        "smart_flow_analysis": smart_flow
     }
 
 # 5. 기술적 지표 + 수급 + 의사결정 API
@@ -220,7 +230,18 @@ def analyze_decision(
 
     df = flow_data["df"]
     res = analyze_stock_decision(df, return_rate=return_rate)
-    
+
+    m_info = search_stock_or_etf(ticker_code)
+    asset_type = m_info[0].get("asset_type", "STOCK") if m_info else "STOCK"
+    smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
+
+    cross_res = analyze_cross_indicators(
+        flow_analysis=res.get("flow_analysis"),
+        technical_analysis=res.get("technical_analysis"),
+        smart_flow_analysis=smart_flow,
+        decision_analysis=res.get("decision")
+    )
+
     return {
         "status": "success",
         "ticker": ticker_code,
@@ -230,7 +251,10 @@ def analyze_decision(
             "source": flow_data["source"],
             "is_delayed": flow_data["is_delayed"]
         },
-        "data": res
+        "data": res,
+        "investor_breakdown": flow_data.get("investor_breakdown"),
+        "smart_flow_analysis": smart_flow,
+        "cross_analysis": cross_res
     }
 
 # 6. 포트폴리오 조회 API (asset_type: 'STOCK' 또는 'ETF')
@@ -243,6 +267,15 @@ def get_portfolio(asset_type: str = Query("STOCK", description="자산분류 ('S
             "asset_type": asset_type.upper(),
             "data": data
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 6-1. 15초 자동 타이머 전용 초경량 시세 조회 API
+@app.get("/api/portfolio/live-prices")
+def get_portfolio_live_prices(asset_type: str = Query("STOCK", description="자산분류 ('STOCK': 개별주식, 'ETF': ETF)")):
+    try:
+        data = pe.get_portfolio_live_prices(asset_type=asset_type)
+        return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -2,12 +2,20 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AI 주식 포트폴리오 의사결정 시스템</title>
+    <!-- PWA Manifest & Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    
     <!-- Google Fonts & Chart.js CDN -->
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=20260902_v9999">
 </head>
 <body>
     <div class="app-container">
@@ -36,20 +44,9 @@
                 <div class="theme-toggle-container">
                     <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="클릭하여 화면 색상을 다크 모드 또는 눈 피로 감소 회백색 모드로 전환합니다">
                         <span class="theme-icon" id="themeIcon">🌙</span>
-                        <span class="theme-text" id="themeText">다크 모드</span>
+                        <span class="theme-text" id="themeText">야간</span>
                     </button>
                 </div>
-                <div class="water-calculator-btn-group">
-                    <button class="btn btn-secondary" onclick="openSimModal()">➕ 물타기 계산기</button>
-                    <div class="tooltip-container">
-                        <span class="tooltip-icon">?</span>
-                        <div class="tooltip-box">
-                            <h4>💡 물타기(추가매수) 계산기란?</h4>
-                            <p>보유 중인 종목의 추가 매수 가격과 수량을 입력하면 매수 후 <strong>변경되는 목표 평단가, 총 투자금액</strong>, 그리고 <strong>원금 회복(손익분기)에 필요한 반등 상승률 단축 효과</strong>를 미리 시뮬레이션해 줍니다.</p>
-                        </div>
-                    </div>
-                </div>
-                <button class="btn btn-primary" onclick="openAddStockModal()">+ 종목 추가</button>
             </div>
         </header>
 
@@ -58,20 +55,20 @@
             <!-- Left Side Navigation Bar (2 Bars) -->
             <aside class="sidebar-nav">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">ASSET PORTFOLIOS</span>
+                    <span class="sidebar-title">포트폴리오</span>
                 </div>
                 <nav class="sidebar-menu">
                     <button class="nav-item active" id="navStock" onclick="switchAssetType('STOCK')">
                         <span class="nav-icon">📈</span>
                         <div class="nav-text">
-                            <span class="nav-label">개별종목 포트폴리오</span>
+                            <span class="nav-label">개별종목</span>
                             <span class="nav-sub">STOCK PORTFOLIO</span>
                         </div>
                     </button>
                     <button class="nav-item" id="navEtf" onclick="switchAssetType('ETF')">
                         <span class="nav-icon">🧺</span>
                         <div class="nav-text">
-                            <span class="nav-label">ETF 포트폴리오</span>
+                            <span class="nav-label">ETF</span>
                             <span class="nav-sub">ETF PORTFOLIO</span>
                         </div>
                     </button>
@@ -83,6 +80,25 @@
                         </div>
                     </button>
                 </nav>
+
+                <!-- 좌측 포트폴리오 박스 아래: 주식현재가 검색 박스 -->
+                <div class="sidebar-quote-box" style="margin-top: 20px; padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.12);">
+                    <div class="sidebar-header" style="margin-bottom: 10px; padding-bottom: 6px; border-bottom: none;">
+                        <span class="sidebar-title" style="font-size: 15px; font-weight: 800; background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4)); display: block;">주식현재가</span>
+                    </div>
+                    <div class="sidebar-quote-form" style="position: relative; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="position: relative; width: 100%;">
+                            <input type="text" id="sidebarQuoteInput" placeholder="종목명 또는 코드 (예: 삼성전자, NAVER)" 
+                                   oninput="handleSidebarQuoteSearch(this.value, event)" 
+                                   onkeydown="handleSidebarQuoteSearch(this.value, event); if(event.key==='Enter'){event.preventDefault(); submitSidebarQuoteSearch();}"
+                                   style="width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 10px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; outline: none;" autocomplete="off">
+                            <div id="sidebarQuoteCandidateList" class="suggestions-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; max-height: 220px; overflow-y: auto; background: var(--card-bg-solid); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin-top: 4px;"></div>
+                        </div>
+                        <button class="btn btn-primary" onclick="submitSidebarQuoteSearch()" style="width: 100%; min-height: 38px; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px;">
+                            🔍 주식현재가 & 차트 조회
+                        </button>
+                    </div>
+                </div>
             </aside>
 
             <!-- Right Main Content Area -->
@@ -90,7 +106,7 @@
                 <!-- 1. Portfolio Dashboard View (STOCK / ETF) -->
                 <div id="portfolioDashboardView">
                     <!-- Main Dashboard Header (PORTFOLIO SUMMARY) -->
-                    <section class="summary-section">
+                    <section class="summary-section" id="portfolioSummarySection">
                         <div class="summary-card">
                             <span class="card-label">총 투자금액</span>
                             <span class="card-val" id="totalInvested">- 원</span>
@@ -130,6 +146,21 @@
                         <div class="section-title-area">
                             <h2 id="currentDashboardTitle">📊 개별종목 PORTFOLIO & TODAY ACTION</h2>
                             <div class="realtime-controls">
+                                <!-- ➕ 물타기 계산기 & + 종목 추가 (개별종목 & ETF 메뉴 전용, ⚡ 실시간 갱신 ON 아이콘 스위치 좌측 배치) -->
+                                <div class="portfolio-action-toolbar" id="portfolioActionToolbar" style="display: flex; align-items: center; gap: 8px; margin-right: 6px;">
+                                    <div class="water-calculator-btn-group">
+                                        <button class="btn btn-secondary" onclick="openSimModal()" style="font-size: 11.5px; padding: 5px 10px; border-radius: 8px;">➕ 물타기 계산기</button>
+                                        <div class="tooltip-container">
+                                            <span class="tooltip-icon">?</span>
+                                            <div class="tooltip-box">
+                                                <h4>💡 물타기(추가매수) 계산기란?</h4>
+                                                <p>보유 중인 종목의 추가 매수 가격과 수량을 입력하면 매수 후 <strong>변경되는 목표 평단가, 총 투자금액</strong>, 그리고 <strong>원금 회복(손익분기)에 필요한 반등 상승률 단축 효과</strong>를 미리 시뮬레이션해 줍니다.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="openAddStockModal()" style="font-size: 11.5px; padding: 5px 10px; border-radius: 8px; font-weight: 700;">+ 종목 추가</button>
+                                </div>
+
                                 <label class="toggle-switch" title="15초마다 실시간 시세를 자동 갱신합니다">
                                     <input type="checkbox" id="autoRefreshToggle" checked onchange="toggleAutoRefresh(this.checked)">
                                     <span class="slider round"></span>
@@ -140,6 +171,17 @@
                                 </button>
                                 <span class="update-info" id="lastUpdatedInfo">최신 업데이트: -</span>
                             </div>
+                        </div>
+
+                        <!-- 주식현재가 실시간 검색 결과 카드 구역 -->
+                        <div id="singleQuoteResultArea" style="display: none; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; background: rgba(56, 189, 248, 0.08); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                                <h3 style="font-size: 15px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 8px; margin: 0;">
+                                    🔍 <span id="singleQuoteResultTitle">주식현재가 & TODAY ACTION 조회 결과</span>
+                                </h3>
+                                <button class="btn btn-secondary" onclick="closeSingleQuoteResult()" style="font-size: 11px; padding: 4px 10px; min-height: 28px; border-radius: 6px;">✖️ 닫기</button>
+                            </div>
+                            <div id="singleQuoteCardContainer" style="margin-top: 10px;"></div>
                         </div>
 
                         <div class="stock-grid" id="stockGrid">
@@ -336,7 +378,7 @@
                 </div>
                 <button class="close-btn" onclick="closeDetailModal()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="max-height: 82vh; overflow-y: auto; padding-right: 8px;">
                 <!-- Action Highlight Card -->
                 <div class="modal-action-box" id="modalActionBox">
                     <div class="action-top">
@@ -351,6 +393,254 @@
                     <div class="action-reasons">
                         <h4>💡 AI 판단 주요 근거 ("왜 그렇게 판단했는가?")</h4>
                         <ul id="modalReasonList"></ul>
+                    </div>
+                </div>
+
+                <!-- 🤖 AI 투자판단 종합 리포트 (Comprehensive AI Report) 신규 영역 -->
+                <div class="comp-report-section" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+                        <h3 style="font-size: 15px; font-weight: 800; color: #a78bfa; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            🤖 AI 투자판단 종합 리포트 (Comprehensive AI Report)
+                        </h3>
+                        <span id="compReliabilityGrade" style="padding: 4px 10px; font-size: 12px; font-weight: 800; border-radius: 20px; background: rgba(167, 139, 250, 0.2); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.4);">
+                            데이터 분석 완료
+                        </span>
+                    </div>
+
+                    <!-- ① 현재 상태 -->
+                    <div style="background: rgba(30, 41, 59, 0.5); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);" id="compCurrentStatus">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px;">
+                            <span style="color: #cbd5e1; font-weight: 700;">📌 ① 현재 상태</span>
+                            <span id="compTimeSource" style="color: #94a3b8; font-size: 11px;">기준일시: 실시간 API | 출처: QUANT AI | 상태: 정상</span>
+                        </div>
+                        <div style="font-size: 13px; font-weight: 700; color: #f8fafc; margin-top: 4px;" id="compPriceActionText">
+                            현재가: -원 | TODAY ACTION: -
+                        </div>
+                    </div>
+
+                    <!-- 2열 그리드: ② 수급 & ③ 기술지표 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-bottom: 10px;">
+                        <!-- ② 수급 -->
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);" id="compFlowSection">
+                            <div style="font-size: 12px; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">📊 ② 수급 동향</div>
+                            <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;" id="compFlowText">FCS/FFCS 분석 중...</div>
+                        </div>
+
+                        <!-- ③ 기술지표 -->
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);" id="compTechSection">
+                            <div style="font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 4px;">📈 ③ 기술지표</div>
+                            <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;" id="compTechText">RSI/RMI 분석 중...</div>
+                        </div>
+                    </div>
+
+                    <!-- 2열 그리드: ④ Smart Money & ⑤ 뉴스·공시 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-bottom: 10px;">
+                        <!-- ④ Smart Money -->
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);" id="compSmartSection">
+                            <div style="font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 4px;">🔥 ④ Smart Money Flow</div>
+                            <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;" id="compSmartText">Smart Money 분석 중...</div>
+                        </div>
+
+                        <!-- ⑤ 뉴스·공시 -->
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);" id="compNewsSection">
+                            <div style="font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 4px;">🌐 ⑤ 최근 뉴스·공시</div>
+                            <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;" id="compNewsText">DART 공시 및 뉴스 인용 중...</div>
+                        </div>
+                    </div>
+
+                    <!-- ⑥ 위험요인 + AI 종합해석 -->
+                    <div style="background: rgba(30, 41, 59, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(167, 139, 250, 0.3);" id="compSummarySection">
+                        <div style="font-size: 12.5px; font-weight: 800; color: #c4b5fd; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                            <span>💡 ⑥ 위험요인 & AI 종합해석 (Executive Summary)</span>
+                            <span id="compConflictBadge" style="display: none; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 10px; background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4);">
+                                ⚠️ 지표 간 신호 충돌 / 추가 확인 필요
+                            </span>
+                        </div>
+                        <div style="font-size: 12px; color: #f1f5f9; line-height: 1.6;" id="compSummaryText">
+                            종합 리포트 요약 생성 중...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 📊 수급 상세분석 (기간별 누적 수급 현황) 신규 추가 영역 -->
+                <div class="flow-detail-section" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        <h4 style="font-size: 14px; font-weight: 700; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 6px;">
+                            📊 수급 상세분석 (기간별 누적 수급 현황)
+                        </h4>
+                        <!-- 기간 선택 탭 버튼 -->
+                        <div class="flow-period-tabs" style="display: flex; gap: 4px; background: rgba(30, 41, 59, 0.8); padding: 3px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                            <button class="flow-p-btn active" onclick="selectFlowPeriod('1d')" id="flowPBtn1d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: #38bdf8; color: #0f172a; cursor: pointer; transition: all 0.2s;">1일</button>
+                            <button class="flow-p-btn" onclick="selectFlowPeriod('3d')" id="flowPBtn3d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">3일</button>
+                            <button class="flow-p-btn" onclick="selectFlowPeriod('5d')" id="flowPBtn5d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">5일</button>
+                            <button class="flow-p-btn" onclick="selectFlowPeriod('10d')" id="flowPBtn10d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">10일</button>
+                            <button class="flow-p-btn" onclick="selectFlowPeriod('20d')" id="flowPBtn20d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">20일</button>
+                        </div>
+                    </div>
+
+                    <!-- 수급 상세 수치 카드 그리드 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">🏢 외국인 누적 순매수</div>
+                            <div id="detailForeignNetBuy" style="font-size: 15px; font-weight: 800; color: #f8fafc;">0 억원</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">🏛️ 기관 누적 순매수</div>
+                            <div id="detailInstNetBuy" style="font-size: 15px; font-weight: 800; color: #f8fafc;">0 억원</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">🤝 수급 동조 상태</div>
+                            <div id="detailConcurrencyState" style="font-size: 12px; font-weight: 700; color: #38bdf8;">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🏛️ 투자자별 세부 수급 (5/10/20일 누적 현황) 영역 -->
+                <div class="investor-breakdown-section" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        <h4 style="font-size: 14px; font-weight: 700; color: #c084fc; margin: 0; display: flex; align-items: center; gap: 6px;">
+                            🏛️ 투자자별 세부 수급 (6대 주체 누적 현황)
+                        </h4>
+                        <!-- 세부 수급 기간 선택 탭 버튼 -->
+                        <div class="breakdown-period-tabs" style="display: flex; gap: 4px; background: rgba(30, 41, 59, 0.8); padding: 3px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                            <button class="breakdown-p-btn active" onclick="selectBreakdownPeriod('5d')" id="bdPBtn5d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: #a855f7; color: #ffffff; cursor: pointer; transition: all 0.2s;">5일</button>
+                            <button class="breakdown-p-btn" onclick="selectBreakdownPeriod('10d')" id="bdPBtn10d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">10일</button>
+                            <button class="breakdown-p-btn" onclick="selectBreakdownPeriod('20d')" id="bdPBtn20d" style="padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s;">20일</button>
+                        </div>
+                    </div>
+
+                    <!-- 6개 투자자 세부 수치 카드 그리드 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">🏢 외국인</div>
+                            <div id="bdForeignNetBuy" style="font-size: 14px; font-weight: 800; color: #f8fafc;">0 억원</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">🏦 연기금 등</div>
+                            <div id="bdPensionNetBuy" style="font-size: 14px; font-weight: 800; color: #94a3b8;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">📈 금융투자</div>
+                            <div id="bdFinInvNetBuy" style="font-size: 14px; font-weight: 800; color: #94a3b8;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">💼 투신</div>
+                            <div id="bdInvTrustNetBuy" style="font-size: 14px; font-weight: 800; color: #94a3b8;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">💎 사모펀드</div>
+                            <div id="bdPrivateFundNetBuy" style="font-size: 14px; font-weight: 800; color: #94a3b8;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">👤 개인</div>
+                            <div id="bdIndividualNetBuy" style="font-size: 14px; font-weight: 800; color: #f8fafc;">0 억원</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🔥 큰손 수급 분석 (Smart Money Flow) 영역 -->
+                <div class="smart-flow-section" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                        <h4 style="font-size: 14px; font-weight: 700; color: #fbbf24; margin: 0; display: flex; align-items: center; gap: 6px;">
+                            🔥 큰손 수급 분석 (Smart Money Flow)
+                        </h4>
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                            <span id="smartDetailAlertBadge" style="display: none; padding: 3px 8px; font-size: 11px; font-weight: 700; border-radius: 12px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                ⚠️ 기관 세부 수급 미확인
+                            </span>
+                            <span id="smartSignalBadge" style="padding: 4px 10px; font-size: 12.5px; font-weight: 800; border-radius: 20px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);">
+                                데이터 부족 / 판단 보류
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- ⚠️ ETF 수급 특성 알림 바 -->
+                    <div id="smartEtfNoticeBar" style="display: none; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #60a5fa; margin-bottom: 10px; line-height: 1.4;">
+                        💡 <strong>ETF 수급 특성 알림:</strong> 개별 주식과 달리 LP/AP의 유동성 공급 및 설정·환매 자금이 포함되어 있으므로 수급 방향을 확정적 이탈/매집으로 단정하지 않습니다.
+                    </div>
+
+                    <!-- 점수 및 프로그래스 바 -->
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; background: rgba(30, 41, 59, 0.6); padding: 10px 14px; border-radius: 8px;">
+                        <div style="font-size: 13px; color: #94a3b8;">Smart Money Score:</div>
+                        <div id="smartMoneyScoreVal" style="font-size: 20px; font-weight: 900; color: #f8fafc;">- 점</div>
+                        <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                            <div id="smartScoreBar" style="width: 0%; height: 100%; background: #94a3b8; transition: width 0.4s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 🏛️ 6대 주체 수급 방향 뱃지 & 추세 요약 -->
+                    <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(30, 41, 59, 0.4); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                            <div style="font-size: 11.5px; color: #94a3b8; font-weight: 700;">주체별 수급 방향 (최근 5일):</div>
+                            <div id="smartSubjectBadges" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <span style="font-size: 11px; color: #64748b;">수집 중...</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 11.5px; color: #cbd5e1; display: flex; gap: 10px; flex-wrap: wrap;" id="smartTrendSummary">
+                            <span>5D 추세: <strong style="color:#94a3b8;">-</strong></span>
+                            <span>10D 추세: <strong style="color:#94a3b8;">-</strong></span>
+                            <span>20D 추세: <strong style="color:#94a3b8;">-</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 판단 사유 리스트 -->
+                    <div style="font-size: 12px; color: #cbd5e1;">
+                        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 4px;">📌 큰손 수급 분석 근거:</div>
+                        <ul id="smartReasonList" style="margin: 0; padding-left: 18px; line-height: 1.6;">
+                            <li>세부 수급 분석 중...</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) 영역 -->
+                <div class="cross-analysis-section" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        <h4 style="font-size: 14px; font-weight: 700; color: #60a5fa; margin: 0; display: flex; align-items: center; gap: 6px;">
+                            🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis)
+                        </h4>
+                        <span id="crossStatusBadge" style="padding: 4px 10px; font-size: 12.5px; font-weight: 800; border-radius: 20px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);">
+                            데이터 분석 중...
+                        </span>
+                    </div>
+
+                    <!-- 4대 지표 수치 & 방향 그리드 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px;">
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span>📊 FCS/FFCS</span>
+                                <span id="crossFcsDir" style="font-weight:700;">-</span>
+                            </div>
+                            <div id="crossFcsVal" style="font-size: 14px; font-weight: 800; color: #f8fafc;">- 점</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span>📈 RSI (14)</span>
+                                <span id="crossRsiDir" style="font-weight:700;">-</span>
+                            </div>
+                            <div id="crossRsiVal" style="font-size: 14px; font-weight: 800; color: #f8fafc;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span>🌊 RMI (14,5)</span>
+                                <span id="crossRmiDir" style="font-weight:700;">-</span>
+                            </div>
+                            <div id="crossRmiVal" style="font-size: 14px; font-weight: 800; color: #f8fafc;">-</div>
+                        </div>
+                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span>🔥 Smart Money</span>
+                                <span id="crossSmartDir" style="font-weight:700;">-</span>
+                            </div>
+                            <div id="crossSmartVal" style="font-size: 14px; font-weight: 800; color: #f8fafc;">- 점</div>
+                        </div>
+                    </div>
+
+                    <!-- 지표 교차 진단 사유 -->
+                    <div style="font-size: 12px; color: #cbd5e1;">
+                        <div style="font-weight: 700; color: #94a3b8; margin-bottom: 4px;">🔍 지표 일치/충돌 비교 진단:</div>
+                        <ul id="crossReasonList" style="margin: 0; padding-left: 18px; line-height: 1.6;">
+                            <li>지표 교차 분석 중...</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -554,7 +844,7 @@
 
                 <!-- 4. RMI (Relative Momentum Index) 차트 -->
                 <div class="sub-chart-box">
-                    <h4 style="font-size: 13px; color: #a855f7; margin-bottom: 6px;">🎯 RMI (Relative Momentum Index - 상대모멘텀지수 14일, 4일간격) <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">(70 이상 과매수, 30 이하 과매도)</span></h4>
+                    <h4 style="font-size: 14px !important; color: #00e5ff !important; font-weight: 800 !important; text-shadow: 0 0 12px rgba(0, 229, 255, 0.65) !important; margin-bottom: 6px;">🎯 RMI (Relative Momentum Index - 상대모멘텀지수 14일, 4일간격) <span style="font-size: 11px !important; color: #94a3b8 !important; font-weight: normal !important; text-shadow: none !important;">(70 이상 과매수, 30 이하 과매도)</span></h4>
                     <div class="chart-container" style="height: 150px; position: relative;">
                         <canvas id="stockRmiChart" height="150"></canvas>
                     </div>
@@ -611,6 +901,95 @@
         </div>
     </div>
 
-    <script src="/app.js"></script>
+    <!-- 6. 퀀트 보조지표 전문가 설명 도움말 모달 -->
+    <div class="modal-overlay" id="indicatorHelpModal" style="display: none;">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 style="color: #38bdf8; font-weight: 800; display: flex; align-items: center; gap: 8px; font-size: 16px;">
+                        ❓ 퀀트 보조지표 및 수급 점수 전문가 가이드
+                    </h3>
+                    <span class="modal-sub">볼린저 밴드, MACD, 스토캐스틱, RSI, FFCS, Buy/Sell/Watering Score 상세 해설</span>
+                </div>
+                <button class="close-btn" onclick="closeIndicatorHelpModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto; padding: 16px 20px;">
+                <div class="help-section-box" style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(56, 189, 248, 0.25);">
+                    <h4 style="color: #38bdf8; font-size: 14px; font-weight: 700; margin-bottom: 6px;">⚡ 볼린저 밴드 (Bollinger Bands - 20, 2.0)</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        주가의 20일 이동평균선(MB)을 중심으로 표준편차 ±2.0배 구간(상단선 UB, 하단선 LB)을 산출하여 주가의 변동성 범위 및 과매수/과매도 반등 지점을 측정합니다. 주가가 하단선을 터치하고 반등할 때는 기술적 매수 타이밍, 상단선을 상향 이탈 후 꺾일 때는 익절/매도 타이밍으로 판단합니다.
+                    </p>
+                </div>
+
+                <div class="help-section-box" style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(168, 85, 247, 0.25);">
+                    <h4 style="color: #c084fc; font-size: 14px; font-weight: 700; margin-bottom: 6px;">📈 MACD (Moving Average Convergence Divergence - 12, 26, 9)</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        단기(12일)와 장기(26일) 지수이동평균의 차이를 이용해 추세의 방향과 모멘텀 전환을 포착합니다. MACD선이 9일 시그널선을 밑에서 위로 뚫고 오르는 <strong>골든크로스</strong>는 강한 상승 추세 전환 매수 신호이며, 위에서 밑으로 꺾이는 <strong>데드크로스</strong>는 하락 전환 매도 신호입니다.
+                    </p>
+                </div>
+
+                <div class="help-section-box" style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(56, 189, 248, 0.25);">
+                    <h4 style="color: #38bdf8; font-size: 14px; font-weight: 700; margin-bottom: 6px;">🎯 스토캐스틱 슬로우 (Stochastic Slow - 14, 3, 3)</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        최근 14일간의 최고가와 최저가 범위 내에서 현재 주가의 상대적 위치(0~100)를 측정하여 단기 매매 타이밍을 분석합니다. %K 지표가 <strong>20 이하 과매도 구간을 탈출할 때</strong>는 강력한 저점 매수 신호, <strong>80 이상 과매수 구간을 하향 이탈할 때</strong>는 고점 매도 신호입니다.
+                    </p>
+                </div>
+
+                <div class="help-section-box" style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(168, 85, 247, 0.25);">
+                    <h4 style="color: #c084fc; font-size: 14px; font-weight: 700; margin-bottom: 6px;">📊 RSI (Relative Strength Index - 상대강도지수 14일)</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        최근 14일간 가격의 상승 폭과 하락 폭의 상대적 강도를 0~100% 수치로 측정하여 과열 및 과매도 상태를 산출하는 대표적 모멘텀 지표입니다. 수치가 <strong>70% 이상일 때는 과매도/상승 과열 구간</strong>으로 차익실현 비중축소를 고려하며, <strong>30% 이하일 때는 과매도 저평가 구간</strong>으로 반등 매수 타이밍으로 판단합니다.
+                    </p>
+                </div>
+
+                <div class="help-section-box" style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.25);">
+                    <h4 style="color: #fbbf24; font-size: 14px; font-weight: 700; margin-bottom: 6px;">🌊 FFCS (Foreign & Financial Concurrency Score - 외국인/기관 수급 점수)</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        국내 증시의 핵심 수급 주체인 외국인 투자자와 기관 투자가의 최근 5일~60일 연속 순매수/순매도 세력 및 쌍끌이 동조화 현상을 알고리즘으로 종합 평가한 100점 만점 퀀트 수급 지수입니다. 점수가 높을수록 수급 방어력이 견고합니다.
+                    </p>
+                </div>
+
+                <div class="help-section-box" style="background: rgba(15, 23, 42, 0.65); padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.25);">
+                    <h4 style="color: #34d399; font-size: 14px; font-weight: 700; margin-bottom: 6px;">⚖️ Buy Score / Sell Score / Watering Score</h4>
+                    <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.65; margin: 0;">
+                        <strong>Buy Score</strong>: 수급 매집 강도와 기술적 지지선 안착을 결합한 신규 매수 가중치 점수.<br>
+                        <strong>Sell Score</strong>: 과열 이탈 및 기관/외국인 매도 세력을 반영한 차익실현 비중축소 점수.<br>
+                        <strong>Watering Score</strong>: 보유 종목 손실 발생 시 원금 회복 가능성 및 분할 물타기 매수 적합도를 산출한 점수.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar (< 768px) -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <button class="mobile-nav-btn active" id="mNavPortfolio" onclick="switchAssetType('PORTFOLIO')">
+            <span class="m-nav-icon">📊</span>
+            <span class="m-nav-label">포트폴리오</span>
+        </button>
+        <button class="mobile-nav-btn" id="mNavStock" onclick="switchAssetType('STOCK')">
+            <span class="m-nav-icon">📈</span>
+            <span class="m-nav-label">개별종목</span>
+        </button>
+        <button class="mobile-nav-btn" id="mNavEtf" onclick="switchAssetType('ETF')">
+            <span class="m-nav-icon">🧺</span>
+            <span class="m-nav-label">ETF</span>
+        </button>
+        <button class="mobile-nav-btn" id="mNavQna" onclick="switchAssetType('QNA')">
+            <span class="m-nav-icon">🤖</span>
+            <span class="m-nav-label">AI Q&A</span>
+        </button>
+    </nav>
+
+    <!-- PWA Automatic Update Notification Toast -->
+    <div id="pwaUpdateToast" class="pwa-update-toast" style="display: none;">
+        <div class="pwa-toast-content">
+            <span class="pwa-toast-icon">🚀</span>
+            <span class="pwa-toast-msg">새 버전이 업데이트되었습니다!</span>
+        </div>
+        <button class="btn-pwa-reload" onclick="reloadPwaApp()">새로고침 적용</button>
+    </div>
+
+    <script src="/app.js?v=20260902_v20000"></script>
 </body>
 </html>
