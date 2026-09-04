@@ -410,9 +410,21 @@ function switchAssetType(assetType) {
     }
 
     if (portfolioRenderCache[assetType]) {
-        // 이미 로딩된 탭 데이터가 있으면 0ms 즉시 쾌속 전환 (불필요한 중복 API 호출 제거)
+        // 이미 로딩된 탭 데이터가 있으면 0ms 즉시 쾌속 전환 후 최신화
         renderPortfolioUI(portfolioRenderCache[assetType]);
+        fetchPortfolioData(true);
     } else {
+        // 캐시가 없으면 클릭 즉시 0초 반응 로딩 스피너 표출 후 조속 데이터 로딩
+        if (stockGrid) {
+            const assetLabel = assetType === 'ETF' ? 'ETF' : '개별주';
+            stockGrid.innerHTML = `
+                <div class="loading-box" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">🔎</div>
+                    <div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">${assetLabel} 포트폴리오 분석 중...</div>
+                    <div style="font-size: 12px; color: #94a3b8;">실시간 수급 동향 및 TODAY ACTION 퀀트 신호를 분석하고 있습니다.</div>
+                </div>
+            `;
+        }
         fetchPortfolioData(false);
     }
 }
