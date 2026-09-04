@@ -3321,4 +3321,246 @@ async function triggerForwardTestEvaluation() {
     }
 }
 
+// =========================================================
+// 🔍 7차-5 Forward Test 종목 검색 & 추적 등록 UI 로직
+// =========================================================
 
+// 현재 선택된 종목 정보 (검색 후 분석 결과 저장)
+let ftCurrentStock = null;
+let ftSearchDebounceTimer = null;
+
+/**
+ * 검색 인풋 디바운스 처리 — 기존 /api/stock/search API 재사용
+ */
+function ftOnSearchInput(query) {
+    clearTimeout(ftSearchDebounceTimer);
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (!query || query.trim().length < 1) {
+        if (dropdown) dropdown.style.display = 'none';
+        return;
+    }
+    ftSearchDebounceTimer = setTimeout(() => ftSearchStock(query.trim()), 280);
+}
+
+async function ftSearchStock(query) {
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (!dropdown) return;
+    try {
+        const resp = await fetch(`/api/stock/search?query=${encodeURIComponent(query)}&asset_type=ALL`);
+        if (!resp.ok) { dropdown.style.display = 'none'; return; }
+        const data = await resp.json();
+        const candidates = (data.candidates || []).slice(0, 10);
+        if (candidates.length === 0) {
+            dropdown.innerHTML = `<div style="padding:10px 14px; color:#64748b; font-size:12px;">검색 결과가 없습니다.</div>`;
+            dropdown.style.display = 'block';
+            return;
+        }
+        dropdown.innerHTML = candidates.map(c => {
+            const typeColor = c.asset_type === 'ETF' ? '#a78bfa' : '#34d399';
+            const safeName = (c.name || c.ticker || '').replace(/'/g, "\\'");
+            const safeTicker = (c.ticker || '').replace(/'/g, "\\'");
+            const safeType = (c.asset_type || 'STOCK').replace(/'/g, "\\'");
+            return `<div
+                onclick="ftSelectStock('${safeTicker}','${safeName}','${safeType}')"
+                style="padding:9px 14px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; font-size:12.5px;"
+                onmouseover="this.style.background='rgba(56,189,248,0.1)'"
+                onmouseout="this.style.background='transparent'"
+            >
+                <span style="color:#f8fafc; font-weight:700;">${c.name || c.ticker}</span>
+                <span style="color:#64748b; font-size:11px; margin-left:8px;">${c.ticker}</span>
+                <span style="color:${typeColor}; font-size:10.5px; padding:1px 6px; border-radius:4px; background:rgba(255,255,255,0.06); margin-left:6px;">${c.asset_type || 'STOCK'}</span>
+            </div>`;
+        }).join('');
+        dropdown.style.display = 'block';
+    } catch(e) {
+        console.error('FT 검색 오류:', e);
+        if (dropdown) dropdown.style.display = 'none';
+    }
+}
+
+function ftCloseDropdown() {
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+/**
+ * 자동완성에서 종목 선택 → /api/decision/analyze 호출하여 분석 결과 조회
+ * 기존 투자판단 엔진을 그대로 사용 (수정 없음)
+ */
+async function ftSelectStock(ticker, name, assetType) {
+    ftCloseDropdown();
+    const input = document.getElementById('ftSearchInput');
+    if (input) input.value = `${name} (${ticker})`;
+
+    const panel = document.getElementById('ftAnalysisPanel');
+    const loading = document.getElementById('ftAnalysisLoading');
+    const msg = document.getElementById('ftRegisterMsg');
+    if (panel) panel.style.display = 'none';
+    if (loading) loading.style.display = 'block';
+    if (msg) msg.style.display = 'none';
+    ftCurrentStock = null;
+
+    try {
+        // 기존 투자판단 엔진 그대로 호출
+        const resp = await fetch(`/api/decision/analyze?ticker=${encodeURIComponent(ticker)}&return_rate=0`);
+        if (loading) loading.style.display = 'none';
+
+        if (!resp.ok) {
+            alert(`분석 데이터를 불러오지 못했습니다. (${resp.status})`);
+            return;
+        }
+        const res = await resp.json();
+        if (res.status !== 'success' || !res.data) {
+            alert('분석 결과를 가져올 수 없습니다. 종목코드를 확인해 주세요.');
+            return;
+        }
+
+        const dec = res.data.decision || {};
+        const flow = res.data.flow_analysis || {};
+        const tech = res.data.technical_analysis || {};
+        const timing = res.data.timing_analysis || {};
+        const smart = res.smart_flow_analysis || {};
+        const cross = res.cross_analysis || {};
+
+        const latestPrice = tech.latest_close || 0;
+        const finalDec = dec.decision || 'HOLD';
+        const origDec = dec.original_decision || finalDec;
+
+        ftCurrentStock = {
+            ticker: res.ticker || ticker,
+            name: res.name || name,
+            assetType: assetType,
+            price: latestPrice,
+            analysisData: {
+                decision: dec,
+                flow_analysis: flow,
+                technical_analysis: tech,
+                timing_analysis: timing,
+                smart_flow_analysis: smart,
+                cross_analysis: cross
+            }
+        };
+
+        const decColor = (finalDec === 'BUY' || finalDec === 'AVERAGE') ? '#34d399'
+                       : finalDec === 'REDUCE' ? '#f87171' : '#fbbf24';
+
+        const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+
+        setEl('ftAnalysisName', res.name || name);
+        setEl('ftAnalysisTicker', `(${res.ticker || ticker})`);
+        setEl('ftAnalysisAssetType', assetType);
+        setEl('ftAnalysisPrice', latestPrice ? `${latestPrice.toLocaleString()}원` : '-');
+        setEl('ftAnalysisAction',
+            origDec !== finalDec
+                ? `${origDec} ➔ <span style="color:${decColor}">${finalDec}</span>`
+                : `<span style="color:${decColor}">${finalDec}</span>`
+        );
+        const fcs = typeof flow.fcs_score !== 'undefined' ? Number(flow.fcs_score).toFixed(1) : '-';
+        const ffcs = typeof flow.ffcs_score !== 'undefined' ? Number(flow.ffcs_score).toFixed(1) : '-';
+        setEl('ftAnalysisFCS', `FCS: ${fcs} / FFCS: ${ffcs}`);
+
+        const rsi = typeof tech.rsi !== 'undefined' ? Number(tech.rsi).toFixed(1) : '-';
+        const rmi = typeof tech.rmi !== 'undefined' ? Number(tech.rmi).toFixed(1) : '-';
+        setEl('ftAnalysisRSI', `RSI: ${rsi} / RMI: ${rmi}`);
+
+        const smartScore = (smart && typeof smart.score !== 'undefined') ? smart.score : '-';
+        const smartGrade = (smart && smart.signal_grade) ? smart.signal_grade : '';
+        setEl('ftAnalysisSmart', `${smartScore !== '-' ? smartScore + '점' : '-'} ${smartGrade}`);
+
+        const ma60v = tech.ma60 ? Number(tech.ma60).toLocaleString() : '-';
+        const ma120v = tech.ma120 ? Number(tech.ma120).toLocaleString() : '-';
+        const isMaDown = dec.trend_filter && dec.trend_filter.active;
+        setEl('ftAnalysisMA',
+            `MA60: ${ma60v} / MA120: ${ma120v}` +
+            (isMaDown ? ' <span style="color:#f87171;font-size:10px;">⚠ 역배열</span>' : '')
+        );
+        const timingSignal = (timing && timing.timing_signal) ? timing.timing_signal : '-';
+        const crossStatus = (cross && cross.status_label) ? cross.status_label : '-';
+        setEl('ftAnalysisTiming', `${timingSignal} / ${crossStatus}`);
+
+        if (panel) panel.style.display = 'block';
+
+    } catch(e) {
+        if (loading) loading.style.display = 'none';
+        console.error('FT 분석 오류:', e);
+        alert('분석 중 오류가 발생했습니다.');
+    }
+}
+
+/**
+ * ⭐ Forward Test 추적 등록
+ * 기존 /api/forward-test/record API 재사용
+ * 중복 등록은 UNIQUE(ticker, signal_date) DB 제약으로 백엔드에서 방지
+ */
+async function ftRegisterTracking() {
+    if (!ftCurrentStock) {
+        alert('먼저 종목을 검색하고 선택해 주세요.');
+        return;
+    }
+
+    const btn = document.getElementById('ftRegisterBtn');
+    const msg = document.getElementById('ftRegisterMsg');
+
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    if (msg) msg.style.display = 'none';
+
+    try {
+        const payload = {
+            ticker: ftCurrentStock.ticker,
+            name: ftCurrentStock.name,
+            asset_type: ftCurrentStock.assetType,
+            price: ftCurrentStock.price,
+            analysis_data: ftCurrentStock.analysisData
+        };
+
+        const resp = await fetch('/api/forward-test/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const result = await resp.json();
+
+        if (msg) {
+            msg.style.display = 'block';
+            if (result.recorded) {
+                msg.style.color = '#34d399';
+                msg.innerHTML = `✅ <strong>${ftCurrentStock.name}</strong> 추적이 등록되었습니다! 5D/10D/20D 수익률을 자동 추적합니다.`;
+            } else {
+                msg.style.color = '#fbbf24';
+                msg.innerHTML = `⚠️ 오늘 이미 등록된 종목입니다. (동일 종목 동일 날짜 중복 방지)`;
+            }
+        }
+
+        // 추적 목록 즉시 갱신
+        await loadForwardTestDashboard();
+
+    } catch(e) {
+        console.error('FT 추적 등록 오류:', e);
+        if (msg) {
+            msg.style.display = 'block';
+            msg.style.color = '#f87171';
+            msg.innerHTML = '❌ 등록 중 오류가 발생했습니다.';
+        }
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+    const input = document.getElementById('ftSearchInput');
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (dropdown && input && !input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+// 전역 노출 (index.html inline onclick용)
+window.ftOnSearchInput = ftOnSearchInput;
+window.ftSelectStock = ftSelectStock;
+window.ftCloseDropdown = ftCloseDropdown;
+window.ftRegisterTracking = ftRegisterTracking;
+window.loadForwardTestDashboard = loadForwardTestDashboard;
+window.triggerForwardTestEvaluation = triggerForwardTestEvaluation;

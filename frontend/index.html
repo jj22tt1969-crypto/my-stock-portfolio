@@ -218,6 +218,86 @@
                                     </div>
                                 </div>
 
+                                <!-- 🔍 종목 검색 & 분석 & 추적 등록 패널 -->
+                                <div id="ftSearchPanel" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(56,189,248,0.2); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                                    <div style="font-size:13px; font-weight:800; color:#38bdf8; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+                                        🔍 종목 검색 및 Forward Test 추적 등록
+                                        <span style="font-size:11px; color:#64748b; font-weight:500;">(STOCK · ETF 모두 검색 가능)</span>
+                                    </div>
+
+                                    <!-- 검색 인풋 -->
+                                    <div style="position:relative; margin-bottom:10px;">
+                                        <input
+                                            id="ftSearchInput"
+                                            type="text"
+                                            placeholder="종목명 또는 종목코드 입력 (예: 삼성전자, 005930, KODEX 200)"
+                                            oninput="ftOnSearchInput(this.value)"
+                                            onkeydown="if(event.key==='Escape') ftCloseDropdown()"
+                                            autocomplete="off"
+                                            style="width:100%; padding:10px 14px; background:rgba(30,41,59,0.9); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#f8fafc; font-size:13px; outline:none; box-sizing:border-box;"
+                                        />
+                                        <div id="ftSearchDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#1e293b; border:1px solid rgba(56,189,248,0.3); border-radius:8px; z-index:999; max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.5);"></div>
+                                    </div>
+
+                                    <!-- 분석 결과 패널 (선택 후 표시) -->
+                                    <div id="ftAnalysisPanel" style="display:none; background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px; margin-bottom:12px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                                            <div>
+                                                <span id="ftAnalysisName" style="font-size:15px; font-weight:800; color:#f8fafc;"></span>
+                                                <span id="ftAnalysisTicker" style="font-size:11.5px; color:#64748b; margin-left:6px;"></span>
+                                                <span id="ftAnalysisAssetType" style="font-size:10.5px; padding:2px 6px; border-radius:4px; background:rgba(56,189,248,0.15); color:#38bdf8; margin-left:6px;"></span>
+                                            </div>
+                                            <div>
+                                                <span id="ftAnalysisPrice" style="font-size:16px; font-weight:800; color:#fbbf24;"></span>
+                                            </div>
+                                        </div>
+
+                                        <!-- 지표 그리드 -->
+                                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:8px; margin-bottom:12px;">
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">🎯 TODAY ACTION</div>
+                                                <div id="ftAnalysisAction" style="font-size:13px; font-weight:800;"></div>
+                                            </div>
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">📊 FCS / FFCS</div>
+                                                <div id="ftAnalysisFCS" style="font-size:12px; font-weight:700; color:#a3e635;"></div>
+                                            </div>
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">📈 RSI / RMI</div>
+                                                <div id="ftAnalysisRSI" style="font-size:12px; font-weight:700; color:#60a5fa;"></div>
+                                            </div>
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">💰 Smart Money</div>
+                                                <div id="ftAnalysisSmart" style="font-size:12px; font-weight:700; color:#a78bfa;"></div>
+                                            </div>
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">📐 MA60 / MA120</div>
+                                                <div id="ftAnalysisMA" style="font-size:12px; font-weight:700; color:#cbd5e1;"></div>
+                                            </div>
+                                            <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                                                <div style="font-size:10px; color:#94a3b8; margin-bottom:3px;">⏱ Timing / Cross</div>
+                                                <div id="ftAnalysisTiming" style="font-size:12px; font-weight:700; color:#fb923c;"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 추적 등록 버튼 -->
+                                        <button
+                                            id="ftRegisterBtn"
+                                            onclick="ftRegisterTracking()"
+                                            style="width:100%; padding:10px; background:linear-gradient(135deg,#22d3ee 0%,#6366f1 100%); color:#fff; font-size:13px; font-weight:800; border:none; border-radius:8px; cursor:pointer; transition:opacity 0.2s;"
+                                            onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'"
+                                        >
+                                            ⭐ Forward Test 추적 시작 (5D/10D/20D 수익률 추적)
+                                        </button>
+                                        <div id="ftRegisterMsg" style="display:none; margin-top:8px; text-align:center; font-size:12px; font-weight:700;"></div>
+                                    </div>
+
+                                    <!-- 로딩 인디케이터 -->
+                                    <div id="ftAnalysisLoading" style="display:none; text-align:center; padding:12px; color:#64748b; font-size:12px;">
+                                        ⏳ 분석 중입니다... (FCS/RSI/Smart Money/Cross 실시간 계산 중)
+                                    </div>
+                                </div>
+
                                 <!-- 1. KPI 4대 요약 카드 -->
                                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
                                     <div style="background: rgba(30, 41, 59, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
