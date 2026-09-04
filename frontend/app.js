@@ -1209,27 +1209,21 @@ function renderStockCards(items) {
 
         const cardHtml = `
             <div class="stock-card" id="stock-card-${item.ticker}">
-                <!-- 📱 스마트폰 모바일 전용 종목명 클릭 리스트 바 (PC 데스크톱 환경에서는 CSS display:none 으로 숨김) -->
-                <div class="mobile-stock-list-bar" onclick="toggleMobileStockCard('${item.ticker}')" title="터치하여 상세 포트폴리오 카드 펼치기/접기">
-                    <div class="m-stock-name">
-                        <span>📱 ${item.name}</span>
-                        <span class="m-stock-code">(${item.ticker})</span>
-                    </div>
-                    <div class="m-stock-right">
-                        <span class="m-return-badge ${plClass}">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</span>
-                        <span class="m-arrow-icon" id="mobile-arrow-${item.ticker}">🔽</span>
-                    </div>
-                </div>
-
-                <!-- ⚡ 카드 상세 본문 (스마트폰 모바일 환경에서는 종목 바 클릭 시 토글, PC에서는 항시 전체 노출) -->
+                <!-- ⚡ 카드 상세 본문 -->
                 <div class="stock-card-body-wrapper" id="mobile-card-body-${item.ticker}">
                     
-                    <!-- 1. 최상단 통합 헤더: 종목명 + 종목코드 + KOSPI/ETF 배지 + 업종 배지 + 포트폴리오 비중 배지 -->
-                    <div class="stock-hero-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <!-- 1. 최상단 단일 통합 헤더 (2줄 구성) -->
+                    <div class="stock-hero-header" style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <!-- 1번째 줄: 종목명 (종목코드) + 실시간 수익률 % -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
                             <h3 class="stock-hero-title" style="font-size: 16px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 6px;">
                                 📱 ${item.name} <span class="stock-hero-code" style="font-size: 13px; font-weight: 600;">(${item.ticker})</span>
                             </h3>
+                            <span class="m-return-badge ${plClass}" style="font-size: 12.5px; font-weight: 800; padding: 3px 10px; border-radius: 12px;">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</span>
+                        </div>
+
+                        <!-- 2번째 줄: KOSPI/ETF 배지 + 업종 배지 + 포트폴리오 비중 배지 -->
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span class="market-tag ${marketClass}">${marketVal}</span>
                             <span class="sector-tag">${item.sector || '기타'}</span>
                             <span style="font-size: 11.5px; font-weight: 700; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 12px;">비중 ${item.weight}%</span>
