@@ -1223,8 +1223,41 @@ function renderStockCards(items) {
 
                 <!-- ⚡ 카드 상세 본문 (스마트폰 모바일 환경에서는 종목 바 클릭 시 토글, PC에서는 항시 전체 노출) -->
                 <div class="stock-card-body-wrapper" id="mobile-card-body-${item.ticker}">
-                    <!-- TODAY ACTION Highlight Badge (Top Hero Signal) -->
-                    <div class="today-action-hero-bar">
+                    
+                    <!-- 1. 최상단 통합 헤더: 종목명 + 종목코드 + KOSPI/ETF 배지 + 업종 배지 + 포트폴리오 비중 배지 -->
+                    <div class="stock-hero-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <h3 class="stock-hero-title" style="font-size: 16px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                📱 ${item.name} <span class="stock-hero-code" style="font-size: 13px; font-weight: 600;">(${item.ticker})</span>
+                            </h3>
+                            <span class="market-tag ${marketClass}">${marketVal}</span>
+                            <span class="sector-tag">${item.sector || '기타'}</span>
+                            <span style="font-size: 11.5px; font-weight: 700; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 12px;">비중 ${item.weight}%</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. 가로 1줄 투자현황 그리드 박스: 현재가 | 매입평균가 | 총금액 | 수익률(손익금액) -->
+                    <div class="stock-price-grid clickable-price ${flashClass}" onclick="openStockHistoryModal('${item.ticker}', '${item.name}')" title="클릭 시 최근 6개월 추세선, 거래량, MFI 분석 차트 보기" style="margin-bottom: 12px;">
+                        <div class="price-grid-item">
+                            <span class="pg-label">현재가</span>
+                            <span class="pg-val cur-price-val">${curPrice.toLocaleString()}원</span>
+                        </div>
+                        <div class="price-grid-item">
+                            <span class="pg-label">매입평균가</span>
+                            <span class="pg-val">${item.avg_price.toLocaleString()}원</span>
+                        </div>
+                        <div class="price-grid-item">
+                            <span class="pg-label">총금액</span>
+                            <span class="pg-val eval-amount-val">${evalAmount.toLocaleString()}원</span>
+                        </div>
+                        <div class="price-grid-item">
+                            <span class="pg-label">수익률</span>
+                            <span class="pg-val return-rate-val ${plClass}">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}% (${pl >= 0 ? '+' : ''}${pl.toLocaleString()}원)</span>
+                        </div>
+                    </div>
+
+                    <!-- 3. TODAY ACTION Highlight Badge & FCS 점수 -->
+                    <div class="today-action-hero-bar" style="margin-bottom: 10px;">
                         <div class="hero-action-left">
                             <span class="hero-action-title">⚡ TODAY ACTION</span>
                             <span class="action-badge ${actionObj.class}">${actionObj.label}</span>
@@ -1234,8 +1267,8 @@ function renderStockCards(items) {
                         </div>
                     </div>
 
-                    <!-- 5차 고도화: 추세필터 연동 바 -->
-                    <div class="trend-filter-box">
+                    <!-- 4. 추세 진단 연동 바 -->
+                    <div class="trend-filter-box" style="margin-bottom: 12px;">
                         <div class="trend-filter-header">
                             <div>
                                 ${tfInfo.badgeHtml}
@@ -1243,38 +1276,6 @@ function renderStockCards(items) {
                             </div>
                         </div>
                         <div class="trend-filter-reason-text">💡 <strong>추세 진단:</strong> ${tfInfo.reasonText}</div>
-                    </div>
-
-                    <!-- Header: Stock Info & Price Grid -->
-                    <div class="card-header">
-                        <div class="stock-name-box">
-                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                <h3 class="stock-name-text">${item.name}</h3>
-                                <span class="market-tag ${marketClass}">${marketVal}</span>
-                                <span class="sector-tag">${item.sector || '기타'}</span>
-                            </div>
-                            <span class="stock-code">${item.ticker} (비중 ${item.weight}%)</span>
-                        </div>
-                        
-                        <!-- 우측 상단 4개 항목: 현재가, 매입평균가, 총금액, 수익률 -->
-                        <div class="stock-price-grid clickable-price ${flashClass}" onclick="openStockHistoryModal('${item.ticker}', '${item.name}')" title="클릭 시 최근 6개월 추세선, 거래량, MFI 분석 차트 보기">
-                            <div class="price-grid-item">
-                                <span class="pg-label">현재가</span>
-                                <span class="pg-val cur-price-val">${curPrice.toLocaleString()}원</span>
-                            </div>
-                            <div class="price-grid-item">
-                                <span class="pg-label">매입평균가</span>
-                                <span class="pg-val">${item.avg_price.toLocaleString()}원</span>
-                            </div>
-                            <div class="price-grid-item">
-                                <span class="pg-label">총금액</span>
-                                <span class="pg-val eval-amount-val">${evalAmount.toLocaleString()}원</span>
-                            </div>
-                            <div class="price-grid-item">
-                                <span class="pg-label">수익률</span>
-                                <span class="pg-val return-rate-val ${plClass}">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}% (${pl >= 0 ? '+' : ''}${pl.toLocaleString()}원)</span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- ⚡ 대제목 & 하이어라키 퀀트 리포트 컨테이너 -->

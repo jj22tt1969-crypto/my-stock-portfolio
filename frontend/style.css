@@ -471,24 +471,31 @@ body {
     text-align: right;
 }
 
-/* 우측상단 4가지 가격 항목 그리드 구조 (현재가, 매입평균가, 총금액, 수익률) */
+/* 가로 1줄 4가지 가격 항목 그리드 구조 (현재가, 매입평균가, 총금액, 수익률) */
 .stock-price-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px 14px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px 12px;
     background: rgba(15, 23, 42, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 8px 14px;
+    padding: 10px 16px;
     border-radius: 10px;
-    text-align: right;
-    min-width: 230px;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
     transition: background-color 0.3s ease;
 }
 
 .price-grid-item {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.price-grid-item:last-child {
+    border-right: none;
 }
 
 .pg-label {
@@ -4094,4 +4101,51 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
 [data-theme="light"] .ft-card-subtext {
     color: #334155 !important;
 }
+
+/* ==========================================
+ * Stock & ETF Card Hero Header & Horizontal Grid Refinements
+ * ========================================== */
+.stock-hero-header .stock-hero-title {
+    color: #f8fafc;
+}
+
+.stock-hero-header .stock-hero-code {
+    color: #94a3b8;
+}
+
+[data-theme="light"] .stock-hero-header {
+    border-bottom-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .stock-hero-header .stock-hero-title {
+    color: #0f172a !important;
+}
+
+[data-theme="light"] .stock-hero-header .stock-hero-code {
+    color: #475569 !important;
+}
+
+[data-theme="light"] .stock-price-grid {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .price-grid-item {
+    border-right-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .pg-label {
+    color: #64748b !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="light"] .pg-val {
+    color: #0f172a !important;
+}
+
+[data-theme="light"] .pg-val.cur-price-val {
+    color: #0f172a !important;
+}
+
 
