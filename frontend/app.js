@@ -11,6 +11,82 @@ let previousStockPrices = {};
 
 let newWorkerWaiting = null;
 
+/**
+ * 5차 고도화: 추세필터(trend_filter) 결과 UI 포맷터
+ */
+function formatTrendFilterInfo(tf, origDecision, finalDecision) {
+    origDecision = origDecision || finalDecision || 'HOLD';
+    finalDecision = finalDecision || origDecision;
+    
+    if (!tf || typeof tf !== 'object') {
+        return {
+            badgeHtml: `<span class="trend-filter-badge normal">정상 추세</span>`,
+            diffText: `[판단: ${finalDecision}]`,
+            reasonText: '추세 정배열 / 정상 구역',
+            statusCategory: 'NORMAL'
+        };
+    }
+
+    const active = tf.active;
+    const status = tf.status || 'NORMAL';
+    const exceptions = tf.exceptions || [];
+    const rawReason = tf.reason || '';
+
+    let badgeList = [];
+    let statusCategory = 'NORMAL';
+
+    if (status === 'BUY_RESTRICTED') {
+        statusCategory = 'RESTRICTED';
+        badgeList.push(`<span class="trend-filter-badge restricted">⚠️ MA60/MA120 역배열 BUY 억제</span>`);
+    } else if (status === 'ALLOWED_BY_EXCEPTION') {
+        statusCategory = 'ALLOWED';
+        if (exceptions.length > 0) {
+            exceptions.forEach(exc => {
+                if (exc.includes('Smart Money') || exc.includes('큰손')) {
+                    badgeList.push(`<span class="trend-filter-badge allowed">🟢 Smart Money 예외 허용</span>`);
+                } else if (exc.includes('쌍끌이') || exc.includes('외인+기관') || exc.includes('외국인')) {
+                    badgeList.push(`<span class="trend-filter-badge allowed">🟢 외인+기관 예외 허용</span>`);
+                } else if (exc.includes('RSI')) {
+                    badgeList.push(`<span class="trend-filter-badge allowed">🟢 RSI 과매도 반등 예외 허용</span>`);
+                } else if (exc.includes('Timing') || exc.includes('볼린저') || exc.includes('Bollinger')) {
+                    badgeList.push(`<span class="trend-filter-badge allowed">🟢 Bollinger 하단 반등 예외 허용</span>`);
+                } else {
+                    badgeList.push(`<span class="trend-filter-badge allowed">🟢 예외 허용 (${exc})</span>`);
+                }
+            });
+        } else {
+            badgeList.push(`<span class="trend-filter-badge allowed">🟢 기술적 예외 허용</span>`);
+        }
+    } else {
+        statusCategory = 'NORMAL';
+        badgeList.push(`<span class="trend-filter-badge normal">정상 추세</span>`);
+    }
+
+    let diffText = '';
+    if (origDecision !== finalDecision) {
+        diffText = `[원본: ${origDecision} ➔ 최종: ${finalDecision}]`;
+    } else {
+        diffText = `[판단: ${finalDecision}]`;
+    }
+
+    let reasonText = rawReason;
+    if (status === 'BUY_RESTRICTED') {
+        reasonText = rawReason || 'MA60/MA120 역배열 하락추세 구간으로 위험 관리를 위해 매수 신호가 HOLD로 억제되었습니다.';
+    } else if (status === 'ALLOWED_BY_EXCEPTION') {
+        reasonText = rawReason || `MA60/MA120 역배열 구간이나 예외 조건 충족으로 매수가 허용되었습니다.`;
+    } else if (!active) {
+        reasonText = 'MA60/MA120 정배열 또는 일반 추세 구역입니다.';
+    }
+
+    return {
+        badgeHtml: badgeList.join(' '),
+        diffText: diffText,
+        reasonText: reasonText,
+        statusCategory: statusCategory
+    };
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initApp();
@@ -1053,6 +1129,7 @@ function renderStockCards(items) {
             'REDUCE': { label: '비중 축소', class: 'REDUCE' }
         };
         const actionObj = decisionMap[item.final_decision] || { label: item.final_decision || '보유', class: 'HOLD' };
+        const tfInfo = formatTrendFilterInfo(item.trend_filter, item.original_decision, item.final_decision);
 
         const reasons = item.ai_reasons || ["수급 및 지지선 모니터링 필요"];
         const reasonsHtml = reasons.map(r => `<li style="list-style: none; position: relative; padding-left: 18px; margin-bottom: 6px; font-size: 12.5px; line-height: 1.65;"><span style="position: absolute; left: 0;">📌</span> ${r}</li>`).join('');
@@ -1130,6 +1207,17 @@ function toggleMobileStockCard(ticker) {
                         <div class="hero-action-right">
                             <span class="hero-ffcs-pill">FCS: <strong>${item.ffcs_score != null ? item.ffcs_score : '-'}점</strong></span>
                         </div>
+                    </div>
+
+                    <!-- 5차 고도화: 추세필터 연동 바 -->
+                    <div class="trend-filter-box">
+                        <div class="trend-filter-header">
+                            <div>
+                                ${tfInfo.badgeHtml}
+                                <span class="trend-filter-decision-diff">${tfInfo.diffText}</span>
+                            </div>
+                        </div>
+                        <div class="trend-filter-reason-text">💡 <strong>추세 진단:</strong> ${tfInfo.reasonText}</div>
                     </div>
 
                     <!-- Header: Stock Info & Price Grid -->
@@ -1236,6 +1324,22 @@ async function openDetailModal(ticker, name) {
         document.getElementById('modalSellScore').innerText = dec.sell_score || 0;
         document.getElementById('modalWaterScore').innerText = dec.watering_score || 0;
 
+        const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
+        const modalTfBox = document.getElementById('modalTrendFilterBox');
+        if (modalTfBox) {
+            modalTfBox.innerHTML = `
+                <div class="trend-filter-box" style="margin-top: 10px; margin-bottom: 12px;">
+                    <div class="trend-filter-header">
+                        <div>
+                            ${tfInfo.badgeHtml}
+                            <span class="trend-filter-decision-diff">${tfInfo.diffText}</span>
+                        </div>
+                    </div>
+                    <div class="trend-filter-reason-text">💡 <strong>추세 진단 사유:</strong> ${tfInfo.reasonText}</div>
+                </div>
+            `;
+        }
+
         const reasonList = document.getElementById('modalReasonList');
         reasonList.innerHTML = '';
         (dec.ai_reasons || []).forEach(r => {
@@ -1339,9 +1443,11 @@ function renderComprehensiveReport(resData) {
         const statusLabel = cross.status_label || "🟢 기술·수급 동시 분석 완료";
         const reasons = cross.reasons || ["주요 지표 종합 연산 완료"];
         const actionStr = dec.decision || "HOLD";
+        const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
         
         summaryTextEl.innerHTML = `
             <div style="font-weight:700; color:#e2e8f0; margin-bottom:4px;">📌 종합 진단: <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span> (TODAY ACTION: <strong>${actionStr}</strong>)</div>
+            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>추세필터 진단:</strong> ${tfInfo.badgeHtml} <span style="color:#94a3b8; font-weight:700;">${tfInfo.diffText}</span> — ${tfInfo.reasonText}</div>
             <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>핵심 판단 근거:</strong> ${reasons.join(' / ')}</div>
             <div style="font-size:11px; color:#94a3b8;">※ 본 종합 리포트는 기존 퀀트 수급 엔진 및 차트 분석 결과를 100% 보존하여 융합 표시한 근거 중심 데이터입니다.</div>
         `;

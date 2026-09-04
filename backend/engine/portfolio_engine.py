@@ -202,6 +202,9 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
             
             # PHASE 4: 최종 판단 & Score 데이터
             "final_decision": decision_info.get("decision", "HOLD"),
+            "original_decision": decision_info.get("original_decision", decision_info.get("decision", "HOLD")),
+            "filtered_decision": decision_info.get("filtered_decision", decision_info.get("decision", "HOLD")),
+            "trend_filter": decision_info.get("trend_filter", {}),
             "final_decision_desc": decision_info.get("decision_desc", "보유 관망"),
             "buy_score": decision_info.get("buy_score", 50.0),
             "buy_grade": decision_info.get("buy_grade", "관망"),

@@ -3933,6 +3933,66 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     text-align: center;
 }
 
+/* 5차 고도화: 추세필터 UI 배지 & 설명 스타일 */
+.trend-filter-box {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.trend-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.trend-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 800;
+}
+
+.trend-filter-badge.restricted {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.trend-filter-badge.allowed {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.trend-filter-badge.normal {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.trend-filter-decision-diff {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+}
+
+.trend-filter-reason-text {
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+
+
 
 
 

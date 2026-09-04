@@ -332,9 +332,115 @@ def make_final_decision(
     }
 
 
+def apply_conditional_trend_filter(
+    df: pd.DataFrame,
+    final_info: Dict[str, Any],
+    flow_res: Dict[str, Any],
+    tech_res: Dict[str, Any],
+    timing_res: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    5차 고도화: MA60/MA120 역배열 조건부 BUY 억제 추세필터
+    - 기존 FCS/FFCS, RSI/RMI, decision 엔진의 원본 판단값 보존
+    - MA60 < MA120 및 종가 < MA60 조건 시 BUY/AVERAGE 신호를 억제(HOLD 전환)
+    - 예외 조건(Smart Money 우위, 외국인+기관 동시 순매수, RMI/RSI 과매도 반등, timing_engine BUY 반등) 발생 시 BUY 허용
+    """
+    original_decision = final_info.get("decision", "HOLD")
+    original_desc = final_info.get("decision_desc", "")
+
+    # 주가 및 이동평균선 정보 추출
+    close_prices = df["Close"] if "Close" in df.columns else df.get("종가")
+    if close_prices is None or len(close_prices) < 20:
+        return {
+            "original_decision": original_decision,
+            "final_decision": original_decision,
+            "final_decision_desc": original_desc,
+            "trend_filter": {
+                "active": False,
+                "status": "NORMAL",
+                "reason": "데이터 수량 부족 (필터 미적용)"
+            }
+        }
+
+    current_price = float(close_prices.iloc[-1])
+    ma60 = float(close_prices.rolling(60, min_periods=20).mean().iloc[-1])
+    ma120 = float(close_prices.rolling(120, min_periods=40).mean().iloc[-1]) if len(close_prices) >= 40 else ma60
+
+    # MA60/MA120 역배열 하락 추세 여부 판별
+    is_ma_downtrend = (current_price < ma60) and (ma60 <= ma120 * 1.01)
+
+    # 원본 판단이 매수 계열(BUY, AVERAGE)이 아니면 추세필터 통과(정상)
+    if original_decision not in ["BUY", "AVERAGE"] or not is_ma_downtrend:
+        return {
+            "original_decision": original_decision,
+            "final_decision": original_decision,
+            "final_decision_desc": original_desc,
+            "trend_filter": {
+                "active": is_ma_downtrend,
+                "status": "NORMAL" if not is_ma_downtrend else "DOWNTREND_PASS",
+                "reason": "추세 정배열 / 매수억제 대상 아님" if not is_ma_downtrend else "역배열 구간이나 원본 비매수 신호"
+            }
+        }
+
+    # 4가지 예외 허용 조건 검사
+    exceptions = []
+
+    # 예외 1: Smart Money Flow 우수 / 순매수 (Score >= 60 또는 수급 우위)
+    from backend.engine.smart_flow_engine import analyze_smart_money_flow
+    smart_flow = analyze_smart_money_flow(flow_res.get("investor_breakdown", {}), df=df)
+    smart_score = smart_flow.get("score")
+    if smart_score is not None and smart_score >= 60.0:
+        exceptions.append(f"큰손 Smart Money 우위({smart_score:.0f}점)")
+    elif smart_flow.get("signal_grade") in ["BUY", "STRONG_BUY"]:
+        exceptions.append("큰손 수급 순매수 전환")
+
+    # 예외 2: 외국인 + 기관/연기금 동시 순매수
+    concurrency_code = flow_res.get("concurrency", {}).get("code", "")
+    if concurrency_code == "BOTH_BUY":
+        exceptions.append("외인+기관 쌍끌이 동시 순매수")
+
+    # 예외 3: RMI / RSI 과매도 구간 반등 (RSI <= 38)
+    rsi_val = tech_res.get("rsi", 50.0)
+    if rsi_val <= 38.0:
+        exceptions.append(f"RSI({rsi_val:.1f}) 과매도 기술적 반등 기대")
+
+    # 예외 4: timing_engine 강한 하단 반등 신호
+    timing_sig = timing_res.get("timing_signal", "NEUTRAL")
+    if timing_sig == "BUY":
+        exceptions.append("Timing Engine 볼린저 하단 반등 신호")
+
+    # 예외가 1개 이상 존재하면 BUY 유지
+    if len(exceptions) > 0:
+        exc_summary = ", ".join(exceptions)
+        return {
+            "original_decision": original_decision,
+            "final_decision": original_decision,
+            "final_decision_desc": f"{original_desc} (역배열 예외 허용)",
+            "trend_filter": {
+                "active": True,
+                "status": "ALLOWED_BY_EXCEPTION",
+                "reason": f"MA60/120 역배열 구간이나 [{exc_summary}] 조건으로 BUY 허용",
+                "exceptions": exceptions
+            }
+        }
+
+    # 예외 미충족 시 BUY -> HOLD (추세억제) 보정
+    return {
+        "original_decision": original_decision,
+        "final_decision": "HOLD",
+        "final_decision_desc": "관망 (MA60/120 역배열 하락추세 BUY 억제)",
+        "trend_filter": {
+            "active": True,
+            "status": "BUY_RESTRICTED",
+            "reason": "MA60/120 역배열 하락추세 구간으로 위험 관리를 위해 BUY 신호 억제됨",
+            "exceptions": []
+        }
+    }
+
+
 def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[str, Any]:
     """
-    단일 종목 통합 수급+기술적 분석+의사결정 판단 메인 함수
+    단일 종목 통합 수급+기술적 분석+의사결정 판단 메인 함수 (5차 조건부 추세필터 탑재)
     """
     if df.empty or len(df) < 5:
         return {"data_available": False, "error": "분석 데이터가 부족합니다."}
@@ -347,17 +453,26 @@ def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[s
     if not flow_res.get("data_available", False) or not tech_res.get("data_available", False):
         return {"data_available": False, "error": "데이터 분석 실패"}
 
-    # 3. Buy Score, Sell Score, Watering Score 연산
+    # 3. Buy Score, Sell Score, Watering Score 연산 (기존 계산 보존)
     buy_info = calculate_buy_score(flow_res, tech_res)
     sell_info = calculate_sell_score(flow_res, tech_res)
     water_info = calculate_watering_score(flow_res, tech_res, return_rate=return_rate)
 
-    # 4. 최종 종합 판단 & AI 이유 생성
+    # 4. 최종 원본 종합 판단 & AI 이유 생성 (기존 로직 보존)
     final_info = make_final_decision(buy_info, sell_info, water_info, flow_res, tech_res, return_rate=return_rate)
 
-    # 5. 매매 타이밍 보조지표 분석 (볼린저 밴드, MACD, 스토캐스틱 슬로우 + 판정 사유)
+    # 5. 매매 타이밍 보조지표 분석 (볼린저 밴드, MACD 등)
     from backend.engine.timing_engine import analyze_trading_timing
     timing_res = analyze_trading_timing(df)
+
+    # 6. 5차 고도화: MA60/120 조건부 BUY 억제 추세필터 적용
+    filter_res = apply_conditional_trend_filter(df, final_info, flow_res, tech_res, timing_res)
+
+    # 원본 decision 객체에 trend_filter 및 보정 decision 반영
+    final_info["original_decision"] = filter_res["original_decision"]
+    final_info["filtered_decision"] = filter_res["final_decision"]
+    final_info["decision"] = filter_res["final_decision"]  # 최종 보정 판단 반영
+    final_info["trend_filter"] = filter_res["trend_filter"]
 
     return {
         "data_available": True,
@@ -366,3 +481,4 @@ def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[s
         "timing_analysis": timing_res,
         "decision": final_info
     }
+
