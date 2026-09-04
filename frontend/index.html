@@ -79,6 +79,13 @@
                             <span class="nav-sub">AI INTERACTIVE ASSISTANT</span>
                         </div>
                     </button>
+                    <button class="nav-item" id="navForwardTest" onclick="switchAssetType('FORWARD_TEST')">
+                        <span class="nav-icon">🧪</span>
+                        <div class="nav-text">
+                            <span class="nav-label">Forward Test</span>
+                            <span class="nav-sub">전진검증 대시보드</span>
+                        </div>
+                    </button>
                 </nav>
 
                 <!-- 좌측 포트폴리오 박스 아래: 주식현재가 검색 박스 -->
@@ -359,6 +366,102 @@
                                     <div id="qaCitationContainer" class="qna-citation-container">
                                         <div class="loading-box" style="padding: 12px; font-size: 13px;">근거자료 및 출처 인용 목록을 생성하고 있습니다...</div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 🧪 7차 Forward Test 전진검증 대시보드 섹션 (독립 노출) -->
+                    <div id="forwardTestSection" style="display: none; margin-top: 10px;">
+                        <div class="card" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 14px; padding: 20px; margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px; margin-bottom: 16px;">
+                                <div>
+                                    <h3 style="font-size: 17px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                        🧪 Forward Test 실전 전진검증 대시보드
+                                    </h3>
+                                    <span style="font-size: 12px; color: #94a3b8; margin-top: 4px; display: block;">
+                                        과거 백테스트가 아닌 실제 미래 시장 데이터로 5D/10D/20D 투자판단 신뢰도를 검증합니다. (Look-ahead bias = 0)
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-sm" onclick="triggerForwardTestEvaluation()" style="background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%); color: #fff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 8px; cursor: pointer;">
+                                        🚀 5D/10D/20D 미래 성과 추적 실행
+                                    </button>
+                                    <button class="btn btn-sm" onclick="loadForwardTestDashboard()" style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.15); color: #f8fafc; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+                                        🔄 새로고침
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 1. KPI 4대 요약 카드 -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                                <div style="background: rgba(30, 41, 59, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                    <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700; display: block; margin-bottom: 4px;">📌 총 누적 신호 스냅샷</span>
+                                    <span style="font-size: 22px; font-weight: 800; color: #f8fafc;" id="ftTotalSignals">0건</span>
+                                </div>
+                                <div style="background: rgba(30, 41, 59, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                    <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700; display: block; margin-bottom: 4px;">✅ 완료된 검증 표본 (5D/10D/20D)</span>
+                                    <span style="font-size: 18px; font-weight: 800; color: #38bdf8;" id="ftCompletedSamples">5D: 0 / 10D: 0 / 20D: 0</span>
+                                </div>
+                                <div style="background: rgba(30, 41, 59, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                    <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700; display: block; margin-bottom: 4px;">📈 BUY 신호 5D 승률 / 수익률</span>
+                                    <span style="font-size: 18px; font-weight: 800; color: #34d399;" id="ftBuyWinRate">0.0% (+0.00%)</span>
+                                </div>
+                                <div style="background: rgba(30, 41, 59, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                    <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700; display: block; margin-bottom: 4px;">🛡️ 최대 손실 (MDD 방어)</span>
+                                    <span style="font-size: 18px; font-weight: 800; color: #f87171;" id="ftMaxLoss">0.00%</span>
+                                </div>
+                            </div>
+
+                            <!-- 2. 핵심 3대 신호 실전 성과 추적 섹션 -->
+                            <div style="margin-bottom: 20px;">
+                                <h4 style="font-size: 14px; font-weight: 800; color: #fbbf24; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                    🎯 핵심 3대 신호 실전 성과 추적
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;" id="ftCoreSignalGrid">
+                                    <!-- Dynamic Cards -->
+                                </div>
+                            </div>
+
+                            <!-- 3. STOCK vs ETF 자산군 성과 비교 -->
+                            <div style="margin-bottom: 20px; background: rgba(30, 41, 59, 0.5); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                                <h4 style="font-size: 13.5px; font-weight: 800; color: #a78bfa; margin-bottom: 8px;">
+                                    🧺 자산군별 실전 성과 비교 (개별주 STOCK vs 자산군 ETF)
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px;" id="ftAssetTypeGrid">
+                                    <!-- Dynamic Cards -->
+                                </div>
+                            </div>
+
+                            <!-- 4. 실시간 신호 스냅샷 및 5D/10D/20D 추적 이력 테이블 -->
+                            <div>
+                                <h4 style="font-size: 14px; font-weight: 800; color: #e2e8f0; margin-bottom: 10px;">
+                                    📋 최근 신호 발생 스냅샷 &amp; 실전 미래 성과 추적 이력
+                                </h4>
+                                <div style="overflow-x: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                                        <thead>
+                                            <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                                <th style="padding: 10px;">발생일자</th>
+                                                <th style="padding: 10px;">종목 (코드)</th>
+                                                <th style="padding: 10px;">구분</th>
+                                                <th style="padding: 10px;">당시 가격</th>
+                                                <th style="padding: 10px;">판단 (원본 ➔ 최종)</th>
+                                                <th style="padding: 10px;">FCS/RSI</th>
+                                                <th style="padding: 10px;">Smart Money</th>
+                                                <th style="padding: 10px;">5D 성과</th>
+                                                <th style="padding: 10px;">10D 성과</th>
+                                                <th style="padding: 10px;">20D 성과</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="ftRecentTableBody">
+                                            <tr>
+                                                <td colspan="10" style="padding: 16px; text-align: center; color: #64748b;">
+                                                    저장된 Forward Test 신호 스냅샷을 불러오는 중입니다...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>

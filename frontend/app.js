@@ -318,8 +318,13 @@ function switchAssetType(assetType) {
     
     const portfolioView = document.getElementById('portfolioDashboardView');
     const qaView = document.getElementById('qaDashboardView');
+    const ftSection = document.getElementById('forwardTestSection');
+    const summarySec = document.getElementById('portfolioSummarySection');
+    const stockGrid = document.getElementById('stockGrid');
     const navActionsGroup = document.getElementById('navActionsGroup');
     const toolbarActions = document.getElementById('portfolioActionToolbar');
+
+    if (ftSection) ftSection.style.display = 'none';
 
     if (assetType === 'PORTFOLIO') {
         const mBtn = document.getElementById('mNavPortfolio');
@@ -329,6 +334,8 @@ function switchAssetType(assetType) {
         
         if (portfolioView) portfolioView.style.display = 'block';
         if (qaView) qaView.style.display = 'none';
+        if (summarySec) summarySec.style.display = '';
+        if (stockGrid) stockGrid.style.display = 'grid';
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'flex';
         
@@ -361,6 +368,21 @@ function switchAssetType(assetType) {
         return;
     }
 
+    if (assetType === 'FORWARD_TEST') {
+        currentAssetType = 'FORWARD_TEST';
+        const btn = document.getElementById('navForwardTest');
+        if (btn) btn.classList.add('active');
+        if (portfolioView) portfolioView.style.display = 'none';
+        if (qaView) qaView.style.display = 'none';
+        if (ftSection) ftSection.style.display = 'block';
+        if (navActionsGroup) navActionsGroup.style.display = 'none';
+        if (toolbarActions) toolbarActions.style.display = 'none';
+        loadForwardTestDashboard();
+        return;
+    }
+
+    if (summarySec) summarySec.style.display = '';
+    if (stockGrid) stockGrid.style.display = 'grid';
     if (navActionsGroup) navActionsGroup.style.display = 'flex';
     if (toolbarActions) toolbarActions.style.display = 'flex';
     if (portfolioView) portfolioView.style.display = 'block';
@@ -3150,4 +3172,150 @@ function closeSingleQuoteResult() {
     const resultArea = document.getElementById('singleQuoteResultArea');
     if (resultArea) resultArea.style.display = 'none';
 }
+
+// =========================================================
+// 🧪 7차 Forward Test 전진검증 UI 대시보드 로직
+// =========================================================
+async function loadForwardTestDashboard() {
+    try {
+        const resp = await fetch('/api/forward-test/dashboard');
+        if (!resp.ok) return;
+        const jsonRes = await resp.json();
+        if (jsonRes.status !== "success" || !jsonRes.data) return;
+
+        const data = jsonRes.data;
+
+        // 1. KPI 4대 요약 카드
+        const totalEl = document.getElementById('ftTotalSignals');
+        const samplesEl = document.getElementById('ftCompletedSamples');
+        const buyRateEl = document.getElementById('ftBuyWinRate');
+        const maxLossEl = document.getElementById('ftMaxLoss');
+
+        if (totalEl) totalEl.innerText = `${data.total_signals.toLocaleString()}건`;
+
+        const comp = data.completed_samples || {};
+        if (samplesEl) samplesEl.innerText = `5D: ${comp['5D'] || 0}건 / 10D: ${comp['10D'] || 0}건 / 20D: ${comp['20D'] || 0}건`;
+
+        const buy5d = (data.decision_stats && data.decision_stats['BUY'] && data.decision_stats['BUY']['5D']) || {};
+        if (buyRateEl) {
+            const wr = buy5d.win_rate !== undefined ? buy5d.win_rate : 0.0;
+            const ret = buy5d.avg_return !== undefined ? buy5d.avg_return : 0.0;
+            buyRateEl.innerText = `${wr.toFixed(1)}% (${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%)`;
+        }
+
+        if (maxLossEl) {
+            const ml = buy5d.max_loss !== undefined ? buy5d.max_loss : 0.0;
+            maxLossEl.innerText = `${ml.toFixed(2)}%`;
+        }
+
+        // 2. 핵심 3대 신호 추적 카드
+        const coreGrid = document.getElementById('ftCoreSignalGrid');
+        if (coreGrid && data.core_signal_stats) {
+            let coreHtml = '';
+            Object.keys(data.core_signal_stats).forEach(key => {
+                const item = data.core_signal_stats[key];
+                const st5 = item['5D'] || {};
+                const st10 = item['10D'] || {};
+                const st20 = item['20D'] || {};
+
+                coreHtml += `
+                    <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                        <div style="font-size: 12.5px; font-weight: 800; color: #fbbf24; margin-bottom: 6px;">${item.name}</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">누적 발생: <strong style="color:#f8fafc;">${item.count}건</strong></div>
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.6;">
+                            • <strong>5D:</strong> ${st5.win_rate || 0}% (${st5.avg_return >= 0 ? '+' : ''}${st5.avg_return || 0}%) | 표본 ${st5.sample_count || 0}개<br>
+                            • <strong>10D:</strong> ${st10.win_rate || 0}% (${st10.avg_return >= 0 ? '+' : ''}${st10.avg_return || 0}%) | 표본 ${st10.sample_count || 0}개<br>
+                            • <strong>20D:</strong> ${st20.win_rate || 0}% (${st20.avg_return >= 0 ? '+' : ''}${st20.avg_return || 0}%) | 표본 ${st20.sample_count || 0}개
+                        </div>
+                    </div>
+                `;
+            });
+            coreGrid.innerHTML = coreHtml;
+        }
+
+        // 3. STOCK vs ETF 자산군 비교
+        const assetGrid = document.getElementById('ftAssetTypeGrid');
+        if (assetGrid && data.asset_type_stats) {
+            const stockSt = (data.asset_type_stats['STOCK'] && data.asset_type_stats['STOCK']['5D']) || {};
+            const etfSt = (data.asset_type_stats['ETF'] && data.asset_type_stats['ETF']['5D']) || {};
+
+            assetGrid.innerHTML = `
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                    <div style="font-size: 12px; font-weight: 800; color: #38bdf8; margin-bottom: 4px;">📈 개별주 (STOCK)</div>
+                    <div style="font-size: 11.5px; color: #e2e8f0;">
+                        5D 승률: <strong>${stockSt.win_rate || 0}%</strong> | 평균수익률: <strong>${stockSt.avg_return >= 0 ? '+' : ''}${stockSt.avg_return || 0}%</strong> (표본 ${stockSt.sample_count || 0}개)
+                    </div>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(168, 85, 247, 0.2);">
+                    <div style="font-size: 12px; font-weight: 800; color: #a855f7; margin-bottom: 4px;">🧺 자산군 (ETF)</div>
+                    <div style="font-size: 11.5px; color: #e2e8f0;">
+                        5D 승률: <strong>${etfSt.win_rate || 0}%</strong> | 평균수익률: <strong>${etfSt.avg_return >= 0 ? '+' : ''}${etfSt.avg_return || 0}%</strong> (표본 ${etfSt.sample_count || 0}개)
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. 이력 테이블
+        const tbody = document.getElementById('ftRecentTableBody');
+        if (tbody && data.recent_signals) {
+            if (data.recent_signals.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" style="padding: 16px; text-align: center; color: #64748b;">
+                            저장된 Forward Test 신호가 없습니다. (종목 분석 실행 시 자동 기록됩니다)
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let rowsHtml = '';
+            data.recent_signals.forEach(sig => {
+                const formatRet = (status, retVal) => {
+                    if (status !== 'COMPLETED' || retVal === null || retVal === undefined) {
+                        return `<span style="color: #64748b; font-size: 11px;">⏳ 미완료</span>`;
+                    }
+                    const color = retVal > 0 ? '#34d399' : (retVal < 0 ? '#f87171' : '#cbd5e1');
+                    return `<span style="color: ${color}; font-weight: 700;">${retVal >= 0 ? '+' : ''}${retVal.toFixed(2)}%</span>`;
+                };
+
+                const origDec = sig.original_decision || 'HOLD';
+                const finalDec = sig.final_decision || 'HOLD';
+                const diffStr = origDec !== finalDec ? `${origDec} ➔ <strong style="color:#fbbf24;">${finalDec}</strong>` : finalDec;
+
+                rowsHtml += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 8px 10px; color: #94a3b8;">${sig.signal_date}</td>
+                        <td style="padding: 8px 10px; font-weight: 700; color: #f8fafc;">${sig.name} <span style="font-size: 10.5px; color: #64748b;">(${sig.ticker})</span></td>
+                        <td style="padding: 8px 10px;"><span style="padding: 2px 6px; border-radius: 4px; font-size: 10.5px; background: rgba(255,255,255,0.08);">${sig.asset_type || 'STOCK'}</span></td>
+                        <td style="padding: 8px 10px; color: #cbd5e1;">${sig.price ? sig.price.toLocaleString() : '-'}원</td>
+                        <td style="padding: 8px 10px;">${diffStr}</td>
+                        <td style="padding: 8px 10px; color: #94a3b8;">FCS:${sig.fcs_score || '-'} / RSI:${sig.rsi || '-'}</td>
+                        <td style="padding: 8px 10px; color: #a78bfa;">${sig.smart_score ? sig.smart_score + '점' : '-'}</td>
+                        <td style="padding: 8px 10px;">${formatRet(sig.status_5d, sig.ret_5d)}</td>
+                        <td style="padding: 8px 10px;">${formatRet(sig.status_10d, sig.ret_10d)}</td>
+                        <td style="padding: 8px 10px;">${formatRet(sig.status_20d, sig.ret_20d)}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = rowsHtml;
+        }
+
+    } catch (e) {
+        console.error("Forward Test Dashboard Load Error:", e);
+    }
+}
+
+async function triggerForwardTestEvaluation() {
+    try {
+        const resp = await fetch('/api/forward-test/evaluate', { method: 'POST' });
+        if (!resp.ok) return;
+        const resData = await resp.json();
+        alert(`🚀 미래 성과 추적이 완료되었습니다. (업데이트: ${resData.result ? resData.result.updated_count : 0}건)`);
+        loadForwardTestDashboard();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
 

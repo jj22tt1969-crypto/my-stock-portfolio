@@ -242,6 +242,28 @@ def analyze_decision(
         decision_analysis=res.get("decision")
     )
 
+    full_analysis_data = {
+        "decision": res.get("decision"),
+        "flow_analysis": res.get("flow_analysis"),
+        "technical_analysis": res.get("technical_analysis"),
+        "timing_analysis": res.get("timing_analysis"),
+        "smart_flow_analysis": smart_flow,
+        "cross_analysis": cross_res
+    }
+
+    try:
+        from backend.engine.forward_test_engine import record_signal_snapshot
+        latest_c = res.get("technical_analysis", {}).get("latest_close", 0.0)
+        record_signal_snapshot(
+            ticker=ticker_code,
+            name=name,
+            asset_type=asset_type,
+            price=latest_c,
+            analysis_data=full_analysis_data
+        )
+    except Exception as e:
+        pass
+
     return {
         "status": "success",
         "ticker": ticker_code,
@@ -517,6 +539,54 @@ def qna_search_target(query: str = Query(..., description="검색어 (종목명/
         "query": query,
         "count": len(candidates),
         "candidates": candidates
+    }
+
+# =========================================================
+# 🧪 7차 Forward Test 전진검증 전용 API 엔드포인트
+# =========================================================
+@app.get("/api/forward-test/dashboard")
+def get_forward_test_dashboard():
+    """Forward Test 대시보드 종합 통계 및 이력 반환 API"""
+    from backend.engine.forward_test_engine import get_forward_test_dashboard_stats
+    stats = get_forward_test_dashboard_stats()
+    return {
+        "status": "success",
+        "data": stats
+    }
+
+@app.post("/api/forward-test/evaluate")
+def trigger_forward_test_evaluate():
+    """Forward Test 5D/10D/20D 미래 성과 자동 추적 및 평가 API"""
+    from backend.engine.forward_test_engine import evaluate_forward_outcomes
+    res = evaluate_forward_outcomes()
+    return {
+        "status": "success",
+        "result": res
+    }
+
+@app.post("/api/forward-test/record")
+def record_forward_test_snapshot(payload: dict = Body(...)):
+    """Forward Test 신호 스냅샷 수동/자동 독립 기록 API"""
+    from backend.engine.forward_test_engine import record_signal_snapshot
+    ticker = payload.get("ticker", "")
+    name = payload.get("name", "")
+    asset_type = payload.get("asset_type", "STOCK")
+    price = payload.get("price", 0.0)
+    analysis_data = payload.get("analysis_data", {})
+
+    if not ticker or not price:
+        raise HTTPException(status_code=400, detail="필수 종목정보가 부족합니다.")
+
+    success = record_signal_snapshot(
+        ticker=ticker,
+        name=name,
+        asset_type=asset_type,
+        price=price,
+        analysis_data=analysis_data
+    )
+    return {
+        "status": "success" if success else "ignored",
+        "recorded": success
     }
 
 # 프론트엔드 정적 파일 서빙 (HTML5 Dashboard UI)

@@ -41,6 +41,12 @@ def init_db():
 
     conn.close()
 
+    try:
+        from backend.engine.forward_test_engine import init_forward_test_db
+        init_forward_test_db()
+    except Exception as e:
+        pass
+
 def add_stock(name: str, ticker: str, avg_price: float, quantity: int, buy_date: str = "", investment_purpose: str = "", sector: str = "기타", asset_type: str = "STOCK", market: str = "KOSPI") -> Dict[str, Any]:
     conn = get_connection()
     cursor = conn.cursor()
