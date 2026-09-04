@@ -119,6 +119,21 @@ def record_signal_snapshot(
         conn.close()
         return False
 
+def delete_signal_snapshot(signal_id: int) -> bool:
+    """Forward Test 신호 스냅샷 삭제 (ID 기반)"""
+    init_forward_test_db()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM forward_test_signals WHERE id = ?", (signal_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return deleted
+    except Exception:
+        conn.close()
+        return False
+
 def evaluate_forward_outcomes() -> Dict[str, Any]:
     """
     저장된 스냅샷에 대해 실제 미래 가격(5D/10D/20D 후)을 추적하여 수익률 자동 업데이트

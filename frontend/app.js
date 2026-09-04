@@ -3298,6 +3298,15 @@ async function loadForwardTestDashboard() {
                         <td style="padding: 8px 10px;">${formatRet(sig.status_5d, sig.ret_5d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_10d, sig.ret_10d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_20d, sig.ret_20d)}</td>
+                        <td style="padding: 8px 10px; text-align:center;">
+                            <button
+                                onclick="ftDeleteSignal(${sig.id})"
+                                title="이 신호 삭제"
+                                style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#f87171; font-size:11px; padding:3px 8px; border-radius:5px; cursor:pointer; transition:all 0.15s;"
+                                onmouseover="this.style.background='rgba(239,68,68,0.35)'"
+                                onmouseout="this.style.background='rgba(239,68,68,0.15)'"
+                            >🗑 삭제</button>
+                        </td>
                     </tr>
                 `;
             });
@@ -3557,10 +3566,30 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 전역 노출 (index.html inline onclick용)
 window.ftOnSearchInput = ftOnSearchInput;
 window.ftSelectStock = ftSelectStock;
 window.ftCloseDropdown = ftCloseDropdown;
 window.ftRegisterTracking = ftRegisterTracking;
 window.loadForwardTestDashboard = loadForwardTestDashboard;
 window.triggerForwardTestEvaluation = triggerForwardTestEvaluation;
+
+/**
+ * 🗑 Forward Test 신호 스냅샷 삭제
+ */
+async function ftDeleteSignal(signalId) {
+    if (!confirm('이 신호를 실제로 삭제하시겠습니까?')) return;
+    try {
+        const resp = await fetch(`/api/forward-test/record/${signalId}`, { method: 'DELETE' });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert('삭제 실패: ' + (err.detail || resp.status));
+            return;
+        }
+        // 테이블 즉시 갱신
+        await loadForwardTestDashboard();
+    } catch(e) {
+        console.error('FT 삭제 오류:', e);
+        alert('삭제 중 오류가 발생했습니다.');
+    }
+}
+window.ftDeleteSignal = ftDeleteSignal;

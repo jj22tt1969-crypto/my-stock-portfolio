@@ -589,6 +589,15 @@ def record_forward_test_snapshot(payload: dict = Body(...)):
         "recorded": success
     }
 
+@app.delete("/api/forward-test/record/{signal_id}")
+def delete_forward_test_signal(signal_id: int):
+    """Forward Test 신호 스냅샷 삭제 API"""
+    from backend.engine.forward_test_engine import delete_signal_snapshot
+    success = delete_signal_snapshot(signal_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="해당 신호를 찾을 수 없거나 이미 삭제되었습니다.")
+    return {"status": "success", "message": f"신호(ID: {signal_id})가 삭제되었습니다."}
+
 # 프론트엔드 정적 파일 서빙 (HTML5 Dashboard UI)
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_dir):
