@@ -3992,7 +3992,106 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     line-height: 1.4;
 }
 
+/* ==========================================
+ * Forward Test 테마별(다크/라이트) 텍스트 가시성 개선 CSS
+ * ========================================== */
 
+/* 기본 (야간/다크 모드) 스타일 */
+.ft-asset-comparison-title {
+    color: #a78bfa;
+}
 
+.ft-snapshot-history-title {
+    color: #e2e8f0;
+}
 
+.ft-thead-row {
+    color: #94a3b8;
+}
+
+.ft-td-name {
+    color: #f8fafc;
+}
+
+.ft-td-ticker {
+    color: #64748b;
+}
+
+.ft-td-date,
+.ft-td-indicators {
+    color: #94a3b8;
+}
+
+.ft-td-price {
+    color: #cbd5e1;
+}
+
+.ft-td-smart {
+    color: #a78bfa;
+}
+
+/* 주간 (라이트 모드) 스타일 오버라이드 */
+[data-theme="light"] .ft-asset-comparison-box {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .ft-asset-comparison-title {
+    color: #6d28d9 !important; /* 가독성 좋은 짙은 보라색 */
+}
+
+[data-theme="light"] .ft-snapshot-history-title {
+    color: #0f172a !important; /* 가독성 좋은 짙은 남색 */
+}
+
+[data-theme="light"] .ft-tracking-table thead tr,
+[data-theme="light"] .ft-thead-row {
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+}
+
+[data-theme="light"] .ft-tracking-table th {
+    color: #1e293b !important;
+}
+
+[data-theme="light"] .ft-tracking-table tr {
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .ft-td-name {
+    color: #0f172a !important; /* 주간 모드 종목명 또렷하게 선명 */
+}
+
+[data-theme="light"] .ft-td-ticker {
+    color: #475569 !important;
+}
+
+[data-theme="light"] .ft-td-date,
+[data-theme="light"] .ft-td-indicators {
+    color: #334155 !important;
+}
+
+[data-theme="light"] .ft-td-price {
+    color: #0f172a !important;
+}
+
+[data-theme="light"] .ft-td-smart {
+    color: #6d28d9 !important;
+}
+
+[data-theme="light"] .ft-asset-badge {
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+}
+
+[data-theme="light"] .ft-asset-card {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="light"] .ft-card-subtext {
+    color: #334155 !important;
+}
 

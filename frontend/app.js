@@ -17,7 +17,7 @@ let newWorkerWaiting = null;
 function formatTrendFilterInfo(tf, origDecision, finalDecision) {
     origDecision = origDecision || finalDecision || 'HOLD';
     finalDecision = finalDecision || origDecision;
-    
+
     if (!tf || typeof tf !== 'object') {
         return {
             badgeHtml: `<span class="trend-filter-badge normal">정상 추세</span>`,
@@ -255,12 +255,12 @@ async function manualRefreshPortfolio() {
     }
     await fetchMarketOverview();
     await fetchPortfolioData(false);
-    
+
     if (btn) {
         btn.classList.remove('spin-anim');
         btn.innerText = '🔄 실시간 새로고침';
     }
-    
+
     const toggle = document.getElementById('autoRefreshToggle');
     if (toggle && toggle.checked) {
         refreshSecondsLeft = 15;
@@ -274,7 +274,7 @@ async function fetchMarketOverview() {
         const resp = await fetch('/api/market/overview');
         if (!resp.ok) return;
         const data = await resp.json();
-        
+
         const indices = data.indices || {};
         if (indices.kospi && indices.kospi.value) {
             const c = indices.kospi.change || 0;
@@ -315,7 +315,7 @@ async function fetchMarketOverview() {
 function switchAssetType(assetType) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.mobile-nav-btn').forEach(el => el.classList.remove('active'));
-    
+
     const portfolioView = document.getElementById('portfolioDashboardView');
     const qaView = document.getElementById('qaDashboardView');
     const ftSection = document.getElementById('forwardTestSection');
@@ -331,19 +331,19 @@ function switchAssetType(assetType) {
         if (mBtn) mBtn.classList.add('active');
         const btn = document.getElementById('navStock');
         if (btn) btn.classList.add('active');
-        
+
         if (portfolioView) portfolioView.style.display = 'block';
         if (qaView) qaView.style.display = 'none';
         if (summarySec) summarySec.style.display = '';
         if (stockGrid) stockGrid.style.display = 'grid';
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'flex';
-        
+
         const summarySec = document.getElementById('portfolioSummarySection');
         if (summarySec) {
             summarySec.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        
+
         currentAssetType = activeAssetCategory;
         if (portfolioRenderCache[currentAssetType]) {
             renderPortfolioUI(portfolioRenderCache[currentAssetType]);
@@ -439,7 +439,7 @@ let qaSearchDebounceTimer = null;
 
 function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager = "") {
     currentQaTarget = { name, code, market, asset_type: assetType, manager, is_identified: true };
-    
+
     const badge = document.getElementById('qaTargetBadge');
     if (badge) {
         if (code === 'MARKET') {
@@ -464,7 +464,7 @@ function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager
             title.innerText = `${name} (${code}) 수급 & 주가 동향 분석`;
         }
     }
-    
+
     // 숨기기
     const listEl = document.getElementById('qaCandidateList');
     if (listEl) listEl.style.display = 'none';
@@ -472,7 +472,7 @@ function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager
 
 function handleQaSearch(val) {
     if (qaSearchDebounceTimer) clearTimeout(qaSearchDebounceTimer);
-    
+
     const listEl = document.getElementById('qaCandidateList');
     if (!val || !val.trim()) {
         if (listEl) listEl.style.display = 'none';
@@ -523,11 +523,11 @@ function renderCandidateList(candidates) {
         const isEtf = c.asset_type === 'ETF';
         const badgeClass = isEtf ? 'candidate-badge-etf' : 'candidate-badge-stock';
         const typeLabel = isEtf ? `ETF (${c.manager || '운용사'})` : c.market;
-        
+
         // Escape quotes
         const safeName = c.name.replace(/'/g, "\\'");
         const safeManager = (c.manager || '').replace(/'/g, "\\'");
-        
+
         html += `
             <div class="candidate-item" onclick="setQaContext('${safeName}', '${c.ticker}', '${c.market}', '${c.asset_type}', '${safeManager}')">
                 <div class="candidate-name">${c.name} <span style="font-weight: normal; color: #94a3b8;">(${c.ticker})</span></div>
@@ -565,7 +565,7 @@ async function submitQaQuestion() {
         alert('질문을 입력해주거나 추천 질문을 선택해주세요.');
         return;
     }
-    
+
     // 식별 완료된 정보로 답변 헤더 갱신
     let detailLabel = "";
     if (currentQaTarget.code === 'MARKET') {
@@ -576,7 +576,7 @@ async function submitQaQuestion() {
 
     document.getElementById('ansTargetTitle').innerText = `${detailLabel} Q&A 근거 기반 종합 리포트`;
     document.getElementById('ansText').innerText = `'${question}' 질문에 대한 근거 수집 및 분석을 진행 중입니다...`;
-    
+
     // STEP 3 뉴스, STEP 4 공식자료, STEP 6 종합 답변 병렬 처리
     await Promise.all([
         fetchAndRenderQaNews(currentQaTarget.code, currentQaTarget.name, question),
@@ -617,7 +617,7 @@ function renderQaNewsItems(items) {
     items.forEach(item => {
         const impIcon = item.importance === '매우 중요' ? '🔥 매우 중요' : (item.importance === '중요' ? '⭐ 중요' : '📌 일반');
         const dupeBadge = item.duplicate_count > 1 ? `<span class="news-duplicate-tag">📰 외 ${item.duplicate_count - 1}개 매체 중복 보도</span>` : '';
-        
+
         html += `
             <div class="news-card-item">
                 <div class="news-card-header">
@@ -683,15 +683,15 @@ function renderOfficialDocItems(items, intent) {
 
     // 출처 타입별 아이콘/라벨 매핑
     const sourceConfig = {
-        'DART':   { icon: '🏛️', label: 'DART', cssClass: 'type-DART' },
-        '정부기관': { icon: '🏢', label: '정부',  cssClass: 'type-gov' },
-        'ETF운용사':{ icon: '📦', label: 'ETF',   cssClass: 'type-etf' },
+        'DART': { icon: '🏛️', label: 'DART', cssClass: 'type-DART' },
+        '정부기관': { icon: '🏢', label: '정부', cssClass: 'type-gov' },
+        'ETF운용사': { icon: '📦', label: 'ETF', cssClass: 'type-etf' },
     };
 
     let html = '';
     items.forEach(item => {
         const src = sourceConfig[item.source_type] || { icon: '📄', label: 'DOC', cssClass: 'type-DART' };
-        
+
         html += `
             <div class="official-card-item">
                 <div class="official-source-badge ${src.cssClass}">
@@ -757,16 +757,16 @@ function renderCitationItems(citations) {
 
     const relConfig = {
         '매우 높음': { css: 'very-high', label: '🛡️ 매우 높음 (공식/공시)' },
-        '높음':     { css: 'high',      label: '⭐ 높음 (주요 언론)' },
-        '중간':     { css: 'medium',    label: '📌 중간 (일반 언론)' },
-        '참고':     { css: 'reference', label: '💡 참고 (커뮤니티/기타)' }
+        '높음': { css: 'high', label: '⭐ 높음 (주요 언론)' },
+        '중간': { css: 'medium', label: '📌 중간 (일반 언론)' },
+        '참고': { css: 'reference', label: '💡 참고 (커뮤니티/기타)' }
     };
 
     let html = '';
     citations.forEach((cit, idx) => {
         const num = idx + 1;
         const rel = relConfig[cit.reliability] || { css: 'medium', label: cit.reliability };
-        
+
         // 주요 기관 및 플랫폼일 경우 메인 홈페이지 바로가기 URL 매핑
         let mainHomeUrl = '';
         if (cit.publisher.includes('금융위원회')) mainHomeUrl = 'https://www.fsc.go.kr';
@@ -809,7 +809,7 @@ function attachInlineCitationsToAnswer(citations) {
     let inlineBadges = '';
     const maxInline = Math.min(citations.length, 3);
     for (let i = 1; i <= maxInline; i++) {
-        inlineBadges += `<a class="cite-badge" href="#cit-item-${i}" title="${citations[i-1].publisher}: ${citations[i-1].title}">[${i}]</a>`;
+        inlineBadges += `<a class="cite-badge" href="#cit-item-${i}" title="${citations[i - 1].publisher}: ${citations[i - 1].title}">[${i}]</a>`;
     }
 
     const baseText = ansTextEl.innerText;
@@ -945,7 +945,7 @@ async function fetchPortfolioData(isBackground = false) {
         const resp = await fetch(`/api/portfolio?asset_type=${currentAssetType}`);
         if (!resp.ok) throw new Error("포트폴리오 조회가 실패했습니다.");
         const resData = await resp.json();
-        
+
         if (resData.status !== "success") {
             if (!isBackground) {
                 grid.innerHTML = `<div class="loading-box">포트폴리오 데이터를 불러올 수 없습니다.</div>`;
@@ -974,13 +974,13 @@ async function updatePortfolioLivePricesOnly() {
         if (resData.status !== "success" || !resData.items) return;
 
         const summary = resData.summary || {};
-        
+
         // 1. 헤더 요약 정보 수치 핀포인트 갱신
         const investedElem = document.getElementById('totalInvested');
         if (investedElem && summary.total_invested != null) {
             investedElem.innerText = `${summary.total_invested.toLocaleString()} 원`;
         }
-        
+
         const evalElem = document.getElementById('totalEval');
         if (evalElem && summary.total_eval != null) {
             evalElem.innerText = `${summary.total_eval.toLocaleString()} 원`;
@@ -1055,10 +1055,10 @@ function renderPortfolioUI(data) {
     const summary = data.summary || {};
     const investedElem = document.getElementById('totalInvested');
     if (investedElem) investedElem.innerText = `${summary.total_invested ? summary.total_invested.toLocaleString() : 0} 원`;
-    
+
     const evalElem = document.getElementById('totalEval');
     if (evalElem) evalElem.innerText = `${summary.total_eval ? summary.total_eval.toLocaleString() : 0} 원`;
-    
+
     const pl = summary.total_profit_loss || 0;
     const plElem = document.getElementById('totalProfitLoss');
     if (plElem) {
@@ -1123,7 +1123,7 @@ function renderPortfolioUI(data) {
 // 4. 종목 카드 그리드 생성 (우측 상단 4가지 가격 항목: 현재가, 매입평균가, 총금액, 수익률)
 function renderStockCards(items) {
     const grid = document.getElementById('stockGrid');
-    
+
     // 만약 이미 종목 수가 같다면 DOM을 매번 전부 날리지 않고 부분 갱신하여 깜빡임 방지
     const existingCards = grid.querySelectorAll('.stock-card');
     const fullReRender = existingCards.length !== items.length;
@@ -1188,25 +1188,25 @@ function renderStockCards(items) {
             }
         }
 
-// 📱 스마트폰 모바일 전용 종목명 카드 펼치기/접기 토글
-function toggleMobileStockCard(ticker) {
-    const wrapper = document.getElementById(`mobile-card-body-${ticker}`);
-    const arrow = document.getElementById(`mobile-arrow-${ticker}`);
-    if (!wrapper) return;
+        // 📱 스마트폰 모바일 전용 종목명 카드 펼치기/접기 토글
+        function toggleMobileStockCard(ticker) {
+            const wrapper = document.getElementById(`mobile-card-body-${ticker}`);
+            const arrow = document.getElementById(`mobile-arrow-${ticker}`);
+            if (!wrapper) return;
 
-    const currentDisp = window.getComputedStyle(wrapper).display;
-    if (currentDisp === 'none') {
-        wrapper.style.display = 'block';
-        if (arrow) arrow.classList.add('rotated');
-    } else {
-        wrapper.style.display = 'none';
-        if (arrow) arrow.classList.remove('rotated');
-    }
-}
+            const currentDisp = window.getComputedStyle(wrapper).display;
+            if (currentDisp === 'none') {
+                wrapper.style.display = 'block';
+                if (arrow) arrow.classList.add('rotated');
+            } else {
+                wrapper.style.display = 'none';
+                if (arrow) arrow.classList.remove('rotated');
+            }
+        }
 
         const marketVal = item.market || (item.asset_type === 'ETF' ? 'ETF' : 'KOSPI');
         const marketClass = marketVal.toLowerCase();
-        
+
         const cardHtml = `
             <div class="stock-card" id="stock-card-${item.ticker}">
                 <!-- 📱 스마트폰 모바일 전용 종목명 클릭 리스트 바 (PC 데스크톱 환경에서는 CSS display:none 으로 숨김) -->
@@ -1326,12 +1326,12 @@ async function openDetailModal(ticker, name) {
     modal.style.display = 'flex';
 
     document.getElementById('modalStockTitle').innerText = `${name} (${ticker}) 상세 수급 & 기술적 차트`;
-    
+
     try {
         const resp = await fetch(`/api/decision/analyze?ticker=${ticker}`);
         if (!resp.ok) return;
         const resData = await resp.json();
-        
+
         if (resData.status !== "success") return;
         const data = resData.data;
 
@@ -1410,7 +1410,7 @@ function renderComprehensiveReport(resData) {
     const priceActionEl = document.getElementById('compPriceActionText');
     const updatedTime = meta.updated_at || new Date().toLocaleString();
     const sourceStr = meta.source || "실시간 퀀트 API";
-    
+
     if (timeSourceEl) {
         timeSourceEl.innerText = `기준일시: ${updatedTime} | 출처: ${sourceStr} | 상태: 정상`;
     }
@@ -1458,7 +1458,7 @@ function renderComprehensiveReport(resData) {
     // ⑥ 위험요인 + AI 종합해석 (Executive Summary)
     const summaryTextEl = document.getElementById('compSummaryText');
     const conflictBadgeEl = document.getElementById('compConflictBadge');
-    
+
     const isConflict = cross.status_label && cross.status_label.includes("충돌");
     if (conflictBadgeEl) {
         conflictBadgeEl.style.display = isConflict ? "inline-block" : "none";
@@ -1469,7 +1469,7 @@ function renderComprehensiveReport(resData) {
         const reasons = cross.reasons || ["주요 지표 종합 연산 완료"];
         const actionStr = dec.decision || "HOLD";
         const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
-        
+
         summaryTextEl.innerHTML = `
             <div style="font-weight:700; color:#e2e8f0; margin-bottom:4px;">📌 종합 진단: <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span> (TODAY ACTION: <strong>${actionStr}</strong>)</div>
             <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>추세필터 진단:</strong> ${tfInfo.badgeHtml} <span style="color:#94a3b8; font-weight:700;">${tfInfo.diffText}</span> — ${tfInfo.reasonText}</div>
@@ -1720,7 +1720,7 @@ function selectFlowPeriod(periodKey) {
 
     if (!currentDetailFlowData) return;
     const pData = currentDetailFlowData.periods_analysis || {};
-    
+
     const frgnVal = (pData.foreign && pData.foreign[periodKey]) ? pData.foreign[periodKey].net_buy / 100000000 : 0;
     const instVal = (pData.institution && pData.institution[periodKey]) ? pData.institution[periodKey].net_buy / 100000000 : 0;
 
@@ -1754,7 +1754,7 @@ function selectFlowPeriod(periodKey) {
 
 function renderDetailChart(flow, tech) {
     const ctx = document.getElementById('stockDetailChart').getContext('2d');
-    
+
     if (detailChartInstance) {
         detailChartInstance.destroy();
     }
@@ -1809,7 +1809,7 @@ let stockSearchDebounceTimer = null;
 // 5. 종목 추가
 function openAddStockModal() {
     hideTickerSuggestions();
-    
+
     // 현재 포트폴리오 탭이 ETF인 경우 종목추가 모달의 자산 분류를 자동으로 ETF로 세팅
     if (typeof currentAssetType !== 'undefined' && currentAssetType === 'ETF') {
         const etfRadio = document.querySelector('input[name="addAssetType"][value="ETF"]');
@@ -1841,14 +1841,14 @@ function initAddStockFormEvents() {
             const assetType = e.target.value;
             const marketEl = document.getElementById('addMarketInput');
             const sectorEl = document.getElementById('addSectorInput');
-            
+
             if (assetType === 'ETF') {
                 if (marketEl) marketEl.value = 'ETF';
                 if (sectorEl) sectorEl.value = '기타';
             } else {
                 if (marketEl && marketEl.value === 'ETF') marketEl.value = 'KOSPI';
             }
-            
+
             const inputVal = document.getElementById('addTickerInput')?.value;
             if (inputVal && inputVal.trim()) {
                 fetchTickerSuggestions(inputVal.trim());
@@ -1862,7 +1862,7 @@ function initAddStockFormEvents() {
         tickerInput.addEventListener('input', (e) => {
             const query = e.target.value.trim();
             if (stockSearchDebounceTimer) clearTimeout(stockSearchDebounceTimer);
-            
+
             if (!query) {
                 hideTickerSuggestions();
                 return;
@@ -1911,7 +1911,7 @@ async function fetchTickerSuggestions(query) {
     try {
         const resp = await fetch(`/api/stock/search?query=${encodeURIComponent(query)}&asset_type=${assetType}`);
         if (!resp.ok) return;
-        
+
         const data = await resp.json();
         const candidates = data.candidates || [];
         tickerSuggestionsCache[cacheKey] = candidates;
@@ -2001,7 +2001,7 @@ async function handleAddStock(event) {
 
     const assetTypeRadio = document.querySelector('input[name="addAssetType"]:checked');
     const assetType = assetTypeRadio ? assetTypeRadio.value : 'STOCK';
-    
+
     const marketEl = document.getElementById('addMarketInput');
     const market = marketEl ? marketEl.value : (assetType === 'ETF' ? 'ETF' : 'KOSPI');
 
@@ -2221,7 +2221,7 @@ async function openStockHistoryModal(ticker, name, timeframe = 'day') {
     modal.style.display = 'flex';
 
     document.getElementById('stockHistoryTitle').innerText = `${name} (${ticker}) 6개월 추세선 · 거래량 · MFI · RMI 차트`;
-    
+
     // 탭 버튼 상태 업데이트
     ['day', 'month'].forEach(tf => {
         const btn = document.getElementById(`tfBtn${tf.charAt(0).toUpperCase() + tf.slice(1)}`);
@@ -2462,7 +2462,7 @@ function openEditStockModal(id, name, avgPrice, quantity, buyDate, purpose, sect
     document.getElementById('editBuyDate').value = buyDate || '';
     document.getElementById('editPurpose').value = purpose || '장기투자';
     document.getElementById('editSector').value = sector || '기타';
-    
+
     document.getElementById('editStockModal').style.display = 'flex';
 }
 
@@ -2583,9 +2583,9 @@ function renderCalendarEvents(filterCategory) {
 
     const importanceCfg = {
         '매우 중요': { cls: 'imp-critical', label: '🔴 매우 중요' },
-        '중요':      { cls: 'imp-high',     label: '🟡 중요' },
-        '보통':      { cls: 'imp-medium',   label: '⚪ 보통' },
-        '참고':      { cls: 'imp-low',      label: '🔵 참고' },
+        '중요': { cls: 'imp-high', label: '🟡 중요' },
+        '보통': { cls: 'imp-medium', label: '⚪ 보통' },
+        '참고': { cls: 'imp-low', label: '🔵 참고' },
     };
 
     let html = '';
@@ -2647,7 +2647,7 @@ let indexChartInstance = null;
 async function openIndexChartModal(symbol, name) {
     const modal = document.getElementById('indexChartModal');
     if (!modal) return;
-    
+
     modal.style.display = 'flex';
     document.getElementById('indexModalTitle').innerText = `${name || symbol} 최근 6개월 변동 차트`;
     document.getElementById('indexModalSub').innerText = '데이터를 불러오는 중...';
@@ -2656,7 +2656,7 @@ async function openIndexChartModal(symbol, name) {
         const resp = await fetch(`/api/market/index-history?symbol=${encodeURIComponent(symbol)}`);
         if (!resp.ok) throw new Error('지수 이력 조회 실패');
         const resData = await resp.json();
-        
+
         if (resData.status !== 'success' || !resData.data) {
             document.getElementById('indexModalSub').innerText = '지수 이력 데이터를 불러올 수 없습니다.';
             return;
@@ -2665,7 +2665,7 @@ async function openIndexChartModal(symbol, name) {
         const data = resData.data;
         const rateText = data.period_rate >= 0 ? `+${data.period_rate}%` : `${data.period_rate}%`;
         const changeText = data.period_change >= 0 ? `+${data.period_change}` : `${data.period_change}`;
-        
+
         document.getElementById('indexModalSub').innerHTML = `
             최근 종가: <b style="color:#fff">${data.latest_val ? data.latest_val.toLocaleString() : '-'}</b> &nbsp;|&nbsp; 
             6개월 최저: <b style="color:#ef4444">${data.min_val ? data.min_val.toLocaleString() : '-'}</b> &nbsp;|&nbsp; 
@@ -2715,7 +2715,7 @@ async function openIndexChartModal(symbol, name) {
                         mode: 'index',
                         intersect: false,
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 return `종가: ${context.parsed.y ? context.parsed.y.toLocaleString() : 0}`;
                             }
                         }
@@ -2804,7 +2804,7 @@ function handleSidebarQuoteSearch(val, event) {
     if (sidebarQuoteDebounceTimer) clearTimeout(sidebarQuoteDebounceTimer);
     selectedSidebarTicker = ""; // 입력 변경 시 이전 선택 초기화
     sidebarHighlightIndex = -1;
-    
+
     if (!val || !val.trim()) {
         hideSidebarQuoteSuggestions();
         return;
@@ -2846,7 +2846,7 @@ function renderSidebarQuoteCandidates(candidates) {
         const isEtf = c.asset_type === 'ETF';
         const typeLabel = isEtf ? `ETF` : c.market;
         const safeName = c.name.replace(/'/g, "\\'");
-        
+
         html += `
             <div class="candidate-item" 
                  onmousedown="event.preventDefault(); selectSidebarQuoteSuggestion('${safeName}', '${c.ticker}');"
@@ -2866,7 +2866,7 @@ function renderSidebarQuoteCandidates(candidates) {
 function selectSidebarQuoteSuggestion(name, ticker) {
     const inputEl = document.getElementById('sidebarQuoteInput');
     if (inputEl) inputEl.value = `${name} (${ticker})`;
-    
+
     selectedSidebarTicker = ticker;
     selectedSidebarName = name;
 
@@ -3381,7 +3381,7 @@ async function ftSearchStock(query) {
             </div>`;
         }).join('');
         dropdown.style.display = 'block';
-    } catch(e) {
+    } catch (e) {
         console.error('FT 검색 오류:', e);
         if (dropdown) dropdown.style.display = 'none';
     }
@@ -3451,7 +3451,7 @@ async function ftSelectStock(ticker, name, assetType) {
         };
 
         const decColor = (finalDec === 'BUY' || finalDec === 'AVERAGE') ? '#34d399'
-                       : finalDec === 'REDUCE' ? '#f87171' : '#fbbf24';
+            : finalDec === 'REDUCE' ? '#f87171' : '#fbbf24';
 
         const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
 
@@ -3489,7 +3489,7 @@ async function ftSelectStock(ticker, name, assetType) {
 
         if (panel) panel.style.display = 'block';
 
-    } catch(e) {
+    } catch (e) {
         if (loading) loading.style.display = 'none';
         console.error('FT 분석 오류:', e);
         alert('분석 중 오류가 발생했습니다.');
@@ -3545,7 +3545,7 @@ async function ftRegisterTracking() {
         // 추적 목록 즉시 갱신
         await loadForwardTestDashboard();
 
-    } catch(e) {
+    } catch (e) {
         console.error('FT 추적 등록 오류:', e);
         if (msg) {
             msg.style.display = 'block';
@@ -3558,7 +3558,7 @@ async function ftRegisterTracking() {
 }
 
 // 드롭다운 외부 클릭 시 닫기
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     const input = document.getElementById('ftSearchInput');
     const dropdown = document.getElementById('ftSearchDropdown');
     if (dropdown && input && !input.contains(e.target) && !dropdown.contains(e.target)) {
@@ -3577,7 +3577,7 @@ window.triggerForwardTestEvaluation = triggerForwardTestEvaluation;
  * 🗑 Forward Test 신호 스냅샷 삭제
  */
 async function ftDeleteSignal(signalId) {
-    if (!confirm('이 신호를 실제로 삭제하시겠습니까?')) return;
+    if (!confirm('이 종목을 삭제하시겠습니까?')) return;
     try {
         const resp = await fetch(`/api/forward-test/record/${signalId}`, { method: 'DELETE' });
         if (!resp.ok) {
@@ -3587,7 +3587,7 @@ async function ftDeleteSignal(signalId) {
         }
         // 테이블 즉시 갱신
         await loadForwardTestDashboard();
-    } catch(e) {
+    } catch (e) {
         console.error('FT 삭제 오류:', e);
         alert('삭제 중 오류가 발생했습니다.');
     }
