@@ -359,7 +359,7 @@ function switchAssetType(assetType) {
         const btn = document.getElementById('navQna');
         const mBtn = document.getElementById('mNavQna');
         if (btn) btn.classList.add('active');
-        if (mNavQna) mNavQna.classList.add('active');
+        if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'none';
         if (qaView) qaView.style.display = 'block';
         if (navActionsGroup) navActionsGroup.style.display = 'none';
@@ -372,8 +372,10 @@ function switchAssetType(assetType) {
         currentAssetType = 'FORWARD_TEST';
         const btn = document.getElementById('navForwardTest');
         if (btn) btn.classList.add('active');
-        if (portfolioView) portfolioView.style.display = 'none';
+        if (portfolioView) portfolioView.style.display = 'block'; // keep parent visible
         if (qaView) qaView.style.display = 'none';
+        if (summarySec) summarySec.style.display = 'none';
+        if (stockGrid) stockGrid.style.display = 'none';
         if (ftSection) ftSection.style.display = 'block';
         if (navActionsGroup) navActionsGroup.style.display = 'none';
         if (toolbarActions) toolbarActions.style.display = 'none';
@@ -397,14 +399,14 @@ function switchAssetType(assetType) {
         if (btn) btn.classList.add('active');
         if (mBtn) mBtn.classList.add('active');
         const title = document.getElementById('currentDashboardTitle');
-        if (title) title.innerHTML = '📊 개별종목 PORTFOLIO & TODAY ACTION';
+        if (title) title.innerHTML = '📊 개별종목 PORTFOLIO \u0026 TODAY ACTION';
     } else {
         const btn = document.getElementById('navEtf');
         const mBtn = document.getElementById('mNavEtf');
         if (btn) btn.classList.add('active');
         if (mBtn) mBtn.classList.add('active');
         const title = document.getElementById('currentDashboardTitle');
-        if (title) title.innerHTML = '🧺 ETF PORTFOLIO & TODAY ACTION';
+        if (title) title.innerHTML = '🧺 ETF PORTFOLIO \u0026 TODAY ACTION';
     }
 
     if (portfolioRenderCache[assetType]) {
@@ -414,6 +416,7 @@ function switchAssetType(assetType) {
         fetchPortfolioData(false);
     }
 }
+window.switchAssetType = switchAssetType;
 
 function toggleCardAccordion(ticker) {
     const content = document.getElementById(`accordion-content-${ticker}`);
