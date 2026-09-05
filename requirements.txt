@@ -6,3 +6,5 @@ requests>=2.31.0
 pykrx>=1.0.40
 finance-datareader>=0.9.50
 python-dotenv>=1.0.0
+psycopg2-binary>=2.9.0
+

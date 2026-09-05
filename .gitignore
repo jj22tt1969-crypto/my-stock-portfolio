@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 .idea/
 .vscode/
+*_backup_sqlite.db
