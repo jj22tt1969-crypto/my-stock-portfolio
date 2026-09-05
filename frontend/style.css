@@ -4090,7 +4090,7 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
 
     .app-container {
         padding: 8px;
-        padding-bottom: 74px; /* 모바일 하단 네비게이션 가림 방지 */
+        padding-bottom: 78px; /* 모바일 하단 네비게이션 가림 방지 */
         box-sizing: border-box;
     }
 
@@ -4108,24 +4108,107 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         display: none;
     }
 
-    /* 2. Portfolio Summary 2x2 카드 */
+    /* 2. Portfolio Summary 2x2 고도화 카드 */
     .summary-section {
         display: grid;
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 8px !important;
+        margin-bottom: 12px;
     }
     .summary-card {
-        padding: 10px 12px;
+        padding: 10px 12px !important;
+        border-radius: 12px;
         word-break: keep-all;
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    .summary-card .card-label {
+        font-size: 11px;
+        color: #94a3b8;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    .summary-card .card-val {
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.3px;
+    }
+    .summary-card .card-val.text-success {
+        color: #34d399 !important;
+    }
+    .summary-card .card-val.text-danger {
+        color: #f87171 !important;
     }
 
-    /* 3. STOCK / ETF 카드 1열 */
+    /* 3. Risk Concentration (위험 집중도) 모바일 세로 배치 */
+    .analytics-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+    }
+    .risk-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+    }
+    .sector-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+    }
+    .sector-tag {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* 4. STOCK / ETF 카드 1열 모바일 UX 고도화 */
     .stock-grid {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
     }
+    .stock-card {
+        padding: 12px 14px !important;
+        border-radius: 14px !important;
+        box-sizing: border-box;
+    }
 
-    /* 4. 차트 모바일 자동 리사이즈 */
+    /* 모바일 종목 카드 헤더 및 통합 통계 */
+    .stock-hero-header {
+        margin-bottom: 10px !important;
+        padding-bottom: 8px !important;
+    }
+    .stock-name-text {
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        max-width: 160px;
+    }
+
+    /* 2x2 모바일 가격 반응형 그리드 */
+    .stock-price-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+        padding: 8px 10px !important;
+        border-radius: 10px !important;
+    }
+    .price-grid-item .pg-label {
+        font-size: 10.5px !important;
+        color: #94a3b8;
+    }
+    .price-grid-item .pg-val {
+        font-size: 13.5px !important;
+        font-weight: 800 !important;
+    }
+
+    /* 5. 차트 모바일 자동 리사이즈 */
     .chart-container, .chart-wrapper {
         width: 100% !important;
         max-width: 100% !important;
@@ -4136,14 +4219,14 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         max-width: 100% !important;
     }
 
-    /* 5. 수급 / RSI / RMI / Smart Money / AI 종합판단 세로 배치 */
-    .analytics-bar, .indicator-flex-container, .decision-container {
+    /* 6. 수급 / RSI / RMI / Smart Money / AI 종합판단 세로 배치 */
+    .indicator-flex-container, .decision-container {
         flex-direction: column !important;
         width: 100% !important;
         box-sizing: border-box;
     }
 
-    /* 6. AI Q&A 모바일 모바일 메신저 최적화 */
+    /* 7. AI Q&A 모바일 메신저 최적화 */
     .qna-input-card, .quick-prompts-row, .quick-tags-row {
         width: 100%;
         box-sizing: border-box;
@@ -4155,7 +4238,7 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         -webkit-overflow-scrolling: touch;
     }
 
-    /* 7. Forward Test 모바일 최적화 */
+    /* 8. Forward Test 모바일 최적화 */
     #ftCoreSignalGrid, #ftAssetTypeGrid {
         grid-template-columns: 1fr !important;
     }
@@ -4163,13 +4246,16 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         min-width: 600px;
     }
 
-    /* 8. 버튼 터치 최적화 (최소 44px) */
-    .btn, .prompt-chip, .tag-btn, .cal-tab, .mobile-nav-btn {
+    /* 9. 버튼 터치 UX (최소 44px 터치 영역) */
+    .btn, .prompt-chip, .tag-btn, .cal-tab, .mobile-nav-btn, .btn-edit, .btn-delete, .btn-detail {
         min-height: 44px;
         touch-action: manipulation;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
-    /* 9. 긴 표/텍스트 넘침 방지 */
+    /* 10. 긴 표/텍스트 넘침 방지 */
     .table-responsive, [style*="overflow-x: auto"] {
         max-width: 100%;
         overflow-x: auto;
@@ -4179,6 +4265,7 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         overflow-wrap: break-word;
     }
 }
+
 
 
 
