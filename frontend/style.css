@@ -4381,7 +4381,52 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         font-size: 12px !important;
     }
 
-    /* 14. 긴 표/텍스트 넘침 방지 */
+    /* 15. 📱 모바일 6차 — Forward Test 실전 전진검증 대시보드 UX 고도화 */
+    #forwardTestSection {
+        margin-top: 4px !important;
+    }
+    #forwardTestSection .card {
+        padding: 14px 12px !important;
+        border-radius: 14px !important;
+        margin-bottom: 14px !important;
+    }
+    #ftSearchPanel {
+        padding: 12px !important;
+        border-radius: 12px !important;
+        margin-bottom: 14px !important;
+    }
+    #ftSearchInput {
+        min-height: 46px !important;
+        font-size: 13.5px !important;
+        padding: 10px 12px !important;
+        border-radius: 10px !important;
+        box-sizing: border-box !important;
+    }
+    #ftSearchDropdown {
+        border-radius: 10px !important;
+    }
+    #ftSearchDropdown div {
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+    #ftRegisterBtn {
+        min-height: 48px !important;
+        font-size: 13.5px !important;
+        font-weight: 800 !important;
+        border-radius: 10px !important;
+    }
+    #ftCoreSignalGrid, #ftAssetTypeGrid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    .ft-tracking-table {
+        min-width: 680px;
+    }
+
+    /* 16. 긴 표/텍스트 넘침 방지 */
     .table-responsive, [style*="overflow-x: auto"] {
         max-width: 100%;
         overflow-x: auto;
