@@ -339,7 +339,6 @@ function switchAssetType(assetType) {
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'flex';
 
-        const summarySec = document.getElementById('portfolioSummarySection');
         if (summarySec) {
             summarySec.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
@@ -371,7 +370,9 @@ function switchAssetType(assetType) {
     if (assetType === 'FORWARD_TEST') {
         currentAssetType = 'FORWARD_TEST';
         const btn = document.getElementById('navForwardTest');
+        const mBtn = document.getElementById('mNavForwardTest');
         if (btn) btn.classList.add('active');
+        if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'block'; // keep parent visible
         if (qaView) qaView.style.display = 'none';
         if (summarySec) summarySec.style.display = 'none';

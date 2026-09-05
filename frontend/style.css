@@ -4079,4 +4079,106 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     color: #0f172a !important;
 }
 
+/* ==========================================
+ * 📱 Mobile Responsive Viewport Optimization (375px, 390px, 430px)
+ * ========================================== */
+@media (max-width: 640px) {
+    html, body {
+        overflow-x: hidden;
+        width: 100%;
+    }
+
+    .app-container {
+        padding: 8px;
+        padding-bottom: 74px; /* 모바일 하단 네비게이션 가림 방지 */
+        box-sizing: border-box;
+    }
+
+    /* 1. 상단 시장지수 가로 스크롤 */
+    .market-bar {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        gap: 8px;
+        padding: 6px 4px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .market-bar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* 2. Portfolio Summary 2x2 카드 */
+    .summary-section {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .summary-card {
+        padding: 10px 12px;
+        word-break: keep-all;
+    }
+
+    /* 3. STOCK / ETF 카드 1열 */
+    .stock-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* 4. 차트 모바일 자동 리사이즈 */
+    .chart-container, .chart-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+    .chart-container canvas {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* 5. 수급 / RSI / RMI / Smart Money / AI 종합판단 세로 배치 */
+    .analytics-bar, .indicator-flex-container, .decision-container {
+        flex-direction: column !important;
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* 6. AI Q&A 모바일 모바일 메신저 최적화 */
+    .qna-input-card, .quick-prompts-row, .quick-tags-row {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .quick-prompts-row, .quick-tags-row {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 7. Forward Test 모바일 최적화 */
+    #ftCoreSignalGrid, #ftAssetTypeGrid {
+        grid-template-columns: 1fr !important;
+    }
+    .ft-tracking-table {
+        min-width: 600px;
+    }
+
+    /* 8. 버튼 터치 최적화 (최소 44px) */
+    .btn, .prompt-chip, .tag-btn, .cal-tab, .mobile-nav-btn {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+
+    /* 9. 긴 표/텍스트 넘침 방지 */
+    .table-responsive, [style*="overflow-x: auto"] {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    p, span, td, th, div {
+        overflow-wrap: break-word;
+    }
+}
+
+
 
