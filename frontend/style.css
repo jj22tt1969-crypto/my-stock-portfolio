@@ -4319,7 +4319,69 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         width: 100% !important;
     }
 
-    /* 12. 긴 표/텍스트 넘침 방지 */
+    /* 13. 📱 모바일 5차 — AI Q&A 메신저 및 입력폼 UX 고도화 */
+    #qaDashboardView {
+        padding: 4px 0 !important;
+    }
+    .qna-dashboard-container {
+        padding: 0 !important;
+    }
+    .qna-input-card {
+        padding: 12px !important;
+        border-radius: 14px !important;
+        margin-bottom: 14px !important;
+    }
+    .qna-input-form {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .qna-input-form textarea {
+        width: 100% !important;
+        min-height: 82px !important;
+        font-size: 14px !important;
+        padding: 12px !important;
+        box-sizing: border-box !important;
+        border-radius: 10px !important;
+    }
+    .btn-qna-submit {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 14px !important;
+        font-weight: 800 !important;
+        border-radius: 10px !important;
+    }
+    .quick-prompts-row, .quick-tags-row {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        gap: 6px !important;
+        padding-bottom: 8px !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .quick-prompts-row::-webkit-scrollbar, .quick-tags-row::-webkit-scrollbar {
+        display: none;
+    }
+    .prompt-chip, .tag-btn {
+        flex: 0 0 auto !important;
+        font-size: 12px !important;
+        padding: 6px 12px !important;
+        min-height: 44px !important;
+    }
+    .answer-card, .qna-header-card {
+        padding: 12px 14px !important;
+        border-radius: 14px !important;
+        margin-bottom: 12px !important;
+    }
+    .citation-link, .source-link-tag {
+        min-height: 38px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+    }
+
+    /* 14. 긴 표/텍스트 넘침 방지 */
     .table-responsive, [style*="overflow-x: auto"] {
         max-width: 100%;
         overflow-x: auto;

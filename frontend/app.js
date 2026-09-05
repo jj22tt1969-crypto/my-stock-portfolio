@@ -316,10 +316,10 @@ function switchAssetType(assetType) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.mobile-nav-btn').forEach(el => el.classList.remove('active'));
 
+    const summarySec = document.getElementById('portfolioSummarySection');
     const portfolioView = document.getElementById('portfolioDashboardView');
     const qaView = document.getElementById('qaDashboardView');
     const ftSection = document.getElementById('forwardTestSection');
-    const summarySec = document.getElementById('portfolioSummarySection');
     const stockGrid = document.getElementById('stockGrid');
     const navActionsGroup = document.getElementById('navActionsGroup');
     const toolbarActions = document.getElementById('portfolioActionToolbar');
