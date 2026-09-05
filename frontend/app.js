@@ -362,7 +362,7 @@ function switchAssetType(assetType) {
         if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'none';
         if (qaView) qaView.style.display = 'block';
-        if (navActionsGroup) navActionsGroup.style.display = 'none';
+        if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'none';
         loadUpcomingCalendar();
         return;
@@ -377,7 +377,7 @@ function switchAssetType(assetType) {
         if (summarySec) summarySec.style.display = 'none';
         if (stockGrid) stockGrid.style.display = 'none';
         if (ftSection) ftSection.style.display = 'block';
-        if (navActionsGroup) navActionsGroup.style.display = 'none';
+        if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'none';
         loadForwardTestDashboard();
         return;
@@ -3268,10 +3268,13 @@ async function loadForwardTestDashboard() {
         // 4. 이력 테이블
         const tbody = document.getElementById('ftRecentTableBody');
         if (tbody && data.recent_signals) {
+            const thSelect = document.getElementById('ftSelectThHeader');
+            if (thSelect) thSelect.style.display = ftDeleteMode ? 'table-cell' : 'none';
+
             if (data.recent_signals.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="10" style="padding: 16px; text-align: center; color: #64748b;">
+                        <td colspan="${ftDeleteMode ? 11 : 10}" style="padding: 16px; text-align: center; color: #64748b;">
                             저장된 Forward Test 신호가 없습니다. (종목 분석 실행 시 자동 기록됩니다)
                         </td>
                     </tr>
@@ -3293,10 +3296,15 @@ async function loadForwardTestDashboard() {
                 const finalDec = sig.final_decision || 'HOLD';
                 const diffStr = origDec !== finalDec ? `${origDec} ➔ <strong style="color:#fbbf24;">${finalDec}</strong>` : finalDec;
 
+                const displayTdSelect = ftDeleteMode ? 'table-cell' : 'none';
+
                 rowsHtml += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td class="ft-select-td" style="padding: 8px 10px; text-align: center; display: ${displayTdSelect};">
+                            <input type="checkbox" class="ft-select-chk" value="${sig.id}" style="cursor: pointer;">
+                        </td>
                         <td style="padding: 8px 10px; color: #94a3b8;">${sig.signal_date}</td>
-                        <td style="padding: 8px 10px; font-weight: 700; color: #f8fafc;">${sig.name} <span style="font-size: 10.5px; color: #64748b;">(${sig.ticker})</span></td>
+                        <td style="padding: 8px 10px; font-weight: 700; color: #f97316;">${sig.name} <span style="font-size: 10.5px; color: #ea580c;">(${sig.ticker})</span></td>
                         <td style="padding: 8px 10px;"><span style="padding: 2px 6px; border-radius: 4px; font-size: 10.5px; background: rgba(255,255,255,0.08);">${sig.asset_type || 'STOCK'}</span></td>
                         <td style="padding: 8px 10px; color: #cbd5e1;">${sig.price ? sig.price.toLocaleString() : '-'}원</td>
                         <td style="padding: 8px 10px;">${diffStr}</td>
@@ -3305,15 +3313,6 @@ async function loadForwardTestDashboard() {
                         <td style="padding: 8px 10px;">${formatRet(sig.status_5d, sig.ret_5d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_10d, sig.ret_10d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_20d, sig.ret_20d)}</td>
-                        <td style="padding: 8px 10px; text-align:center;">
-                            <button
-                                onclick="ftDeleteSignal(${sig.id})"
-                                title="이 신호 삭제"
-                                style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#f87171; font-size:11px; padding:3px 8px; border-radius:5px; cursor:pointer; transition:all 0.15s;"
-                                onmouseover="this.style.background='rgba(239,68,68,0.35)'"
-                                onmouseout="this.style.background='rgba(239,68,68,0.15)'"
-                            >🗑 삭제</button>
-                        </td>
                     </tr>
                 `;
             });
@@ -3580,9 +3579,115 @@ window.ftRegisterTracking = ftRegisterTracking;
 window.loadForwardTestDashboard = loadForwardTestDashboard;
 window.triggerForwardTestEvaluation = triggerForwardTestEvaluation;
 
+// =========================================================
+// 🗑️ Forward Test 종목 추가 & 선택 삭제 컨트롤 함수
+// =========================================================
+let ftDeleteMode = false;
+
 /**
- * 🗑 Forward Test 신호 스냅샷 삭제
+ * 1. [➕ 종목 추가] 버튼 클릭 시 검색창으로 스크롤 및 포커스
  */
+function ftFocusSearchInput() {
+    const input = document.getElementById('ftSearchInput');
+    const panel = document.getElementById('ftSearchPanel');
+    if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        panel.style.border = '1px solid #f97316';
+        panel.style.boxShadow = '0 0 12px rgba(249, 115, 22, 0.4)';
+        setTimeout(() => {
+            panel.style.border = '1px solid rgba(56,189,248,0.2)';
+            panel.style.boxShadow = 'none';
+        }, 2500);
+    }
+    if (input) {
+        input.focus();
+    }
+}
+window.ftFocusSearchInput = ftFocusSearchInput;
+
+/**
+ * 2. [🗑️ 종목 삭제] 선택 모드 토글
+ */
+function ftToggleDeleteMode() {
+    ftDeleteMode = !ftDeleteMode;
+    
+    const thSelect = document.getElementById('ftSelectThHeader');
+    const btnGroup = document.getElementById('ftHeaderBtnGroup');
+    
+    if (ftDeleteMode) {
+        if (thSelect) thSelect.style.display = 'table-cell';
+        if (btnGroup) {
+            btnGroup.innerHTML = `
+                <button class="btn btn-sm" onclick="ftConfirmDeleteSelected()" style="background: #ef4444; color: #ffffff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);">
+                    🚨 선택 항목 삭제
+                </button>
+                <button class="btn btn-sm" onclick="ftToggleDeleteMode()" style="background: rgba(148, 163, 184, 0.2); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; font-weight: 700; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                    취소
+                </button>
+            `;
+        }
+    } else {
+        if (thSelect) thSelect.style.display = 'none';
+        if (btnGroup) {
+            btnGroup.innerHTML = `
+                <button class="btn btn-sm" onclick="ftFocusSearchInput()" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);">
+                    ➕ 종목 추가
+                </button>
+                <button id="ftToggleDeleteBtn" class="btn btn-sm" onclick="ftToggleDeleteMode()" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                    🗑️ 종목 삭제
+                </button>
+            `;
+        }
+    }
+    
+    // 테이블 내 전체 체크박스 셀 display 토글
+    const selectTds = document.querySelectorAll('.ft-select-td');
+    selectTds.forEach(td => {
+        td.style.display = ftDeleteMode ? 'table-cell' : 'none';
+    });
+}
+window.ftToggleDeleteMode = ftToggleDeleteMode;
+
+/**
+ * 3. 전체 선택 체크박스 동작
+ */
+function ftToggleSelectAll(masterChk) {
+    const chks = document.querySelectorAll('.ft-select-chk');
+    chks.forEach(chk => {
+        chk.checked = masterChk.checked;
+    });
+}
+window.ftToggleSelectAll = ftToggleSelectAll;
+
+/**
+ * 4. 선택된 종목 스냅샷 일괄 삭제 실행
+ */
+async function ftConfirmDeleteSelected() {
+    const checkedNodes = document.querySelectorAll('.ft-select-chk:checked');
+    if (checkedNodes.length === 0) {
+        alert('삭제할 종목 항목을 체크박스로 선택해 주세요.');
+        return;
+    }
+    
+    if (!confirm(`선택한 ${checkedNodes.length}개의 종목 스냅샷 이력을 정말 삭제하시겠습니까?`)) return;
+    
+    let successCount = 0;
+    for (const chk of checkedNodes) {
+        const id = chk.value;
+        try {
+            const resp = await fetch(`/api/forward-test/record/${id}`, { method: 'DELETE' });
+            if (resp.ok) successCount++;
+        } catch (e) {
+            console.error(`ID ${id} 삭제 실패:`, e);
+        }
+    }
+    
+    alert(`${successCount}개 항목이 성공적으로 삭제되었습니다.`);
+    ftDeleteMode = false;
+    await loadForwardTestDashboard();
+}
+window.ftConfirmDeleteSelected = ftConfirmDeleteSelected;
+
 async function ftDeleteSignal(signalId) {
     if (!confirm('이 종목을 삭제하시겠습니까?')) return;
     try {
@@ -3592,7 +3697,6 @@ async function ftDeleteSignal(signalId) {
             alert('삭제 실패: ' + (err.detail || resp.status));
             return;
         }
-        // 테이블 즉시 갱신
         await loadForwardTestDashboard();
     } catch (e) {
         console.error('FT 삭제 오류:', e);
