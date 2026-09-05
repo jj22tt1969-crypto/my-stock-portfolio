@@ -1,5 +1,5 @@
 // QUANT AI PORTFOLIO Service Worker (No-Cache Bypass Version)
-const CACHE_NAME = 'quant-ai-pwa-v1.0.5_sugub_btn';
+const CACHE_NAME = 'quant-ai-pwa-v1.0.6_orange_title';
 
 // 1. 설치 시 즉시 스킵
 self.addEventListener('install', (event) => {
