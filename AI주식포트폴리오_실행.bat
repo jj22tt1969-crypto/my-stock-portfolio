@@ -18,6 +18,6 @@ REM Open browser after 12 second delay (server needs time to fully initialize)
 start /min "" cmd /c "timeout /t 12 /nobreak > nul && start http://localhost:8000/"
 
 REM Run server in foreground (with hot-reload)
-"C:\Users\SKB.0439\AppData\Local\Programs\Python\Python311\python.exe" -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+"C:\Users\SKB.0439\AppData\Local\Programs\Python\Python311\python.exe" -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude "*.db"
 
 pause

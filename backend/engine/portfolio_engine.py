@@ -105,35 +105,43 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
         return empty_res
 
 
-    # 종목별 수급 및 실시간 주가 데이터 병렬 수집
+    # 종목별 수급 및 실시간 주가 데이터 병렬 수집 (스레드 과집중 방지 max_workers=6 & 예외 방어)
     from concurrent.futures import ThreadPoolExecutor
 
     def process_single_stock(stock):
-        ticker = stock["ticker"]
-        avg_price = float(stock["avg_price"])
-        flow_data = get_stock_flow_data(ticker, min_days=30)
-        
-        current_price = avg_price
-        diff = 0.0
-        decision_result = {}
-        
-        if flow_data.get("data_available", False):
-            df = flow_data["df"]
-            latest_row = df.iloc[-1]
-            current_price = float(latest_row['close_price'])
-            diff = float(latest_row['diff'])
-
-            return_rate_tmp = ((current_price - avg_price) / avg_price * 100) if avg_price > 0 else 0.0
-            decision_result = analyze_stock_decision(df, return_rate=return_rate_tmp)
+        try:
+            ticker = stock["ticker"]
+            avg_price = float(stock["avg_price"])
+            flow_data = get_stock_flow_data(ticker, min_days=30)
             
-        return {
-            "stock": stock,
-            "current_price": current_price,
-            "diff": diff,
-            "decision_result": decision_result
-        }
+            current_price = avg_price
+            diff = 0.0
+            decision_result = {}
+            
+            if flow_data.get("data_available", False):
+                df = flow_data["df"]
+                latest_row = df.iloc[-1]
+                current_price = float(latest_row['close_price'])
+                diff = float(latest_row['diff'])
 
-    with ThreadPoolExecutor(max_workers=min(len(stocks), 16)) as executor:
+                return_rate_tmp = ((current_price - avg_price) / avg_price * 100) if avg_price > 0 else 0.0
+                decision_result = analyze_stock_decision(df, return_rate=return_rate_tmp)
+                
+            return {
+                "stock": stock,
+                "current_price": current_price,
+                "diff": diff,
+                "decision_result": decision_result
+            }
+        except Exception as e:
+            return {
+                "stock": stock,
+                "current_price": float(stock.get("avg_price", 0)),
+                "diff": 0.0,
+                "decision_result": {}
+            }
+
+    with ThreadPoolExecutor(max_workers=min(len(stocks), 6)) as executor:
         stock_results = list(executor.map(process_single_stock, stocks))
 
 

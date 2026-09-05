@@ -47,15 +47,13 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_warmup_cache():
     """
-    서버 가동 시 백그라운드 비동기 스레드로 포트폴리오(STOCK & ETF) 데이터 및 KRX 전종목 캐시를 미리 사전 워밍업(Warm-up)하여
+    서버 가동 시 KRX 전종목 캐시를 미리 사전 워밍업(Warm-up)하여
     사용자가 최초 접속했을 때 화면 출력이 0.001초 만에 즉시 이뤄지도록 보장합니다.
     """
     loop = asyncio.get_event_loop()
     try:
         from backend.engine.krx_loader import load_krx_all_stocks
         loop.run_in_executor(None, load_krx_all_stocks)
-        loop.run_in_executor(None, partial(pe.analyze_portfolio, "STOCK"))
-        loop.run_in_executor(None, partial(pe.analyze_portfolio, "ETF"))
     except Exception:
         pass
 
