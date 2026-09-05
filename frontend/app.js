@@ -3208,14 +3208,24 @@ async function loadForwardTestDashboard() {
 
         const buy5d = (data.decision_stats && data.decision_stats['BUY'] && data.decision_stats['BUY']['5D']) || {};
         if (buyRateEl) {
-            const wr = buy5d.win_rate !== undefined ? buy5d.win_rate : 0.0;
-            const ret = buy5d.avg_return !== undefined ? buy5d.avg_return : 0.0;
-            buyRateEl.innerText = `${wr.toFixed(1)}% (${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%)`;
+            const sc = buy5d.sample_count || 0;
+            if (sc === 0) {
+                buyRateEl.innerText = "표본 부족 (0건)";
+            } else {
+                const wr = buy5d.win_rate !== undefined ? buy5d.win_rate : 0.0;
+                const ret = buy5d.avg_return !== undefined ? buy5d.avg_return : 0.0;
+                buyRateEl.innerText = `${wr.toFixed(1)}% (${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%)`;
+            }
         }
 
         if (maxLossEl) {
-            const ml = buy5d.max_loss !== undefined ? buy5d.max_loss : 0.0;
-            maxLossEl.innerText = `${ml.toFixed(2)}%`;
+            const sc = buy5d.sample_count || 0;
+            if (sc === 0) {
+                maxLossEl.innerText = "표본 부족";
+            } else {
+                const ml = buy5d.max_loss !== undefined ? buy5d.max_loss : 0.0;
+                maxLossEl.innerText = `${ml.toFixed(2)}%`;
+            }
         }
 
         // 2. 핵심 3대 신호 추적 카드
@@ -3224,18 +3234,20 @@ async function loadForwardTestDashboard() {
             let coreHtml = '';
             Object.keys(data.core_signal_stats).forEach(key => {
                 const item = data.core_signal_stats[key];
-                const st5 = item['5D'] || {};
-                const st10 = item['10D'] || {};
-                const st20 = item['20D'] || {};
+                const fmtPeriod = (st) => {
+                    const sc = st.sample_count || 0;
+                    if (sc === 0) return `<span style="color:#94a3b8;">표본 부족 (0개)</span>`;
+                    return `${st.win_rate || 0}% (${st.avg_return >= 0 ? '+' : ''}${st.avg_return || 0}%) | 표본 ${sc}개`;
+                };
 
                 coreHtml += `
                     <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(251, 191, 36, 0.3);">
                         <div style="font-size: 12.5px; font-weight: 800; color: #fbbf24; margin-bottom: 6px;">${item.name}</div>
                         <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">누적 발생: <strong style="color:#f8fafc;">${item.count}건</strong></div>
                         <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.6;">
-                            • <strong>5D:</strong> ${st5.win_rate || 0}% (${st5.avg_return >= 0 ? '+' : ''}${st5.avg_return || 0}%) | 표본 ${st5.sample_count || 0}개<br>
-                            • <strong>10D:</strong> ${st10.win_rate || 0}% (${st10.avg_return >= 0 ? '+' : ''}${st10.avg_return || 0}%) | 표본 ${st10.sample_count || 0}개<br>
-                            • <strong>20D:</strong> ${st20.win_rate || 0}% (${st20.avg_return >= 0 ? '+' : ''}${st20.avg_return || 0}%) | 표본 ${st20.sample_count || 0}개
+                            • <strong>5D:</strong> ${fmtPeriod(item['5D'] || {})}<br>
+                            • <strong>10D:</strong> ${fmtPeriod(item['10D'] || {})}<br>
+                            • <strong>20D:</strong> ${fmtPeriod(item['20D'] || {})}
                         </div>
                     </div>
                 `;
@@ -3249,17 +3261,23 @@ async function loadForwardTestDashboard() {
             const stockSt = (data.asset_type_stats['STOCK'] && data.asset_type_stats['STOCK']['5D']) || {};
             const etfSt = (data.asset_type_stats['ETF'] && data.asset_type_stats['ETF']['5D']) || {};
 
+            const fmtAsset = (st) => {
+                const sc = st.sample_count || 0;
+                if (sc === 0) return `5D 승률: <span style="color:#94a3b8;">표본 부족 (0개)</span>`;
+                return `5D 승률: <strong>${st.win_rate || 0}%</strong> | 평균수익률: <strong>${st.avg_return >= 0 ? '+' : ''}${st.avg_return || 0}%</strong> (표본 ${sc}개)`;
+            };
+
             assetGrid.innerHTML = `
                 <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.2);">
                     <div style="font-size: 12px; font-weight: 800; color: #38bdf8; margin-bottom: 4px;">📈 개별주 (STOCK)</div>
                     <div style="font-size: 11.5px; color: #e2e8f0;">
-                        5D 승률: <strong>${stockSt.win_rate || 0}%</strong> | 평균수익률: <strong>${stockSt.avg_return >= 0 ? '+' : ''}${stockSt.avg_return || 0}%</strong> (표본 ${stockSt.sample_count || 0}개)
+                        ${fmtAsset(stockSt)}
                     </div>
                 </div>
                 <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(168, 85, 247, 0.2);">
                     <div style="font-size: 12px; font-weight: 800; color: #a855f7; margin-bottom: 4px;">🧺 자산군 (ETF)</div>
                     <div style="font-size: 11.5px; color: #e2e8f0;">
-                        5D 승률: <strong>${etfSt.win_rate || 0}%</strong> | 평균수익률: <strong>${etfSt.avg_return >= 0 ? '+' : ''}${etfSt.avg_return || 0}%</strong> (표본 ${etfSt.sample_count || 0}개)
+                        ${fmtAsset(etfSt)}
                     </div>
                 </div>
             `;
