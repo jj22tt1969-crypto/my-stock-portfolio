@@ -31,9 +31,15 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn, "SQLITE"
 
+def get_cursor(conn, db_type):
+    if db_type == "POSTGRESQL":
+        import psycopg2.extras
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    return conn.cursor()
+
 def init_db():
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     
     if db_type == "POSTGRESQL":
         cursor.execute("""
@@ -90,7 +96,7 @@ def init_db():
 
 def add_stock(name: str, ticker: str, avg_price: float, quantity: int, buy_date: str = "", investment_purpose: str = "", sector: str = "기타", asset_type: str = "STOCK", market: str = "KOSPI") -> Dict[str, Any]:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     asset_type = asset_type.upper() if asset_type else "STOCK"
     market = market.upper() if market else "KOSPI"
     try:
@@ -108,7 +114,8 @@ def add_stock(name: str, ticker: str, avg_price: float, quantity: int, buy_date:
                     market = EXCLUDED.market
                 RETURNING id;
             """, (name, ticker, avg_price, quantity, buy_date, investment_purpose, sector, asset_type, market))
-            item_id = cursor.fetchone()[0]
+            res_row = cursor.fetchone()
+            item_id = res_row['id'] if isinstance(res_row, dict) else res_row[0]
         else:
             cursor.execute("""
                 INSERT INTO portfolios (name, ticker, avg_price, quantity, buy_date, investment_purpose, sector, asset_type, market)
@@ -132,7 +139,7 @@ def add_stock(name: str, ticker: str, avg_price: float, quantity: int, buy_date:
 
 def get_all_stocks(asset_type: Optional[str] = "STOCK") -> List[Dict[str, Any]]:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     ph = "%s" if db_type == "POSTGRESQL" else "?"
     if asset_type and asset_type.upper() != "ALL":
         target = asset_type.upper()
@@ -146,7 +153,7 @@ def get_all_stocks(asset_type: Optional[str] = "STOCK") -> List[Dict[str, Any]]:
 
 def get_stock_by_id(item_id: int) -> Optional[Dict[str, Any]]:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     ph = "%s" if db_type == "POSTGRESQL" else "?"
     cursor.execute(f"SELECT * FROM portfolios WHERE id = {ph}", (item_id,))
     row = cursor.fetchone()
@@ -155,7 +162,7 @@ def get_stock_by_id(item_id: int) -> Optional[Dict[str, Any]]:
 
 def get_stock_by_ticker(ticker: str) -> Optional[Dict[str, Any]]:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     ph = "%s" if db_type == "POSTGRESQL" else "?"
     cursor.execute(f"SELECT * FROM portfolios WHERE ticker = {ph}", (ticker,))
     row = cursor.fetchone()
@@ -164,7 +171,7 @@ def get_stock_by_ticker(ticker: str) -> Optional[Dict[str, Any]]:
 
 def delete_stock(item_id: int) -> bool:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     ph = "%s" if db_type == "POSTGRESQL" else "?"
     cursor.execute(f"DELETE FROM portfolios WHERE id = {ph}", (item_id,))
     affected = cursor.rowcount
@@ -174,7 +181,7 @@ def delete_stock(item_id: int) -> bool:
 
 def update_stock(item_id: int, avg_price: float, quantity: int, buy_date: str = "", investment_purpose: str = "", sector: str = "기타", market: str = "KOSPI") -> Dict[str, Any]:
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     ph = "%s" if db_type == "POSTGRESQL" else "?"
     try:
         cursor.execute(f"""
@@ -195,7 +202,7 @@ def update_stock(item_id: int, avg_price: float, quantity: int, buy_date: str = 
 
 def clear_all_stocks():
     conn, db_type = get_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn, db_type)
     cursor.execute("DELETE FROM portfolios")
     conn.commit()
     conn.close()
