@@ -3347,91 +3347,75 @@ let ftSearchDebounceTimer = null;
 /**
  * 검색 인풋 디바운스 처리 — 기존 /api/stock/search API 재사용
  */
-function ftOnSea/**
- * 2. [🗑️ 종목 삭제] 선택 모드 토글 (forceState 지정 가능)
- */
-function ftToggleDeleteMode(forceState) {
-    if (typeof forceState === 'boolean') {
-        ftDeleteMode = forceState;
-    } else {
-        ftDeleteMode = !ftDeleteMode;
-    }
-    
-    const thSelect = document.getElementById('ftSelectThHeader');
-    const btnGroup = document.getElementById('ftHeaderBtnGroup');
-    
-    if (ftDeleteMode) {
-        if (thSelect) thSelect.style.display = 'table-cell';
-        if (btnGroup) {
-            btnGroup.innerHTML = `
-                <button class="btn btn-sm" onclick="ftConfirmDeleteSelected()" style="background: #ef4444; color: #ffffff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);">
-                    🚨 선택 항목 삭제
-                </button>
-                <button class="btn btn-sm" onclick="ftToggleDeleteMode(false)" style="background: rgba(148, 163, 184, 0.2); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; font-weight: 700; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                    취소
-                </button>
-            `;
-        }
-    } else {
-        if (thSelect) thSelect.style.display = 'none';
-        if (btnGroup) {
-            btnGroup.innerHTML = `
-                <button class="btn btn-sm" onclick="ftFocusSearchInput()" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: #ffffff; font-weight: 700; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);">
-                    ➕ 종목 추가
-                </button>
-                <button id="ftToggleDeleteBtn" class="btn btn-sm" onclick="ftToggleDeleteMode(true)" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                    🗑️ 종목 삭제
-                </button>
-            `;
-        }
-    }
-    
-    // 테이블 내 전체 체크박스 셀 display 토글
-    const selectTds = document.querySelectorAll('.ft-select-td');
-    selectTds.forEach(td => {
-        td.style.display = ftDeleteMode ? 'table-cell' : 'none';
-    });
-}
-window.ftToggleDeleteMode = ftToggleDeleteMode;
-
-/**
- * 3. 전체 선택 체크박스 동작
- */
-function ftToggleSelectAll(masterChk) {
-    const chks = document.querySelectorAll('.ft-select-chk');
-    chks.forEach(chk => {
-        chk.checked = masterChk.checked;
-    });
-}
-window.ftToggleSelectAll = ftToggleSelectAll;
-
-/**
- * 4. 선택된 종목 스냅샷 일괄 삭제 실행 및 본래 메뉴 복구
- */
-async function ftConfirmDeleteSelected() {
-    const checkedNodes = document.querySelectorAll('.ft-select-chk:checked');
-    if (checkedNodes.length === 0) {
-        alert('삭제할 종목 항목을 체크박스로 선택해 주세요.');
+function ftOnSearchInput(query) {
+    clearTimeout(ftSearchDebounceTimer);
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (!query || query.trim().length < 1) {
+        if (dropdown) dropdown.style.display = 'none';
         return;
     }
-    
-    if (!confirm(`선택한 ${checkedNodes.length}개의 종목 스냅샷 이력을 정말 삭제하시겠습니까?`)) return;
-    
-    let successCount = 0;
-    for (const chk of checkedNodes) {
-        const id = chk.value;
-        try {
-            const resp = await fetch(`/api/forward-test/record/${id}`, { method: 'DELETE' });
-            if (resp.ok) successCount++;
-        } catch (e) {
-            console.error(`ID ${id} 삭제 실패:`, e);
+    ftSearchDebounceTimer = setTimeout(() => ftSearchStock(query.trim()), 280);
+}
+
+async function ftSearchStock(query) {
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (!dropdown) return;
+    try {
+        const resp = await fetch(`/api/stock/search?query=${encodeURIComponent(query)}&asset_type=ALL`);
+        const data = await resp.json();
+        const candidates = (data.candidates || []).slice(0, 10);
+        if (candidates.length === 0) {
+            dropdown.innerHTML = `<div style="padding:10px 14px; color:#64748b; font-size:12px;">검색 결과가 없습니다.</div>`;
+            dropdown.style.display = 'block';
+            return;
         }
+        dropdown.innerHTML = candidates.map(c => {
+            const typeColor = c.asset_type === 'ETF' ? '#a78bfa' : '#34d399';
+            const safeName = (c.name || c.ticker || '').replace(/'/g, "\\'");
+            const safeTicker = (c.ticker || '').replace(/'/g, "\\'");
+            const safeType = (c.asset_type || 'STOCK').replace(/'/g, "\\'");
+            return `<div
+                onclick="ftSelectStock('${safeTicker}','${safeName}','${safeType}')"
+                style="padding:9px 14px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; font-size:12.5px;"
+                onmouseover="this.style.background='rgba(56,189,248,0.1)'"
+                onmouseout="this.style.background='transparent'"
+            >
+                <span style="color:#f8fafc; font-weight:700;">${c.name || c.ticker}</span>
+                <span style="color:#64748b; font-size:11px; margin-left:8px;">${c.ticker}</span>
+                <span style="color:${typeColor}; font-size:10.5px; padding:1px 6px; border-radius:4px; background:rgba(255,255,255,0.06); margin-left:6px;">${c.asset_type || 'STOCK'}</span>
+            </div>`;
+        }).join('');
+        dropdown.style.display = 'block';
+    } catch (e) {
+        console.error('FT 검색 오류:', e);
+        if (dropdown) dropdown.style.display = 'none';
     }
-    
-    alert(`${successCount}개 항목이 성공적으로 삭제되었습니다.`);
-    ftToggleDeleteMode(false); // 삭제 완료 후 본래 메뉴([➕ 종목 추가], [🗑️ 종목 삭제])로 원상 복구!
-    await loadForwardTestDashboard();
-}=${encodeURIComponent(ticker)}&return_rate=0`);
+}
+
+function ftCloseDropdown() {
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+/**
+ * 자동완성에서 종목 선택 후 /api/decision/analyze 호출하여 분석 결과 조회
+ * 기존 의사결정 분석 엔진을 그대로 사용 (새로 만들 필요 없음)
+ */
+async function ftSelectStock(ticker, name, assetType) {
+    ftCloseDropdown();
+    const input = document.getElementById('ftSearchInput');
+    if (input) input.value = `${name} (${ticker})`;
+
+    const panel = document.getElementById('ftAnalysisPanel');
+    const loading = document.getElementById('ftAnalysisLoading');
+    const msg = document.getElementById('ftRegisterMsg');
+    if (panel) panel.style.display = 'none';
+    if (loading) loading.style.display = 'block';
+    if (msg) msg.style.display = 'none';
+    ftCurrentStock = null;
+
+    try {
+        const resp = await fetch(`/api/decision/analyze?ticker=${encodeURIComponent(ticker)}&return_rate=0`);
         if (loading) loading.style.display = 'none';
 
         if (!resp.ok) {
