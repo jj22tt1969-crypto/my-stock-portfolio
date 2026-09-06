@@ -319,11 +319,15 @@ def fetch_naver_frgn_data(ticker: str, pages: int = 1) -> pd.DataFrame:
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
+# 모듈 레벨 전역 수집 스레드 풀 (shutdown(wait=True) 재블로킹 방지 및 워커 스레드 관리)
+_COLLECTOR_THREAD_POOL = ThreadPoolExecutor(max_workers=8)
+
 def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
     """
-    PyKRX 수급 데이터 수집 (안전 2.0초 타임아웃 래퍼 적용)
-    - PyKRX 내부 API는 timeout 인자를 직접 지원하지 않으므로 ThreadPoolExecutor를 통해
-      해외 Cloud IP(Render 등) 접속 블로킹 시 최대 2.0초 후 즉시 반환하도록 방어합니다.
+    PyKRX 수급 데이터 수집 (모듈 레벨 전역 스레드 풀 & 안전 2.0초 타임아웃 래퍼 적용)
+    - PyKRX 내부 API는 timeout 인자를 직접 지원하지 않으며, with ThreadPoolExecutor 사용 시
+      __exit__에서 shutdown(wait=True)로 인한 재블로킹(30~60s)이 발생하므로,
+      모듈 전역 _COLLECTOR_THREAD_POOL을 이용해 f.result(timeout=2.0)만 포획하고 2초 후 즉시 반환합니다.
     """
     def _inner():
         try:
@@ -358,11 +362,10 @@ def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
             return pd.DataFrame()
 
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_inner)
-            return future.result(timeout=2.0)
+        future = _COLLECTOR_THREAD_POOL.submit(_inner)
+        return future.result(timeout=2.0)
     except TimeoutError:
-        logger.warning(f"PyKRX fetch timed out (2.0s limit reached) for {ticker}")
+        logger.warning(f"PyKRX fetch timed out (2.0s limit reached) for {ticker} - returning empty DataFrame immediately")
         return pd.DataFrame()
     except Exception as e:
         logger.warning(f"PyKRX safe wrapper error for {ticker}: {e}")
@@ -371,7 +374,7 @@ def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
 
 def fetch_fdr_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
     """
-    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수 (안전 2.0초 타임아웃 래퍼 적용)
+    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수 (모듈 레벨 전역 스레드 풀 & 안전 2.0초 타임아웃 래퍼 적용)
     """
     def _inner():
         try:
@@ -404,11 +407,10 @@ def fetch_fdr_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
             return pd.DataFrame()
 
     try:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_inner)
-            return future.result(timeout=2.0)
+        future = _COLLECTOR_THREAD_POOL.submit(_inner)
+        return future.result(timeout=2.0)
     except TimeoutError:
-        logger.warning(f"FinanceDataReader fetch timed out (2.0s limit reached) for {ticker}")
+        logger.warning(f"FinanceDataReader fetch timed out (2.0s limit reached) for {ticker} - returning empty DataFrame immediately")
         return pd.DataFrame()
     except Exception as e:
         logger.warning(f"FinanceDataReader safe wrapper error for {ticker}: {e}")
