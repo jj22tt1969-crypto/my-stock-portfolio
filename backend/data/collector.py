@@ -317,70 +317,101 @@ def fetch_naver_frgn_data(ticker: str, pages: int = 1) -> pd.DataFrame:
     return df
 
 
-def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
-    try:
-        from pykrx import stock
-        to_date = datetime.now().strftime("%Y%m%d")
-        from_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y%m%d")
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
-        df_price = stock.get_market_ohlcv_by_date(from_date, to_date, ticker)
-        if df_price.empty:
+def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
+    """
+    PyKRX 수급 데이터 수집 (안전 2.0초 타임아웃 래퍼 적용)
+    - PyKRX 내부 API는 timeout 인자를 직접 지원하지 않으므로 ThreadPoolExecutor를 통해
+      해외 Cloud IP(Render 등) 접속 블로킹 시 최대 2.0초 후 즉시 반환하도록 방어합니다.
+    """
+    def _inner():
+        try:
+            from pykrx import stock
+            to_date = datetime.now().strftime("%Y%m%d")
+            from_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y%m%d")
+
+            df_price = stock.get_market_ohlcv_by_date(from_date, to_date, ticker)
+            if df_price.empty:
+                return pd.DataFrame()
+
+            df_net = stock.get_market_trading_value_by_date(from_date, to_date, ticker)
+
+            df = pd.DataFrame()
+            df['date'] = df_price.index.strftime("%Y-%m-%d")
+            df['close_price'] = df_price['종가'].values
+            df['diff'] = df_price['대비'].values if '대비' in df_price.columns else 0
+            df['volume'] = df_price['거래량'].values
+            df['trading_value'] = df_price['거래대금'].values
+
+            if not df_net.empty and '외국인합계' in df_net.columns:
+                df['foreign_net_buy'] = df_net['외국인합계'].values
+                df['institution_net_buy'] = df_net['기관합계'].values
+            else:
+                df['foreign_net_buy'] = 0
+                df['institution_net_buy'] = 0
+
+            df['foreign_holding_ratio'] = 0.0
+            return df.tail(days).reset_index(drop=True)
+        except Exception as e:
+            logger.warning(f"PyKRX fetch fallback failed for {ticker}: {e}")
             return pd.DataFrame()
 
-        df_net = stock.get_market_trading_value_by_date(from_date, to_date, ticker)
-        
-        df = pd.DataFrame()
-        df['date'] = df_price.index.strftime("%Y-%m-%d")
-        df['close_price'] = df_price['종가'].values
-        df['diff'] = df_price['대비'].values if '대비' in df_price.columns else 0
-        df['volume'] = df_price['거래량'].values
-        df['trading_value'] = df_price['거래대금'].values
-        
-        if not df_net.empty and '외국인합계' in df_net.columns:
-            df['foreign_net_buy'] = df_net['외국인합계'].values
-            df['institution_net_buy'] = df_net['기관합계'].values
-        else:
-            df['foreign_net_buy'] = 0
-            df['institution_net_buy'] = 0
-            
-        df['foreign_holding_ratio'] = 0.0
-        return df.tail(days).reset_index(drop=True)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_inner)
+            return future.result(timeout=2.0)
+    except TimeoutError:
+        logger.warning(f"PyKRX fetch timed out (2.0s limit reached) for {ticker}")
+        return pd.DataFrame()
     except Exception as e:
-        logger.warning(f"PyKRX fetch fallback failed for {ticker}: {e}")
+        logger.warning(f"PyKRX safe wrapper error for {ticker}: {e}")
         return pd.DataFrame()
 
 
 def fetch_fdr_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
     """
-    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수
+    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수 (안전 2.0초 타임아웃 래퍼 적용)
     """
-    try:
-        import FinanceDataReader as fdr
-        start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
-        df_fdr = fdr.DataReader(ticker, start=start_date)
-        if df_fdr.empty:
+    def _inner():
+        try:
+            import FinanceDataReader as fdr
+            start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
+            df_fdr = fdr.DataReader(ticker, start=start_date)
+            if df_fdr.empty:
+                return pd.DataFrame()
+
+            df = pd.DataFrame()
+            df['date'] = df_fdr.index.strftime("%Y-%m-%d")
+            df['close_price'] = df_fdr['Close'].values.astype(int)
+
+            if 'Change' in df_fdr.columns:
+                prev_close = df_fdr['Close'].shift(1).fillna(df_fdr['Close'])
+                df['diff'] = (df_fdr['Close'] - prev_close).values.astype(int)
+            else:
+                df['diff'] = 0
+
+            df['volume'] = df_fdr['Volume'].values.astype(int) if 'Volume' in df_fdr.columns else 0
+            df['trading_value'] = df['volume'] * df['close_price']
+            df['foreign_net_buy'] = 0
+            df['institution_net_buy'] = 0
+            df['foreign_holding_ratio'] = 0.0
+            df['change_rate'] = (df['diff'] / (df['close_price'] - df['diff']) * 100).round(2)
+
+            return df.tail(days).reset_index(drop=True)
+        except Exception as e:
+            logger.warning(f"FinanceDataReader fetch fallback failed for {ticker}: {e}")
             return pd.DataFrame()
 
-        df = pd.DataFrame()
-        df['date'] = df_fdr.index.strftime("%Y-%m-%d")
-        df['close_price'] = df_fdr['Close'].values.astype(int)
-        
-        if 'Change' in df_fdr.columns:
-            prev_close = df_fdr['Close'].shift(1).fillna(df_fdr['Close'])
-            df['diff'] = (df_fdr['Close'] - prev_close).values.astype(int)
-        else:
-            df['diff'] = 0
-
-        df['volume'] = df_fdr['Volume'].values.astype(int) if 'Volume' in df_fdr.columns else 0
-        df['trading_value'] = df['volume'] * df['close_price']
-        df['foreign_net_buy'] = 0
-        df['institution_net_buy'] = 0
-        df['foreign_holding_ratio'] = 0.0
-        df['change_rate'] = (df['diff'] / (df['close_price'] - df['diff']) * 100).round(2)
-        
-        return df.tail(days).reset_index(drop=True)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_inner)
+            return future.result(timeout=2.0)
+    except TimeoutError:
+        logger.warning(f"FinanceDataReader fetch timed out (2.0s limit reached) for {ticker}")
+        return pd.DataFrame()
     except Exception as e:
-        logger.warning(f"FinanceDataReader fetch fallback failed for {ticker}: {e}")
+        logger.warning(f"FinanceDataReader safe wrapper error for {ticker}: {e}")
         return pd.DataFrame()
 
 
@@ -432,7 +463,7 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
         df = fetch_fdr_flow_data(ticker, days=min_days)
 
     if df.empty or len(df) < 5:
-        return {
+        fail_res = {
             "data_available": False,
             "status_code": "FETCH_FAILED",
             "status_message": "데이터 수집 실패",
@@ -441,6 +472,15 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
             "source": source_name,
             "is_delayed": False
         }
+        # 기존 캐시에 성공 데이터가 존재하는 경우, 실패 결과로 덮어쓰지 않고 기존 성공 캐시 보호
+        if cache_key in _FLOW_DATA_CACHE:
+            old_ts, old_data = _FLOW_DATA_CACHE[cache_key]
+            if old_data.get("data_available", False):
+                return old_data
+
+        # 성공 캐시가 없더라도 실패 결과를 TTL 60초 동안 저장하여 반복 재호출 정체 차단
+        _FLOW_DATA_CACHE[cache_key] = (now_ts, fail_res)
+        return fail_res
 
     # 2. 장중 실시간 현재가 수집 및 최신 행 융합(Override)
     realtime_info = fetch_naver_realtime_price(ticker)
