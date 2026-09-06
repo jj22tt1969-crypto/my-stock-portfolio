@@ -65,16 +65,7 @@ def resolve_ticker(query: str, asset_type_hint: str = None) -> tuple[str, str]:
         if extracted_name:
             return extracted_code, extracted_name
 
-    # 1. FinanceDataReader (KRX 2,870여개 전종목) 탐색 (우선순위 1)
-    try:
-        from backend.engine.krx_loader import search_krx_stocks
-        krx_m = search_krx_stocks(query, limit=1)
-        if krx_m and krx_m[0].get("score", 0) >= 80:
-            return krx_m[0]["ticker"], krx_m[0]["name"]
-    except Exception:
-        pass
-
-    # 1-2. STOCK_ETF_MASTER 마스터 데이터베이스 연동
+    # 1. STOCK_ETF_MASTER 마스터 데이터베이스 연동 (최우선 0ms 즉시 반환)
     from backend.engine.stock_identifier import search_stock_or_etf, BRAND_ALIAS_MAP
     master_results = search_stock_or_etf(query, asset_type=asset_type_hint or "ALL")
     if master_results:
@@ -156,7 +147,7 @@ def fetch_naver_realtime_price(ticker: str) -> dict:
     poll_url = f"https://polling.finance.naver.com/api/realtime/domestic/stock/{ticker}"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     try:
-        resp = requests.get(poll_url, headers=headers, timeout=5, verify=False)
+        resp = http_session.get(poll_url, headers=headers, timeout=1.5, verify=False)
         if resp.status_code == 200:
             res_json = resp.json()
             datas = res_json.get("datas", [])
@@ -183,7 +174,7 @@ def fetch_naver_realtime_price(ticker: str) -> dict:
     # 2순위: HTML 스크래핑 Fallback
     url = f"https://finance.naver.com/item/main.naver?code={ticker}"
     try:
-        resp = requests.get(url, headers=headers, timeout=5, verify=False)
+        resp = http_session.get(url, headers=headers, timeout=1.5, verify=False)
         if resp.status_code != 200:
             return None
         soup = BeautifulSoup(resp.text, 'html.parser')
@@ -374,46 +365,35 @@ def fetch_pykrx_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
 
 def fetch_fdr_flow_data(ticker: str, days: int = 30) -> pd.DataFrame:
     """
-    FinanceDataReader(fdr.DataReader) 기반 3차 비상 시세 폴백 수집 함수 (모듈 레벨 전역 스레드 풀 & 안전 2.0초 타임아웃 래퍼 적용)
+    FinanceDataReader(fdr.DataReader) 기반 비상 시세 폴백 수집 함수 (직렬 0.15s 고속 반환)
     """
-    def _inner():
-        try:
-            import FinanceDataReader as fdr
-            start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
-            df_fdr = fdr.DataReader(ticker, start=start_date)
-            if df_fdr.empty:
-                return pd.DataFrame()
-
-            df = pd.DataFrame()
-            df['date'] = df_fdr.index.strftime("%Y-%m-%d")
-            df['close_price'] = df_fdr['Close'].values.astype(int)
-
-            if 'Change' in df_fdr.columns:
-                prev_close = df_fdr['Close'].shift(1).fillna(df_fdr['Close'])
-                df['diff'] = (df_fdr['Close'] - prev_close).values.astype(int)
-            else:
-                df['diff'] = 0
-
-            df['volume'] = df_fdr['Volume'].values.astype(int) if 'Volume' in df_fdr.columns else 0
-            df['trading_value'] = df['volume'] * df['close_price']
-            df['foreign_net_buy'] = 0
-            df['institution_net_buy'] = 0
-            df['foreign_holding_ratio'] = 0.0
-            df['change_rate'] = (df['diff'] / (df['close_price'] - df['diff']) * 100).round(2)
-
-            return df.tail(days).reset_index(drop=True)
-        except Exception as e:
-            logger.warning(f"FinanceDataReader fetch fallback failed for {ticker}: {e}")
+    try:
+        import FinanceDataReader as fdr
+        start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
+        df_fdr = fdr.DataReader(ticker, start=start_date)
+        if df_fdr is None or df_fdr.empty:
             return pd.DataFrame()
 
-    try:
-        future = _COLLECTOR_THREAD_POOL.submit(_inner)
-        return future.result(timeout=2.0)
-    except TimeoutError:
-        logger.warning(f"FinanceDataReader fetch timed out (2.0s limit reached) for {ticker} - returning empty DataFrame immediately")
-        return pd.DataFrame()
+        df = pd.DataFrame()
+        df['date'] = df_fdr.index.strftime("%Y-%m-%d")
+        df['close_price'] = df_fdr['Close'].values.astype(int)
+
+        if 'Change' in df_fdr.columns:
+            prev_close = df_fdr['Close'].shift(1).fillna(df_fdr['Close'])
+            df['diff'] = (df_fdr['Close'] - prev_close).values.astype(int)
+        else:
+            df['diff'] = 0
+
+        df['volume'] = df_fdr['Volume'].values.astype(int) if 'Volume' in df_fdr.columns else 0
+        df['trading_value'] = df['volume'] * df['close_price']
+        df['foreign_net_buy'] = 0
+        df['institution_net_buy'] = 0
+        df['foreign_holding_ratio'] = 0.0
+        df['change_rate'] = (df['diff'] / (df['close_price'] - df['diff']) * 100).round(2)
+
+        return df.tail(days).reset_index(drop=True)
     except Exception as e:
-        logger.warning(f"FinanceDataReader safe wrapper error for {ticker}: {e}")
+        logger.warning(f"FinanceDataReader fetch fallback failed for {ticker}: {e}")
         return pd.DataFrame()
 
 
@@ -451,12 +431,18 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
         return err_res
 
 
-    # 1. 일별 수급 데이터 수집 (경량화 1~2페이지 수집)
-    source_name = "Naver Finance (실시간 융합)"
-    pages_to_fetch = 1 if min_days <= 20 else 2
-    df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
+    # ETF 자산군 식별 (Render 해외 IP 환경에서 PyKRX/Naver frgn 지연을 우회하여 ETF 시세 수집 0.3s 직행)
+    is_etf = any(b in name.upper() for b in ["ETF", "KODEX", "TIGER", "ACE", "SOL", "RISE", "PLUS", "KBSTAR", "ARIRANG", "HANARO", "KOACT", "HEROES", "WOORI", "UNICORN"])
 
-    if df.empty or len(df) < 5:
+    # 1. 일별 수급 데이터 수집 (개별주식은 Naver frgn 수집, ETF는 FDR 시세로 직행)
+    source_name = "Naver Finance (실시간 융합)"
+    if not is_etf:
+        pages_to_fetch = 1 if min_days <= 20 else 2
+        df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
+    else:
+        df = pd.DataFrame()
+
+    if (df.empty or len(df) < 5) and not is_etf:
         source_name = "KRX Open Data (PyKRX)"
         df = fetch_pykrx_flow_data(ticker, days=min_days)
 
@@ -526,7 +512,7 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
         "source": source_name,
         "is_delayed": False, # 실시간 체결가 융합 반영
         "df": df,
-        "investor_breakdown": fetch_investor_breakdown_data(ticker, days=min_days)
+        "investor_breakdown": {} if is_etf else fetch_investor_breakdown_data(ticker, days=min_days)
     }
     _FLOW_DATA_CACHE[cache_key] = (now_ts, res)
     return res

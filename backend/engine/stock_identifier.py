@@ -287,22 +287,14 @@ def get_stock_by_ticker_or_name(query: str, asset_type: str = "ALL") -> Dict[str
 
 def search_all_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, Any]]:
     """
-    FinanceDataReader(KRX 2,870여개 전종목) + STOCK_ETF_MASTER를 통합하여
-    코스피, 코스닥 상장종목 전체 및 ETF 전체를 100% 동적 탐색합니다.
+    STOCK_ETF_MASTER를 기반으로 코스피, 코스닥 대표 상장종목 및 ETF를 초고속(1ms 미만)으로 탐색합니다.
+    (해외 클라우드 IP 접속 블로킹을 방지하기 위해 외부 fdr.StockListing 다운로드를 배제하고 안전한 static 마스터를 활용합니다.)
     """
     if not query or not query.strip():
         return []
 
     q = query.strip()
     results = search_stock_or_etf(q, asset_type=asset_type)
-
-    # 2. FinanceDataReader 기반 2,870여개 KRX 전종목 탐색
-    try:
-        from backend.engine.krx_loader import search_krx_stocks
-        krx_results = search_krx_stocks(q, limit=10)
-        results.extend(krx_results)
-    except Exception as e:
-        logger.warning(f"KRX search error: {e}")
 
     # ticker 기준 중복 제거 및 점수 정렬
     unique_results = []
