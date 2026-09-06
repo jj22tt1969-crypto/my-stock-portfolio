@@ -102,20 +102,30 @@ def resolve_ticker(query: str, asset_type_hint: str = None) -> tuple[str, str]:
     # 4. 네이버 증권 종목 검색 API (타임아웃 1.5초)
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     for q_term in [search_q, query]:
-        search_url = f"https://ac.finance.naver.com/ac?q={requests.utils.quote(q_term)}&target=stock"
+        search_url = f"https://ac.stock.naver.com/ac?q={requests.utils.quote(q_term)}&target=stock"
         try:
             resp = requests.get(search_url, headers=headers, timeout=1.5, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
-                items = data.get('items', [[]])[0]
+                raw_items = data.get('items', [])
+                items = raw_items[0] if raw_items and isinstance(raw_items[0], list) else raw_items
                 for item in items:
-                    if len(item) >= 2:
+                    if isinstance(item, dict):
+                        code = item.get('code')
+                        name = item.get('name')
+                        if code and name and (q_term in name or query in name):
+                            return code, name
+                    elif isinstance(item, list) and len(item) >= 2:
                         name = item[0]
                         code = item[1]
                         if q_term in name or query in name:
                             return code, name
-                if items and len(items[0]) >= 2:
-                    return items[0][1], items[0][0]
+                if items:
+                    first = items[0]
+                    if isinstance(first, dict) and first.get('code') and first.get('name'):
+                        return first['code'], first['name']
+                    elif isinstance(first, list) and len(first) >= 2:
+                        return first[1], first[0]
         except Exception as e:
             logger.warning(f"Search ticker API failed for '{q_term}': {e}")
     
