@@ -481,20 +481,28 @@ function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager
     // 숨기기
     const listEl = document.getElementById('qaCandidateList');
     if (listEl) listEl.style.display = 'none';
+
+    // 선택 완료 후 검색 입력창 초기화
+    const inputEl = document.getElementById('qaTickerInput');
+    if (inputEl) inputEl.value = '';
 }
 
 function handleQaSearch(val) {
     if (qaSearchDebounceTimer) clearTimeout(qaSearchDebounceTimer);
 
     const listEl = document.getElementById('qaCandidateList');
+    const badge = document.getElementById('qaTargetBadge');
+
     if (!val || !val.trim()) {
         if (listEl) listEl.style.display = 'none';
+        if (!currentQaTarget.is_identified && currentQaTarget.name) {
+            setQaContext(currentQaTarget.name, currentQaTarget.code, currentQaTarget.market, currentQaTarget.asset_type, currentQaTarget.manager);
+        }
         return;
     }
 
     // 검색어 변경 시 식별 미확정 상태로 전환 (Guardrail)
     currentQaTarget.is_identified = false;
-    const badge = document.getElementById('qaTargetBadge');
     if (badge) {
         badge.innerHTML = `⏳ 검색 선택 중...`;
         badge.style.borderColor = "#f59e0b";
@@ -504,17 +512,38 @@ function handleQaSearch(val) {
     qaSearchDebounceTimer = setTimeout(async () => {
         try {
             const resp = await fetch(`/api/qna/search-target?query=${encodeURIComponent(val.trim())}`);
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                if (listEl) {
+                    listEl.innerHTML = `<div class="candidate-empty" style="padding: 12px; font-size: 12px; color: #ef4444; text-align: center;">⚠️ 검색을 불러오지 못했습니다. (서버 응답 오류: ${resp.status})</div>`;
+                    listEl.style.display = 'block';
+                }
+                if (badge) {
+                    badge.innerHTML = `⚠️ 검색 오류`;
+                    badge.style.borderColor = "#ef4444";
+                    badge.style.color = "#ef4444";
+                }
+                return;
+            }
             const data = await resp.json();
             renderCandidateList(data.candidates || []);
         } catch (e) {
             console.error("QnA search error:", e);
+            if (listEl) {
+                listEl.innerHTML = `<div class="candidate-empty" style="padding: 12px; font-size: 12px; color: #ef4444; text-align: center;">⚠️ 네트워크 연결 실패로 검색할 수 없습니다.</div>`;
+                listEl.style.display = 'block';
+            }
+            if (badge) {
+                badge.innerHTML = `⚠️ 네트워크 오류`;
+                badge.style.borderColor = "#ef4444";
+                badge.style.color = "#ef4444";
+            }
         }
     }, 200);
 }
 
 function renderCandidateList(candidates) {
     const listEl = document.getElementById('qaCandidateList');
+    const badge = document.getElementById('qaTargetBadge');
     if (!listEl) return;
 
     // 🛡️ ticker 기준 중복 제거 Guardrail
@@ -526,24 +555,35 @@ function renderCandidateList(candidates) {
     });
 
     if (!uniqueCandidates || uniqueCandidates.length === 0) {
-        listEl.innerHTML = `<div style="padding: 12px; font-size: 12px; color: #94a3b8; text-align: center;">일치하는 종목/ETF 결과가 없습니다.</div>`;
+        listEl.innerHTML = `<div class="candidate-empty" style="padding: 12px; font-size: 12px; color: #94a3b8; text-align: center;">🔍 일치하는 종목/ETF 결과가 없습니다.</div>`;
         listEl.style.display = 'block';
+        if (badge) {
+            badge.innerHTML = `⚠️ 검색 결과 없음`;
+            badge.style.borderColor = "#64748b";
+            badge.style.color = "#94a3b8";
+        }
         return;
+    }
+
+    if (badge) {
+        badge.innerHTML = `🔍 결과 (${uniqueCandidates.length}건) - 종목 선택 필요`;
+        badge.style.borderColor = "#38bdf8";
+        badge.style.color = "#38bdf8";
     }
 
     let html = '';
     uniqueCandidates.forEach(c => {
         const isEtf = c.asset_type === 'ETF';
         const badgeClass = isEtf ? 'candidate-badge-etf' : 'candidate-badge-stock';
-        const typeLabel = isEtf ? `ETF (${c.manager || '운용사'})` : c.market;
+        const typeLabel = isEtf ? `ETF (${c.manager || '운용사'})` : (c.market || 'KOSPI');
 
         // Escape quotes
-        const safeName = c.name.replace(/'/g, "\\'");
+        const safeName = (c.name || '').replace(/'/g, "\\'");
         const safeManager = (c.manager || '').replace(/'/g, "\\'");
 
         html += `
             <div class="candidate-item" onclick="setQaContext('${safeName}', '${c.ticker}', '${c.market}', '${c.asset_type}', '${safeManager}')">
-                <div class="candidate-name">${c.name} <span style="font-weight: normal; color: #94a3b8;">(${c.ticker})</span></div>
+                <div class="candidate-name">${c.name} <span style="font-weight: normal; color: #94a3b8; font-size: 11px;">(${c.ticker})</span></div>
                 <div class="candidate-meta">
                     <span class="${badgeClass}">${typeLabel}</span>
                 </div>
@@ -554,6 +594,15 @@ function renderCandidateList(candidates) {
     listEl.innerHTML = html;
     listEl.style.display = 'block';
 }
+
+// 외부 클릭 시 candidate list 자동 닫기
+document.addEventListener('click', (e) => {
+    const listEl = document.getElementById('qaCandidateList');
+    const searchBox = document.querySelector('.context-search-box');
+    if (listEl && searchBox && !searchBox.contains(e.target)) {
+        listEl.style.display = 'none';
+    }
+});
 
 function selectQuickPrompt(promptText) {
     const txtArea = document.getElementById('qaQuestionText');
