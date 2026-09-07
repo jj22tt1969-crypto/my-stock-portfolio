@@ -188,6 +188,15 @@
                                 </h3>
                                 <button class="btn btn-secondary" onclick="closeSingleQuoteResult()" style="font-size: 11px; padding: 4px 10px; min-height: 28px; border-radius: 6px;">✖️ 닫기</button>
                             </div>
+                            <!-- 📱 모바일/PC 공용 현재가 직접 검색 바 -->
+                            <div class="mobile-quote-search-bar" style="margin-bottom: 12px; display: flex; gap: 8px;">
+                                <input type="text" id="mobileQuoteInput" placeholder="종목명 또는 코드 (예: 삼성전자, 신풍제약)"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault(); submitMobileQuoteSearch();}"
+                                       style="flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; outline: none;" autocomplete="off">
+                                <button class="btn btn-primary" onclick="submitMobileQuoteSearch()" style="padding: 10px 16px; font-size: 13px; font-weight: 700; border-radius: 8px; white-space: nowrap;">
+                                    🔍 조회
+                                </button>
+                            </div>
                             <div id="singleQuoteCardContainer" style="margin-top: 10px;"></div>
                         </div>
 
@@ -1177,6 +1186,10 @@
         <button class="mobile-nav-btn" id="mNavQna" onclick="switchAssetType('QNA')">
             <span class="m-nav-icon">🤖</span>
             <span class="m-nav-label">AI Q&A</span>
+        </button>
+        <button class="mobile-nav-btn" id="mNavQuote" onclick="switchAssetType('QUOTE')">
+            <span class="m-nav-icon">🔍</span>
+            <span class="m-nav-label">현재가</span>
         </button>
         <button class="mobile-nav-btn" id="mNavForwardTest" onclick="switchAssetType('FORWARD_TEST')">
             <span class="m-nav-icon">🧪</span>

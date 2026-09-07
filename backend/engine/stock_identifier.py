@@ -33,6 +33,7 @@ STOCK_ETF_MASTER = [
     {"name": "LG에너지솔루션", "ticker": "373220", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "삼성바이오로직스", "ticker": "207940", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "기아", "ticker": "000270", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
+    {"name": "신풍제약", "ticker": "019170", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "셀트리온", "ticker": "068270", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "KB금융", "ticker": "105560", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},
     {"name": "신한지주", "ticker": "055550", "market": "KOSPI", "asset_type": "STOCK", "manager": ""},

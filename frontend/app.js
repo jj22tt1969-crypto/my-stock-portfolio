@@ -384,6 +384,36 @@ function switchAssetType(assetType) {
         return;
     }
 
+    if (assetType === 'QUOTE') {
+        currentAssetType = 'QUOTE';
+        const mBtn = document.getElementById('mNavQuote');
+        if (mBtn) mBtn.classList.add('active');
+        if (portfolioView) portfolioView.style.display = 'block';
+        if (qaView) qaView.style.display = 'none';
+        if (summarySec) summarySec.style.display = 'none';
+        if (stockGrid) stockGrid.style.display = 'none';
+        if (ftSection) ftSection.style.display = 'none';
+        if (navActionsGroup) navActionsGroup.style.display = 'flex';
+        if (toolbarActions) toolbarActions.style.display = 'none';
+
+        const quoteArea = document.getElementById('singleQuoteResultArea');
+        if (quoteArea) quoteArea.style.display = 'block';
+
+        const mobileInput = document.getElementById('mobileQuoteInput');
+        const sidebarInput = document.getElementById('sidebarQuoteInput');
+        const container = document.getElementById('singleQuoteCardContainer');
+
+        if (container && (!container.children || container.children.length === 0)) {
+            const query = (mobileInput && mobileInput.value.trim()) || (sidebarInput && sidebarInput.value.trim()) || '삼성전자';
+            if (mobileInput) mobileInput.value = query;
+            if (sidebarInput) sidebarInput.value = query;
+            submitSidebarQuoteSearch();
+        } else if (mobileInput) {
+            mobileInput.focus();
+        }
+        return;
+    }
+
     if (summarySec) summarySec.style.display = '';
     if (stockGrid) stockGrid.style.display = 'grid';
     if (navActionsGroup) navActionsGroup.style.display = 'flex';
@@ -2928,6 +2958,15 @@ function selectSidebarQuoteSuggestion(name, ticker) {
     selectedSidebarName = name;
 
     hideSidebarQuoteSuggestions();
+    submitSidebarQuoteSearch();
+}
+
+function submitMobileQuoteSearch() {
+    const mobileInput = document.getElementById('mobileQuoteInput');
+    const sidebarInput = document.getElementById('sidebarQuoteInput');
+    if (mobileInput && sidebarInput) {
+        sidebarInput.value = mobileInput.value.trim();
+    }
     submitSidebarQuoteSearch();
 }
 
