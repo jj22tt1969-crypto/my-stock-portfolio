@@ -166,6 +166,7 @@
                                         </div>
                                     </div>
                                     <button class="btn btn-primary" onclick="openAddStockModal()" style="font-size: 11.5px; padding: 5px 10px; border-radius: 8px; font-weight: 700;">+ 종목 추가</button>
+                                    <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="보조지표 및 수급 점수 설명서 보기">?</button>
                                 </div>
 
                                 <label class="toggle-switch" title="15초마다 실시간 시세를 자동 갱신합니다">
@@ -578,10 +579,13 @@
     <!-- 1. 종목 상세 차트 & 종합 분석 모달 -->
     <div class="modal-overlay" id="detailModal">
         <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <div>
-                    <h3 id="modalStockTitle">삼성전자 (005930) 상세 수급 & 차트</h3>
-                    <span class="modal-sub" id="modalStockSub"></span>
+            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div>
+                        <h3 id="modalStockTitle">삼성전자 (005930) 상세 수급 & 차트</h3>
+                        <span class="modal-sub" id="modalStockSub"></span>
+                    </div>
+                    <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="지표 설명서 보기">?</button>
                 </div>
                 <button class="close-btn" onclick="closeDetailModal()">&times;</button>
             </div>

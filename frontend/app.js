@@ -1348,8 +1348,9 @@ function renderStockCards(items) {
                             <span class="hero-action-title">⚡ TODAY ACTION</span>
                             <span class="action-badge ${actionObj.class}">${actionObj.label}</span>
                         </div>
-                        <div class="hero-action-right">
+                        <div class="hero-action-right" style="display: flex; align-items: center; gap: 4px;">
                             <span class="hero-ffcs-pill">FCS: <strong>${item.ffcs_score != null ? item.ffcs_score : '-'}점</strong></span>
+                            <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="보조지표 및 수급 점수 설명서 보기">?</button>
                         </div>
                     </div>
 

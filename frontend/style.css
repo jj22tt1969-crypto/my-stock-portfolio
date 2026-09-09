@@ -4530,7 +4530,39 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     color: #0f172a !important;
 }
 
+/* ❓ 이쁜 정사각형 박스 스타일 도움말 버튼 복구 */
+.btn-help-icon {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(14, 165, 233, 0.3) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: #38bdf8;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-left: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
 
+.btn-help-icon:hover {
+    background: #38bdf8;
+    color: #0f172a;
+    border-color: #38bdf8;
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 0 6px 18px rgba(56, 189, 248, 0.5);
+}
 
-
-
+@media (max-width: 768px) {
+    .btn-help-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 13px;
+        margin-left: 4px;
+    }
+}
