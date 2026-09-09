@@ -157,13 +157,6 @@
                                 <div class="portfolio-action-toolbar" id="portfolioActionToolbar" style="display: flex; align-items: center; gap: 8px; margin-right: 6px;">
                                     <div class="water-calculator-btn-group">
                                         <button class="btn btn-secondary" onclick="openSimModal()" style="font-size: 11.5px; padding: 5px 10px; border-radius: 8px;">➕ 물타기 계산기</button>
-                                        <div class="tooltip-container">
-                                            <span class="tooltip-icon">?</span>
-                                            <div class="tooltip-box">
-                                                <h4>💡 물타기(추가매수) 계산기란?</h4>
-                                                <p>보유 중인 종목의 추가 매수 가격과 수량을 입력하면 매수 후 <strong>변경되는 목표 평단가, 총 투자금액</strong>, 그리고 <strong>원금 회복(손익분기)에 필요한 반등 상승률 단축 효과</strong>를 미리 시뮬레이션해 줍니다.</p>
-                                            </div>
-                                        </div>
                                     </div>
                                     <button class="btn btn-primary" onclick="openAddStockModal()" style="font-size: 11.5px; padding: 5px 10px; border-radius: 8px; font-weight: 700;">+ 종목 추가</button>
                                     <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="보조지표 및 수급 점수 설명서 보기">?</button>
@@ -579,13 +572,10 @@
     <!-- 1. 종목 상세 차트 & 종합 분석 모달 -->
     <div class="modal-overlay" id="detailModal">
         <div class="modal-content modal-lg">
-            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div>
-                        <h3 id="modalStockTitle">삼성전자 (005930) 상세 수급 & 차트</h3>
-                        <span class="modal-sub" id="modalStockSub"></span>
-                    </div>
-                    <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="지표 설명서 보기">?</button>
+            <div class="modal-header">
+                <div>
+                    <h3 id="modalStockTitle">삼성전자 (005930) 상세 수급 & 차트</h3>
+                    <span class="modal-sub" id="modalStockSub"></span>
                 </div>
                 <button class="close-btn" onclick="closeDetailModal()">&times;</button>
             </div>

@@ -1348,9 +1348,8 @@ function renderStockCards(items) {
                             <span class="hero-action-title">⚡ TODAY ACTION</span>
                             <span class="action-badge ${actionObj.class}">${actionObj.label}</span>
                         </div>
-                        <div class="hero-action-right" style="display: flex; align-items: center; gap: 4px;">
+                        <div class="hero-action-right">
                             <span class="hero-ffcs-pill">FCS: <strong>${item.ffcs_score != null ? item.ffcs_score : '-'}점</strong></span>
-                            <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="보조지표 및 수급 점수 설명서 보기">?</button>
                         </div>
                     </div>
 
@@ -3248,7 +3247,7 @@ function renderSingleQuoteCard(data, ticker, name) {
                     <span style="font-size: 19px; font-weight: 800; color: #38bdf8; margin-left: 6px;">${curPrice.toLocaleString()}원</span>
                 </div>
 
-                <!-- 우측: TODAY ACTION & FCS, 5가지 액션 뱃지 바, ❓ 정사각형 도움말 버튼 -->
+                <!-- 우측: TODAY ACTION & FCS, 5가지 액션 뱃지 바 -->
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <div style="font-size: 15px; color: #f97316; font-weight: 800; letter-spacing: 0.3px; text-shadow: 0 0 10px rgba(249, 115, 22, 0.35);">
                         ⚡ TODAY ACTION <span style="margin-left: 4px; color: #38bdf8; font-size: 15px; font-weight: 800;">FCS: ${flow.ffcs_score != null ? flow.ffcs_score : '-'}점</span>
@@ -3256,9 +3255,6 @@ function renderSingleQuoteCard(data, ticker, name) {
 
                     <!-- 5가지 액션 차등 하이라이트 바 (해당 1건 크게/진하게, 나머지 연하게) -->
                     ${action5StepBarHtml}
-
-                    <!-- ❓ 이쁜 정사각형 박스 지표가이드 도움말 버튼 -->
-                    <button class="btn-help-icon" onclick="openIndicatorHelpModal()" title="볼린저밴드/MACD/스토캐스틱/RSI/FFCS/Score 지표 상세 설명 보기" style="width: 32px !important; height: 32px !important; border-radius: 8px !important; background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(14, 165, 233, 0.35)) !important; border: 1px solid #38bdf8 !important; color: #38bdf8 !important; font-size: 15px !important; font-weight: 800 !important; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);">?</button>
                 </div>
             </div>
 
