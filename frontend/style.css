@@ -4320,6 +4320,13 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         max-width: 100% !important;
         width: 100% !important;
     }
+    .multi-chart-body {
+        gap: 10px !important;
+    }
+    .multi-chart-body .sub-chart-box {
+        padding: 8px 10px !important;
+        border-radius: 10px !important;
+    }
 
     /* 13. 📱 모바일 5차 — AI Q&A 메신저 및 입력폼 UX 고도화 */
     #qaDashboardView {

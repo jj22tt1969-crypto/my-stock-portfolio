@@ -2243,6 +2243,54 @@ async function openIndexChartModal(symbol, name) {
     }
 }
 
+// 모바일 차트 전용 X축 날짜 가로 표시 & 라벨 간소화 헬퍼 함수
+function getMobileChartXAxisConfig(maxTicksDesktop = 12) {
+    const isMobile = window.innerWidth <= 768;
+    return {
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: {
+            color: '#94a3b8',
+            maxTicksLimit: isMobile ? 6 : maxTicksDesktop,
+            minRotation: 0,
+            maxRotation: isMobile ? 0 : 50,
+            font: {
+                size: isMobile ? 10 : 11
+            },
+            callback: function(val, index, ticks) {
+                const rawLabel = this.getLabelForValue(val);
+                if (!rawLabel) return '';
+
+                // PC 화면에서는 기존 라벨 유지
+                if (window.innerWidth > 768) {
+                    return rawLabel;
+                }
+
+                // 모바일 화면: YYYY-MM (첫 틱/연도 변경 시) 및 MM (동일 연도 축약) 가로 표시
+                const str = String(rawLabel).trim();
+                const parts = str.split(/[-./]/);
+                if (parts.length >= 2) {
+                    const year = parts[0];
+                    const month = parts[1];
+
+                    if (index === 0) {
+                        return `${year}-${month}`;
+                    }
+
+                    if (ticks && ticks[index - 1]) {
+                        const prevRaw = this.getLabelForValue(ticks[index - 1].value);
+                        const prevParts = String(prevRaw).split(/[-./]/);
+                        if (prevParts.length >= 2 && prevParts[0] === year) {
+                            return month;
+                        }
+                    }
+                    return `${year}-${month}`;
+                }
+                return str;
+            }
+        }
+    };
+}
+
 function renderIndexHistoryChart(dates, closes, name) {
     const ctx = document.getElementById('indexHistoryChart').getContext('2d');
     if (indexHistoryChartInstance) {
@@ -2273,7 +2321,7 @@ function renderIndexHistoryChart(dates, closes, name) {
                 tooltip: { mode: 'index', intersect: false }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: getMobileChartXAxisConfig(12),
                 y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
@@ -2395,7 +2443,7 @@ function renderStockMultiCharts(data) {
                 tooltip: { mode: 'index', intersect: false }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: getMobileChartXAxisConfig(12),
                 y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
@@ -2424,7 +2472,7 @@ function renderStockMultiCharts(data) {
                 legend: { labels: { color: '#f8fafc' } }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: getMobileChartXAxisConfig(12),
                 y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
@@ -2476,7 +2524,7 @@ function renderStockMultiCharts(data) {
                 legend: { labels: { color: '#94a3b8' } }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: getMobileChartXAxisConfig(12),
                 y: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
@@ -2528,7 +2576,7 @@ function renderStockMultiCharts(data) {
                 legend: { labels: { color: '#94a3b8' } }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: getMobileChartXAxisConfig(12),
                 y: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
@@ -2809,10 +2857,7 @@ async function openIndexChartModal(symbol, name) {
                     }
                 },
                 scales: {
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8', maxTicksLimit: 8 }
-                    },
+                    x: getMobileChartXAxisConfig(8),
                     y: {
                         grid: { color: 'rgba(255, 255, 255, 0.08)' },
                         ticks: { color: '#94a3b8' }
