@@ -1,0 +1,173 @@
+commit cb9e0a816c186ac94db8e50ee40a18d419b4fe65
+Author: 장진태(JIN TAE JANG)/수북구축팀/SKB <SKB.0439@skbroadband.com>
+Date:   Sat Sep 5 13:39:22 2026 +0900
+
+    QUANT AI PORTFOLIO - 모바일 UI 1차 완료
+
+diff --git a/frontend/app.js b/frontend/app.js
+index 2ea5321..9ec4fe0 100644
+--- a/frontend/app.js
++++ b/frontend/app.js
+@@ -339,7 +339,6 @@ function switchAssetType(assetType) {
+         if (navActionsGroup) navActionsGroup.style.display = 'flex';
+         if (toolbarActions) toolbarActions.style.display = 'flex';
+ 
+-        const summarySec = document.getElementById('portfolioSummarySection');
+         if (summarySec) {
+             summarySec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+         }
+@@ -371,7 +370,9 @@ function switchAssetType(assetType) {
+     if (assetType === 'FORWARD_TEST') {
+         currentAssetType = 'FORWARD_TEST';
+         const btn = document.getElementById('navForwardTest');
++        const mBtn = document.getElementById('mNavForwardTest');
+         if (btn) btn.classList.add('active');
++        if (mBtn) mBtn.classList.add('active');
+         if (portfolioView) portfolioView.style.display = 'block'; // keep parent visible
+         if (qaView) qaView.style.display = 'none';
+         if (summarySec) summarySec.style.display = 'none';
+diff --git a/frontend/index.html b/frontend/index.html
+index 048a85b..4d06f01 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -1161,21 +1161,25 @@
+     <!-- Mobile Bottom Navigation Bar (< 768px) -->
+     <nav class="mobile-bottom-nav" id="mobileBottomNav">
+         <button class="mobile-nav-btn active" id="mNavPortfolio" onclick="switchAssetType('PORTFOLIO')">
+-            <span class="m-nav-icon">📊</span>
+-            <span class="m-nav-label">포트폴리오</span>
++            <span class="m-nav-icon">🏠</span>
++            <span class="m-nav-label">Portfolio</span>
+         </button>
+         <button class="mobile-nav-btn" id="mNavStock" onclick="switchAssetType('STOCK')">
+-            <span class="m-nav-icon">📈</span>
++            <span class="m-nav-icon">📊</span>
+             <span class="m-nav-label">개별종목</span>
+         </button>
+         <button class="mobile-nav-btn" id="mNavEtf" onclick="switchAssetType('ETF')">
+-            <span class="m-nav-icon">🧺</span>
++            <span class="m-nav-icon">📈</span>
+             <span class="m-nav-label">ETF</span>
+         </button>
+         <button class="mobile-nav-btn" id="mNavQna" onclick="switchAssetType('QNA')">
+             <span class="m-nav-icon">🤖</span>
+             <span class="m-nav-label">AI Q&A</span>
+         </button>
++        <button class="mobile-nav-btn" id="mNavForwardTest" onclick="switchAssetType('FORWARD_TEST')">
++            <span class="m-nav-icon">🧪</span>
++            <span class="m-nav-label">Forward Test</span>
++        </button>
+     </nav>
+ 
+     <!-- PWA Automatic Update Notification Toast -->
+diff --git a/frontend/style.css b/frontend/style.css
+index 57074a3..284eb87 100644
+--- a/frontend/style.css
++++ b/frontend/style.css
+@@ -4079,4 +4079,106 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
+     color: #0f172a !important;
+ }
+ 
++/* ==========================================
++ * 📱 Mobile Responsive Viewport Optimization (375px, 390px, 430px)
++ * ========================================== */
++@media (max-width: 640px) {
++    html, body {
++        overflow-x: hidden;
++        width: 100%;
++    }
++
++    .app-container {
++        padding: 8px;
++        padding-bottom: 74px; /* 모바일 하단 네비게이션 가림 방지 */
++        box-sizing: border-box;
++    }
++
++    /* 1. 상단 시장지수 가로 스크롤 */
++    .market-bar {
++        display: flex;
++        overflow-x: auto;
++        white-space: nowrap;
++        gap: 8px;
++        padding: 6px 4px;
++        -webkit-overflow-scrolling: touch;
++        scrollbar-width: none;
++    }
++    .market-bar::-webkit-scrollbar {
++        display: none;
++    }
++
++    /* 2. Portfolio Summary 2x2 카드 */
++    .summary-section {
++        display: grid;
++        grid-template-columns: repeat(2, 1fr) !important;
++        gap: 8px !important;
++    }
++    .summary-card {
++        padding: 10px 12px;
++        word-break: keep-all;
++    }
++
++    /* 3. STOCK / ETF 카드 1열 */
++    .stock-grid {
++        grid-template-columns: 1fr !important;
++        gap: 12px !important;
++    }
++
++    /* 4. 차트 모바일 자동 리사이즈 */
++    .chart-container, .chart-wrapper {
++        width: 100% !important;
++        max-width: 100% !important;
++        box-sizing: border-box;
++    }
++    .chart-container canvas {
++        width: 100% !important;
++        max-width: 100% !important;
++    }
++
++    /* 5. 수급 / RSI / RMI / Smart Money / AI 종합판단 세로 배치 */
++    .analytics-bar, .indicator-flex-container, .decision-container {
++        flex-direction: column !important;
++        width: 100% !important;
++        box-sizing: border-box;
++    }
++
++    /* 6. AI Q&A 모바일 모바일 메신저 최적화 */
++    .qna-input-card, .quick-prompts-row, .quick-tags-row {
++        width: 100%;
++        box-sizing: border-box;
++    }
++    .quick-prompts-row, .quick-tags-row {
++        overflow-x: auto;
++        white-space: nowrap;
++        padding-bottom: 6px;
++        -webkit-overflow-scrolling: touch;
++    }
++
++    /* 7. Forward Test 모바일 최적화 */
++    #ftCoreSignalGrid, #ftAssetTypeGrid {
++        grid-template-columns: 1fr !important;
++    }
++    .ft-tracking-table {
++        min-width: 600px;
++    }
++
++    /* 8. 버튼 터치 최적화 (최소 44px) */
++    .btn, .prompt-chip, .tag-btn, .cal-tab, .mobile-nav-btn {
++        min-height: 44px;
++        touch-action: manipulation;
++    }
++
++    /* 9. 긴 표/텍스트 넘침 방지 */
++    .table-responsive, [style*="overflow-x: auto"] {
++        max-width: 100%;
++        overflow-x: auto;
++        -webkit-overflow-scrolling: touch;
++    }
++    p, span, td, th, div {
++        overflow-wrap: break-word;
++    }
++}
++
++
+ 
