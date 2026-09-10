@@ -3704,7 +3704,6 @@ async function ftSelectStock(ticker, name, assetType) {
                 flow_analysis: flow,
                 technical_analysis: tech,
                 timing_analysis: timing,
-                smart_flow_analysis: null,
                 cross_analysis: cross
             }
         };
