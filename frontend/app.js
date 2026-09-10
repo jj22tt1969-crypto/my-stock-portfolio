@@ -1453,10 +1453,12 @@ async function openDetailModal(ticker, name) {
         }
 
         const reasonList = document.getElementById('modalReasonList');
-        reasonList.innerHTML = '';
-        (dec.ai_reasons || []).forEach(r => {
-            reasonList.innerHTML += `<li>${r}</li>`;
-        });
+        if (reasonList) {
+            reasonList.innerHTML = '';
+            (dec.ai_reasons || []).forEach(r => {
+                reasonList.innerHTML += `<li>${r}</li>`;
+            });
+        }
 
         // 📊 수급 상세분석 탭 초기화 (기본 1일)
         selectFlowPeriod('1d');
