@@ -382,29 +382,20 @@ def apply_conditional_trend_filter(
             }
         }
 
-    # 4가지 예외 허용 조건 검사
+    # 3가지 예외 허용 조건 검사 (Smart Money 예외 분리 완료)
     exceptions = []
 
-    # 예외 1: Smart Money Flow 우수 / 순매수 (Score >= 60 또는 수급 우위)
-    from backend.engine.smart_flow_engine import analyze_smart_money_flow
-    smart_flow = analyze_smart_money_flow(flow_res.get("investor_breakdown", {}), df=df)
-    smart_score = smart_flow.get("score")
-    if smart_score is not None and smart_score >= 60.0:
-        exceptions.append(f"큰손 Smart Money 우위({smart_score:.0f}점)")
-    elif smart_flow.get("signal_grade") in ["BUY", "STRONG_BUY"]:
-        exceptions.append("큰손 수급 순매수 전환")
-
-    # 예외 2: 외국인 + 기관/연기금 동시 순매수
+    # 예외 1: 외국인 + 기관/연기금 동시 순매수
     concurrency_code = flow_res.get("concurrency", {}).get("code", "")
     if concurrency_code == "BOTH_BUY":
         exceptions.append("외인+기관 쌍끌이 동시 순매수")
 
-    # 예외 3: RMI / RSI 과매도 구간 반등 (RSI <= 38)
+    # 예외 2: RMI / RSI 과매도 구간 반등 (RSI <= 38)
     rsi_val = tech_res.get("rsi", 50.0)
     if rsi_val <= 38.0:
         exceptions.append(f"RSI({rsi_val:.1f}) 과매도 기술적 반등 기대")
 
-    # 예외 4: timing_engine 강한 하단 반등 신호
+    # 예외 3: timing_engine 강한 하단 반등 신호
     timing_sig = timing_res.get("timing_signal", "NEUTRAL")
     if timing_sig == "BUY":
         exceptions.append("Timing Engine 볼린저 하단 반등 신호")
