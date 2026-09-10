@@ -4580,3 +4580,30 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         margin-left: 4px;
     }
 }
+
+/* 🔍 고급 상세 분석 아코디언 및 3단 레이아웃 모바일 반응형 스타일 */
+.modal-body {
+    overflow-x: hidden !important;
+}
+
+.advanced-analysis-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.advanced-analysis-details[open] summary {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+
+@media (max-width: 480px) {
+    .flow-period-tabs button,
+    .breakdown-period-tabs button {
+        padding: 3px 6px !important;
+        font-size: 11px !important;
+    }
+    
+    #techBadgesBar span {
+        font-size: 10px !important;
+        padding: 2px 5px !important;
+    }
+}

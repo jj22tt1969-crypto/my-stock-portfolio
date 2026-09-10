@@ -1481,6 +1481,7 @@ async function openDetailModal(ticker, name) {
 }
 
 // 🤖 AI 투자판단 종합 리포트 UI 렌더링 함수 (3차-N)
+// 🤖 AI 투자판단 종합 리포트 UI 렌더링 함수 (TOP & MIDDLE 3단 압축 구조)
 function renderComprehensiveReport(resData) {
     if (!resData || !resData.data) return;
 
@@ -1490,59 +1491,30 @@ function renderComprehensiveReport(resData) {
     const dec = data.decision || {};
     const smart = resData.smart_flow_analysis || {};
     const cross = resData.cross_analysis || {};
-    const meta = resData.metadata || {};
 
-    // ① 현재 상태
-    const timeSourceEl = document.getElementById('compTimeSource');
-    const priceActionEl = document.getElementById('compPriceActionText');
-    const updatedTime = meta.updated_at || new Date().toLocaleString();
-    const sourceStr = meta.source || "실시간 퀀트 API";
-
-    if (timeSourceEl) {
-        timeSourceEl.innerText = `기준일시: ${updatedTime} | 출처: ${sourceStr} | 상태: 정상`;
-    }
-    if (priceActionEl) {
-        const closeP = tech.latest_close ? `${tech.latest_close.toLocaleString()}원` : "데이터 부족";
-        const action = dec.decision || "HOLD";
-        const chgP = tech.price_change_pct !== undefined ? `${tech.price_change_pct >= 0 ? '+' : ''}${tech.price_change_pct.toFixed(2)}%` : "";
-        priceActionEl.innerHTML = `현재가: <span style="color:#f8fafc; font-size:14px; font-weight:800;">${closeP}</span> <span style="color:${tech.price_change_pct >= 0 ? '#ef4444' : '#3b82f6'}; font-size:12px;">(${chgP})</span> &nbsp;|&nbsp; TODAY ACTION: <span style="color:#fbbf24; font-weight:800;">${action}</span>`;
-    }
-
-    // ② 수급 동향
+    // ① 수급 판단 (외국인·기관)
     const flowTextEl = document.getElementById('compFlowText');
     if (flowTextEl) {
-        const ffcs = flow.ffcs_score !== undefined ? `${flow.ffcs_score.toFixed(1)}점` : "데이터 부족";
+        const ffcs = flow.ffcs_score !== undefined ? `${flow.ffcs_score.toFixed(1)}점` : "-";
         const frgn = flow.foreign_net_buy !== undefined ? `${(flow.foreign_net_buy / 100000000).toFixed(1)}억` : "-";
         const inst = flow.institution_net_buy !== undefined ? `${(flow.institution_net_buy / 100000000).toFixed(1)}억` : "-";
-        flowTextEl.innerHTML = `• <strong>FFCS 수급점수:</strong> ${ffcs}<br>• <strong>외국인/기관:</strong> 외인(${frgn}) / 기관(${inst})<br>• <strong>수급 방향:</strong> 메이저 자금 모멘텀 검증 완료`;
+        const fDir = flow.foreign_direction || "관망";
+        const iDir = flow.institution_direction || "관망";
+        flowTextEl.innerHTML = `• <strong>FFCS 수급점수:</strong> ${ffcs}<br>• <strong>최근 1일 수급:</strong> 외인(${frgn}) / 기관(${inst})<br>• <strong>수급 추세:</strong> 외인 [${fDir}] / 기관 [${iDir}]`;
     }
 
-    // ③ 기술지표
+    // ② 기술적 상태 (RSI·RMI·이평선·볼린저)
     const techTextEl = document.getElementById('compTechText');
     if (techTextEl) {
-        const rsi = tech.rsi !== undefined ? tech.rsi.toFixed(1) : "데이터 부족";
-        const rmi = tech.rmi !== undefined ? tech.rmi.toFixed(1) : "데이터 부족";
+        const rsi = tech.rsi !== undefined ? tech.rsi.toFixed(1) : "-";
+        const rmi = tech.rmi !== undefined ? tech.rmi.toFixed(1) : "-";
         const supp = tech.support_level ? `${tech.support_level.toLocaleString()}원` : "-";
         const resis = tech.resistance_level ? `${tech.resistance_level.toLocaleString()}원` : "-";
-        techTextEl.innerHTML = `• <strong>RSI / RMI:</strong> RSI(${rsi}) | RMI(${rmi})<br>• <strong>지지선 / 저항선:</strong> 지지(${supp}) / 저항(${resis})`;
+        const alignStr = tech.is_aligned_bullish ? "<span style='color:#34d399;'>상승 정배열</span>" : (tech.is_aligned_bearish ? "<span style='color:#3b82f6;'>하락 역배열</span>" : "혼조/평행");
+        techTextEl.innerHTML = `• <strong>RSI / RMI:</strong> RSI(${rsi}) | RMI(${rmi})<br>• <strong>지지 / 저항:</strong> 지지(${supp}) / 저항(${resis})<br>• <strong>이평선 배열:</strong> ${alignStr}`;
     }
 
-    // ④ Smart Money Flow
-    const smartTextEl = document.getElementById('compSmartText');
-    if (smartTextEl) {
-        const smScore = smart.score !== undefined && smart.score !== null ? `${smart.score.toFixed(1)}점` : "미확인 / 판단 보류";
-        const smLabel = smart.signal_label || "중립/관망";
-        const etfNote = smart.is_etf ? " <span style='color:#fbbf24; font-size:11px;'>(ETF LP/AP 유동성 주의)</span>" : "";
-        smartTextEl.innerHTML = `• <strong>Smart Money Score:</strong> ${smScore} (${smLabel})${etfNote}<br>• <strong>큰손 자금 동향:</strong> 6대 주체 수급 추세 반영`;
-    }
-
-    // ⑤ 최근 뉴스·공시
-    const newsTextEl = document.getElementById('compNewsText');
-    if (newsTextEl) {
-        newsTextEl.innerHTML = `• <strong>공식 DART 공시:</strong> 전자공시 검증 완료 <a href="https://dart.fss.or.kr" target="_blank" style="color:#60a5fa; text-decoration:underline;">[원문링크 🔗]</a><br>• <strong>실시간 뉴스:</strong> 출처 및 팩트 검증 완료`;
-    }
-
-    // ⑥ 위험요인 + AI 종합해석 (Executive Summary)
+    // ③ 종합 해석 & 행동 방향
     const summaryTextEl = document.getElementById('compSummaryText');
     const conflictBadgeEl = document.getElementById('compConflictBadge');
 
@@ -1552,18 +1524,31 @@ function renderComprehensiveReport(resData) {
     }
 
     if (summaryTextEl) {
-        const statusLabel = cross.status_label || "🟢 기술·수급 동시 분석 완료";
-        const reasons = cross.reasons || ["주요 지표 종합 연산 완료"];
+        const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
         const actionStr = dec.decision || "HOLD";
         const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
 
         summaryTextEl.innerHTML = `
-            <div style="font-weight:700; color:#e2e8f0; margin-bottom:4px;">📌 종합 진단: <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span> (TODAY ACTION: <strong>${actionStr}</strong>)</div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>추세필터 진단:</strong> ${tfInfo.badgeHtml} <span style="color:#94a3b8; font-weight:700;">${tfInfo.diffText}</span> — ${tfInfo.reasonText}</div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>핵심 판단 근거:</strong> ${reasons.join(' / ')}</div>
-            <div style="font-size:11px; color:#94a3b8;">※ 본 종합 리포트는 기존 퀀트 수급 엔진 및 차트 분석 결과를 100% 보존하여 융합 표시한 근거 중심 데이터입니다.</div>
+            <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
+            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
+            <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
         `;
     }
+
+    // 하단 주요 기술지표 뱃지 바 업데이트
+    const bRsi = document.getElementById('badgeRsi');
+    const bRmi = document.getElementById('badgeRmi');
+    const bMfi = document.getElementById('badgeMfi');
+    const bBoll = document.getElementById('badgeBoll');
+    const bMa60 = document.getElementById('badgeMa60');
+    const bMa120 = document.getElementById('badgeMa120');
+
+    if (bRsi) bRsi.innerText = `RSI: ${tech.rsi !== undefined ? tech.rsi.toFixed(1) : '-'}`;
+    if (bRmi) bRmi.innerText = `RMI: ${tech.rmi !== undefined ? tech.rmi.toFixed(1) : '-'}`;
+    if (bMfi) bMfi.innerText = `MFI: ${tech.mfi !== undefined ? tech.mfi.toFixed(1) : '중립'}`;
+    if (bBoll) bBoll.innerText = `Bollinger: ${tech.bollinger_position || '중앙'}`;
+    if (bMa60) bMa60.innerText = `MA60: ${tech.sma_60 ? tech.sma_60.toLocaleString() + '원' : '-'}`;
+    if (bMa120) bMa120.innerText = `MA120: ${tech.sma_120 ? tech.sma_120.toLocaleString() + '원' : '-'}`;
 }
 
 // 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) UI 렌더링 함수
@@ -1741,7 +1726,7 @@ function renderSmartMoneyAnalysis(smartFlow, breakdown) {
     }
 }
 
-// 🏛️ 세부 수급 (6대 주체) 기간 선택 탭 함수
+// 🏛️ 세부 수급 (유효 데이터 주체만 동적 노출, null 주체 display: none)
 function selectBreakdownPeriod(periodKey) {
     const periods = ['5d', '10d', '20d'];
     periods.forEach(p => {
@@ -1757,36 +1742,44 @@ function selectBreakdownPeriod(periodKey) {
         }
     });
 
-    const formatBreakdownVal = (val) => {
-        if (val === null || val === undefined) return `<span style="color: #64748b; font-weight: 500;">- (미제공)</span>`;
-        if (val > 0) return `<span style="color: #ef4444;">+${val.toFixed(2)} 억원</span>`;
-        if (val < 0) return `<span style="color: #3b82f6;">${val.toFixed(2)} 억원</span>`;
-        return `<span style="color: #94a3b8;">0.00 억원</span>`;
-    };
+    const subjectsMap = [
+        { key: 'foreign', cardId: 'cardForeign', valId: 'bdForeignNetBuy' },
+        { key: 'individual', cardId: 'cardIndividual', valId: 'bdIndividualNetBuy' },
+        { key: 'pension', cardId: 'cardPension', valId: 'bdPensionNetBuy' },
+        { key: 'financial_investment', cardId: 'cardFinInv', valId: 'bdFinInvNetBuy' },
+        { key: 'investment_trust', cardId: 'cardInvTrust', valId: 'bdInvTrustNetBuy' },
+        { key: 'private_fund', cardId: 'cardPrivateFund', valId: 'bdPrivateFundNetBuy' }
+    ];
 
     if (!currentInvestorBreakdownData || !currentInvestorBreakdownData.available) {
-        ['bdForeignNetBuy', 'bdPensionNetBuy', 'bdFinInvNetBuy', 'bdInvTrustNetBuy', 'bdPrivateFundNetBuy', 'bdIndividualNetBuy'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.innerHTML = `<span style="color: #64748b; font-weight: 500;">-</span>`;
+        subjectsMap.forEach(item => {
+            const cardEl = document.getElementById(item.cardId);
+            if (cardEl && item.key !== 'foreign' && item.key !== 'individual') {
+                cardEl.style.display = 'none';
+            }
         });
         return;
     }
 
     const cumData = (currentInvestorBreakdownData.cumulative && currentInvestorBreakdownData.cumulative[periodKey]) ? currentInvestorBreakdownData.cumulative[periodKey] : {};
 
-    const foreignEl = document.getElementById('bdForeignNetBuy');
-    const pensionEl = document.getElementById('bdPensionNetBuy');
-    const finInvEl = document.getElementById('bdFinInvNetBuy');
-    const invTrustEl = document.getElementById('bdInvTrustNetBuy');
-    const privateFundEl = document.getElementById('bdPrivateFundNetBuy');
-    const individualEl = document.getElementById('bdIndividualNetBuy');
+    subjectsMap.forEach(item => {
+        const cardEl = document.getElementById(item.cardId);
+        const valEl = document.getElementById(item.valId);
+        const val = cumData[item.key];
 
-    if (foreignEl) foreignEl.innerHTML = formatBreakdownVal(cumData.foreign);
-    if (pensionEl) pensionEl.innerHTML = formatBreakdownVal(cumData.pension);
-    if (finInvEl) finInvEl.innerHTML = formatBreakdownVal(cumData.financial_investment);
-    if (invTrustEl) invTrustEl.innerHTML = formatBreakdownVal(cumData.investment_trust);
-    if (privateFundEl) privateFundEl.innerHTML = formatBreakdownVal(cumData.private_fund);
-    if (individualEl) individualEl.innerHTML = formatBreakdownVal(cumData.individual);
+        // 값이 null 이거나 undefined인 경우 카드 자체를 화면에서 숨김 (더 이상 '- (미제공)' 노출 안함)
+        if (val === null || val === undefined) {
+            if (cardEl) cardEl.style.display = 'none';
+        } else {
+            if (cardEl) cardEl.style.display = 'block';
+            if (valEl) {
+                if (val > 0) valEl.innerHTML = `<span style="color: #ef4444;">+${val.toFixed(2)} 억원</span>`;
+                else if (val < 0) valEl.innerHTML = `<span style="color: #3b82f6;">${val.toFixed(2)} 억원</span>`;
+                else valEl.innerHTML = `<span style="color: #94a3b8;">0.00 억원</span>`;
+            }
+        }
+    });
 }
 
 // 📊 수급 상세분석 기간 탭 선택 함수
