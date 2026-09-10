@@ -1046,12 +1046,12 @@ async function fetchPortfolioData(isBackground = false) {
         }
 
         const data = resData.data;
-        portfolioRenderCache[currentAssetType] = data; // 캐시 보관
         renderPortfolioUI(data);
+        portfolioRenderCache[currentAssetType] = data; // UI 렌더링 정상 완료 후 캐시 보관
 
     } catch (e) {
         console.error(e);
-        if (!isBackground && !portfolioRenderCache[currentAssetType]) {
+        if (!isBackground && grid) {
             grid.innerHTML = `<div class="loading-box text-danger">서버 통신 중 오류가 발생했습니다: ${e.message}</div>`;
         }
     }
@@ -1212,6 +1212,23 @@ function renderPortfolioUI(data) {
 }
 
 
+// 📱 스마트폰 모바일 전용 종목명 카드 펼치기/접기 토글
+function toggleMobileStockCard(ticker) {
+    const wrapper = document.getElementById(`mobile-card-body-${ticker}`);
+    const arrow = document.getElementById(`mobile-arrow-${ticker}`);
+    if (!wrapper) return;
+
+    const currentDisp = window.getComputedStyle(wrapper).display;
+    if (currentDisp === 'none') {
+        wrapper.style.display = 'block';
+        if (arrow) arrow.classList.add('rotated');
+    } else {
+        wrapper.style.display = 'none';
+        if (arrow) arrow.classList.remove('rotated');
+    }
+}
+window.toggleMobileStockCard = toggleMobileStockCard;
+
 // 4. 종목 카드 그리드 생성 (우측 상단 4가지 가격 항목: 현재가, 매입평균가, 총금액, 수익률)
 function renderStockCards(items) {
     const grid = document.getElementById('stockGrid');
@@ -1277,22 +1294,6 @@ function renderStockCards(items) {
                     priceGrid.classList.add(flashClass);
                 }
                 return;
-            }
-        }
-
-        // 📱 스마트폰 모바일 전용 종목명 카드 펼치기/접기 토글
-        function toggleMobileStockCard(ticker) {
-            const wrapper = document.getElementById(`mobile-card-body-${ticker}`);
-            const arrow = document.getElementById(`mobile-arrow-${ticker}`);
-            if (!wrapper) return;
-
-            const currentDisp = window.getComputedStyle(wrapper).display;
-            if (currentDisp === 'none') {
-                wrapper.style.display = 'block';
-                if (arrow) arrow.classList.add('rotated');
-            } else {
-                wrapper.style.display = 'none';
-                if (arrow) arrow.classList.remove('rotated');
             }
         }
 

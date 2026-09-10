@@ -73,8 +73,28 @@ def load_krx_all_stocks(force_reload: bool = False) -> List[Dict[str, Any]]:
             return stocks_list
 
         except Exception as e:
-            logger.error(f"[KRX Loader] KRX 종목 로딩 실패: {e}")
-            return _KRX_ALL_STOCKS_CACHE
+            logger.warn(f"[KRX Loader] KRX 종목 외부 로딩 실패 (Fallback DB 종목 활용): {e}")
+            _LAST_LOADED_TS = time.time()  # 무한 404 재시도 방지
+            try:
+                from backend.db import database as db
+                db_stocks = db.get_all_stocks(asset_type="ALL")
+                fallback_list = []
+                for s in db_stocks:
+                    item = {
+                        "name": s["name"],
+                        "ticker": s["ticker"],
+                        "market": s.get("market", "KOSPI"),
+                        "asset_type": s.get("asset_type", "STOCK"),
+                        "manager": "",
+                        "score": 90
+                    }
+                    fallback_list.append(item)
+                    _KRX_TICKER_MAP[s["ticker"]] = item
+                    _KRX_NAME_MAP[s["name"].upper()] = item
+                _KRX_ALL_STOCKS_CACHE = fallback_list
+                return fallback_list
+            except Exception:
+                return _KRX_ALL_STOCKS_CACHE
 
 
 def search_krx_stocks(query: str, limit: int = 10) -> List[Dict[str, Any]]:
