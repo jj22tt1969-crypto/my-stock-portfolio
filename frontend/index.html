@@ -684,50 +684,13 @@
                     </div>
                 </div>
 
-                <!-- D. 고급 상세 분석 접이식 (Smart Money & Cross Analysis 상세) -->
+                <!-- D. 고급 상세 분석 접이식 (Cross Analysis 상세) -->
                 <details class="advanced-analysis-details" style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px;">
                     <summary style="font-size: 13px; font-weight: 700; color: #94a3b8; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
-                        <span>🔍 고급 상세 분석 (Smart Money Flow & Cross Analysis 세부)</span>
+                        <span>🔍 고급 상세 분석 (Cross Analysis 세부)</span>
                         <span style="font-size: 11px; color: #64748b;">[펼치기/접기]</span>
                     </summary>
                     <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 14px;">
-                        
-                        <!-- 🔥 Smart Money Flow -->
-                        <div class="smart-flow-section" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-                                <h4 style="font-size: 13px; font-weight: 700; color: #fbbf24; margin: 0;">
-                                    🔥 큰손 수급 분석 (Smart Money Flow)
-                                </h4>
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                    <span id="smartDetailAlertBadge" style="display: none; padding: 2px 6px; font-size: 10.5px; font-weight: 700; border-radius: 8px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">기관 세부 미확인</span>
-                                    <span id="smartSignalBadge" style="padding: 3px 8px; font-size: 11.5px; font-weight: 800; border-radius: 16px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);">데이터 부족</span>
-                                </div>
-                            </div>
-                            <div id="smartEtfNoticeBar" style="display: none; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 6px 10px; font-size: 11.5px; color: #60a5fa; margin-bottom: 8px;">
-                                💡 <strong>ETF 알림:</strong> LP/AP 설정 자금이 포함된 수급입니다.
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px;">
-                                <div style="font-size: 12px; color: #94a3b8;">Smart Money Score:</div>
-                                <div id="smartMoneyScoreVal" style="font-size: 18px; font-weight: 900; color: #f8fafc;">- 점</div>
-                                <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                                    <div id="smartScoreBar" style="width: 0%; height: 100%; background: #94a3b8; transition: width 0.4s ease;"></div>
-                                </div>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 4px; background: rgba(30, 41, 59, 0.4); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
-                                    <div style="font-size: 11px; color: #94a3b8;">주체별 5일 방향:</div>
-                                    <div id="smartSubjectBadges" style="display: flex; gap: 4px; flex-wrap: wrap;"></div>
-                                </div>
-                                <div style="font-size: 11px; color: #cbd5e1; display: flex; gap: 8px; flex-wrap: wrap;" id="smartTrendSummary">
-                                    <span>5D: <strong style="color:#94a3b8;">-</strong></span>
-                                    <span>10D: <strong style="color:#94a3b8;">-</strong></span>
-                                    <span>20D: <strong style="color:#94a3b8;">-</strong></span>
-                                </div>
-                            </div>
-                            <div style="font-size: 11.5px; color: #cbd5e1;">
-                                <ul id="smartReasonList" style="margin: 0; padding-left: 16px; line-height: 1.5;"></ul>
-                            </div>
-                        </div>
 
                         <!-- 🔮 Cross Analysis -->
                         <div class="cross-analysis-section" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 10px; padding: 12px;">
@@ -760,13 +723,6 @@
                                         <span id="crossRmiDir" style="font-weight:700;">-</span>
                                     </div>
                                     <div id="crossRmiVal" style="font-size: 13px; font-weight: 800; color: #f8fafc;">-</div>
-                                </div>
-                                <div style="background: rgba(30, 41, 59, 0.6); padding: 8px 10px; border-radius: 6px;">
-                                    <div style="font-size: 10.5px; color: #94a3b8; display: flex; justify-content: space-between;">
-                                        <span>Smart Money</span>
-                                        <span id="crossSmartDir" style="font-weight:700;">-</span>
-                                    </div>
-                                    <div id="crossSmartVal" style="font-size: 13px; font-weight: 800; color: #f8fafc;">- 점</div>
                                 </div>
                             </div>
                             <div style="font-size: 11.5px; color: #cbd5e1;">

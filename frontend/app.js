@@ -1469,9 +1469,6 @@ async function openDetailModal(ticker, name) {
         // 🤖 AI 투자판단 종합 리포트 (Comprehensive AI Report) 렌더링
         renderComprehensiveReport(resData);
 
-        // 🔥 큰손 수급 분석 (Smart Money Flow) 렌더링
-        renderSmartMoneyAnalysis(resData.smart_flow_analysis, resData.investor_breakdown);
-
         // 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) 렌더링
         renderCrossAnalysis(resData.cross_analysis);
 
@@ -1793,131 +1790,11 @@ function renderCrossAnalysis(crossData) {
         if (rmiValEl) rmiValEl.innerText = ind.rmi.val.toFixed(1);
         if (rmiDirEl) rmiDirEl.innerText = ind.rmi.label;
     }
-    if (ind.smart_money) {
-        if (smartValEl) smartValEl.innerText = ind.smart_money.val !== null ? `${ind.smart_money.val.toFixed(1)} 점` : "-";
-        if (smartDirEl) smartDirEl.innerText = ind.smart_money.label;
-    }
 
     if (reasonListEl) {
         const reasons = crossData.reasons || ["지표 간 수급/차트 비교 연산 완료"];
         reasonListEl.innerHTML = reasons.map(r => `<li>📌 ${r}</li>`).join('');
     }
-}
-
-// 🔥 큰손 수급 분석 (Smart Money Flow) UI 렌더링 함수
-function renderSmartMoneyAnalysis(smartFlow, breakdown) {
-    const badgeEl = document.getElementById('smartSignalBadge');
-    const scoreValEl = document.getElementById('smartMoneyScoreVal');
-    const scoreBarEl = document.getElementById('smartScoreBar');
-    const reasonListEl = document.getElementById('smartReasonList');
-    const alertBadgeEl = document.getElementById('smartDetailAlertBadge');
-    const etfNoticeEl = document.getElementById('smartEtfNoticeBar');
-    const subjectBadgesEl = document.getElementById('smartSubjectBadges');
-    const trendSummaryEl = document.getElementById('smartTrendSummary');
-
-    if (!smartFlow || !smartFlow.available || smartFlow.score === null) {
-        if (badgeEl) {
-            badgeEl.innerText = "데이터 부족 / 판단 보류";
-            badgeEl.style.background = "rgba(148, 163, 184, 0.2)";
-            badgeEl.style.color = "#94a3b8";
-            badgeEl.style.borderColor = "rgba(148, 163, 184, 0.3)";
-        }
-        if (scoreValEl) scoreValEl.innerText = "- 점";
-        if (scoreBarEl) {
-            scoreBarEl.style.width = "0%";
-            scoreBarEl.style.background = "#94a3b8";
-        }
-        if (reasonListEl) {
-            reasonListEl.innerHTML = `<li>세부 수급 데이터 수집 대기 중 (판단 보류)</li>`;
-        }
-        if (alertBadgeEl) alertBadgeEl.style.display = "none";
-        if (etfNoticeEl) etfNoticeEl.style.display = "none";
-        if (subjectBadgesEl) subjectBadgesEl.innerHTML = `<span style="font-size: 11px; color: #94a3b8;">데이터 보류</span>`;
-        return;
-    }
-
-    const score = smartFlow.score;
-    const label = smartFlow.signal_label || "🟡 중립/관망";
-    const color = smartFlow.signal_color || "#eab308";
-    const reasons = smartFlow.reasons || ["큰손 수급 분석 정상 유지"];
-    const isDetailAvailable = smartFlow.is_detail_available;
-    const isEtf = smartFlow.is_etf;
-
-    if (alertBadgeEl) {
-        alertBadgeEl.style.display = (isDetailAvailable === false) ? "inline-block" : "none";
-    }
-
-    if (etfNoticeEl) {
-        etfNoticeEl.style.display = (isEtf === true) ? "block" : "none";
-    }
-
-    if (badgeEl) {
-        badgeEl.innerText = label;
-        badgeEl.style.color = color;
-        badgeEl.style.borderColor = color;
-        badgeEl.style.background = `${color}22`; // 13% opacity
-    }
-
-    if (scoreValEl) {
-        scoreValEl.innerText = `${score.toFixed(1)} 점`;
-    }
-
-    if (scoreBarEl) {
-        scoreBarEl.style.width = `${Math.min(100, Math.max(0, score))}%`;
-        scoreBarEl.style.background = color;
-    }
-
-    // 🏛️ 6대 주체 수급 방향 미니 뱃지 렌더링 (최근 5일 누적 기준)
-    if (subjectBadgesEl && breakdown && breakdown.cumulative && breakdown.cumulative['5d']) {
-        const cum5d = breakdown.cumulative['5d'];
-        const subjects = [
-            { key: 'foreign', label: '외인' },
-            { key: 'pension', label: '연기금' },
-            { key: 'private_fund', label: '사모' },
-            { key: 'investment_trust', label: '투신' },
-            { key: 'financial_investment', label: '금투' },
-            { key: 'individual', label: '개인' }
-        ];
-
-        let badgesHtml = '';
-        subjects.forEach(s => {
-            const val = cum5d[s.key];
-            if (val !== undefined && val !== null) {
-                const isBuy = val > 0;
-                const isZero = val === 0;
-                const bgColor = isZero ? 'rgba(148, 163, 184, 0.15)' : (isBuy ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)');
-                const textColor = isZero ? '#94a3b8' : (isBuy ? '#ef4444' : '#3b82f6');
-                const borderCol = isZero ? 'rgba(148, 163, 184, 0.3)' : (isBuy ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)');
-                const sign = isZero ? '0' : (isBuy ? '+' : '-');
-
-                badgesHtml += `<span style="padding: 2px 6px; font-size: 10.5px; font-weight: 800; border-radius: 6px; background: ${bgColor}; color: ${textColor}; border: 1px solid ${borderCol};">${s.label}${sign}</span>`;
-            }
-        });
-        subjectBadgesEl.innerHTML = badgesHtml || '<span style="font-size: 11px; color: #94a3b8;">미확인</span>';
-    }
-
-    // 📈 5D / 10D / 20D 수급 추세 요약 렌더링
-    if (trendSummaryEl && smartFlow.summary) {
-        const sum = smartFlow.summary;
-        const fmtAmt = (amt) => {
-            if (amt === undefined || amt === null) return '-';
-            const sign = amt > 0 ? '+' : '';
-            const col = amt > 0 ? '#ef4444' : (amt < 0 ? '#3b82f6' : '#94a3b8');
-            return `<strong style="color:${col}">${sign}${amt.toFixed(1)}억</strong>`;
-        };
-
-        trendSummaryEl.innerHTML = `
-            <span>5D 추세: ${fmtAmt(sum.smart_amount_5d)}</span>
-            <span>10D 추세: ${fmtAmt(sum.smart_amount_10d)}</span>
-            <span>20D 추세: ${fmtAmt(sum.smart_amount_20d)}</span>
-        `;
-    }
-
-    if (reasonListEl) {
-        reasonListEl.innerHTML = reasons.map(r => `<li>📌 ${r}</li>`).join('');
-    }
-}
-
 // 🏛️ 세부 수급 (유효 데이터 주체만 동적 노출, null 주체 display: none)
 function selectBreakdownPeriod(periodKey) {
     const periods = ['5d', '10d', '20d'];
@@ -3811,7 +3688,6 @@ async function ftSelectStock(ticker, name, assetType) {
         const flow = res.data.flow_analysis || {};
         const tech = res.data.technical_analysis || {};
         const timing = res.data.timing_analysis || {};
-        const smart = res.smart_flow_analysis || {};
         const cross = res.cross_analysis || {};
 
         const latestPrice = tech.latest_close || 0;
@@ -3828,7 +3704,7 @@ async function ftSelectStock(ticker, name, assetType) {
                 flow_analysis: flow,
                 technical_analysis: tech,
                 timing_analysis: timing,
-                smart_flow_analysis: smart,
+                smart_flow_analysis: null,
                 cross_analysis: cross
             }
         };
