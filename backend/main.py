@@ -198,8 +198,7 @@ def analyze_flow(ticker: str = Query(..., description="종목명 또는 6자리 
             "is_delayed": flow_data["is_delayed"]
         },
         "analysis": analysis_result,
-        "investor_breakdown": flow_data.get("investor_breakdown"),
-        "smart_flow_analysis": None
+        "investor_breakdown": flow_data.get("investor_breakdown")
     }
 
 # 5. 기술적 지표 + 수급 + 의사결정 API
@@ -238,7 +237,6 @@ def analyze_decision(
         "flow_analysis": res.get("flow_analysis"),
         "technical_analysis": res.get("technical_analysis"),
         "timing_analysis": res.get("timing_analysis"),
-        "smart_flow_analysis": None,
         "cross_analysis": cross_res
     }
 
@@ -266,7 +264,6 @@ def analyze_decision(
         },
         "data": res,
         "investor_breakdown": flow_data.get("investor_breakdown"),
-        "smart_flow_analysis": None,
         "cross_analysis": cross_res
     }
 
