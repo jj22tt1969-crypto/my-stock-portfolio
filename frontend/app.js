@@ -2479,6 +2479,7 @@ let stockPriceTrendChartInstance = null;
 let stockVolumeChartInstance = null;
 let stockMfiChartInstance = null;
 let stockRmiChartInstance = null;
+let stockBollingerChartInstance = null;
 
 async function openStockHistoryModal(ticker, name, timeframe = 'day') {
     currentStockHistoryTicker = ticker;
@@ -2489,7 +2490,7 @@ async function openStockHistoryModal(ticker, name, timeframe = 'day') {
     if (!modal) return;
     modal.style.display = 'flex';
 
-    document.getElementById('stockHistoryTitle').innerText = `${name} (${ticker}) 6개월 추세선 · 거래량 · MFI · RMI 차트`;
+    document.getElementById('stockHistoryTitle').innerText = `${name} (${ticker}) 6개월 추세선 · 거래량 · MFI · RMI · 볼린저밴드 차트`;
 
     // 탭 버튼 상태 업데이트
     ['day', 'month'].forEach(tf => {
@@ -2664,7 +2665,7 @@ function renderStockMultiCharts(data) {
         }
     });
 
-    // 4. RMI (Relative Momentum Index) 상대모멘텀지수 차트
+    // 4. RMI (Relative Momentum Index) 상대모멘텀지수 차트 (MFI와 동일한 2px 라인 및 0.1 fill 적용)
     const ctxRmi = document.getElementById('stockRmiChart').getContext('2d');
     if (stockRmiChartInstance) stockRmiChartInstance.destroy();
 
@@ -2680,8 +2681,8 @@ function renderStockMultiCharts(data) {
                     label: 'RMI (상대모멘텀지수 14일, 4일간격)',
                     data: data.rmi || [],
                     borderColor: '#00e5ff',
-                    backgroundColor: 'rgba(0, 229, 255, 0.25)',
-                    borderWidth: 3,
+                    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                    borderWidth: 2,
                     fill: true,
                     pointRadius: 0
                 },
@@ -2715,6 +2716,88 @@ function renderStockMultiCharts(data) {
             }
         }
     });
+
+    // 5. Bollinger Bands (볼린저 밴드 20일, 2.0σ) 차트
+    const ctxBollinger = document.getElementById('stockBollingerChart') ? document.getElementById('stockBollingerChart').getContext('2d') : null;
+    if (ctxBollinger) {
+        if (stockBollingerChartInstance) stockBollingerChartInstance.destroy();
+
+        const closes = data.closes || [];
+        const ma20 = data.ma20 || [];
+        const bbUpper = [];
+        const bbLower = [];
+
+        for (let i = 0; i < closes.length; i++) {
+            if (i < 19) {
+                bbUpper.push(null);
+                bbLower.push(null);
+            } else {
+                const slice = closes.slice(i - 19, i + 1);
+                const mean = slice.reduce((a, b) => a + b, 0) / 20;
+                const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / 20;
+                const std = Math.sqrt(variance);
+                const mid = ma20[i] !== undefined ? ma20[i] : mean;
+                bbUpper.push(Math.round((mid + 2 * std) * 100) / 100);
+                bbLower.push(Math.round((mid - 2 * std) * 100) / 100);
+            }
+        }
+
+        stockBollingerChartInstance = new Chart(ctxBollinger, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: '상단선 (Upper 2.0σ)',
+                        data: bbUpper,
+                        borderColor: 'rgba(239, 68, 68, 0.85)',
+                        borderWidth: 1.5,
+                        borderDash: [3, 3],
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: '종가 (Close)',
+                        data: closes,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true
+                    },
+                    {
+                        label: '중심선 (MA20)',
+                        data: ma20,
+                        borderColor: '#f59e0b',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: '하단선 (Lower 2.0σ)',
+                        data: bbLower,
+                        borderColor: 'rgba(16, 185, 129, 0.85)',
+                        borderWidth: 1.5,
+                        borderDash: [3, 3],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#94a3b8' } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: getMobileChartXAxisConfig(12),
+                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+    }
 }
 
 function closeStockHistoryModal() {

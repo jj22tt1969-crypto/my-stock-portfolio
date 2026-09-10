@@ -1,5 +1,5 @@
 // QUANT AI PORTFOLIO Service Worker (PWA Realtime Network-First Version)
-const CACHE_NAME = 'quant-ai-pwa-v1.0.9_startup_fix';
+const CACHE_NAME = 'quant-ai-pwa-v1.0.10_rmi_bollinger_fix';
 
 // 1. 설치 시 즉시 스킵 (skipWaiting)
 self.addEventListener('install', (event) => {

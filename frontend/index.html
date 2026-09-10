@@ -886,6 +886,14 @@
                         <canvas id="stockRmiChart" height="150"></canvas>
                     </div>
                 </div>
+
+                <!-- 5. Bollinger Band (볼린저 밴드 20일, 2.0σ) 차트 -->
+                <div class="sub-chart-box">
+                    <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 6px;">🌌 Bollinger Bands (볼린저 밴드 20일, 2.0σ) <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">(상단선 / 중심선 MA20 / 하단선 / 종가)</span></h4>
+                    <div class="chart-container" style="height: 150px; position: relative;">
+                        <canvas id="stockBollingerChart" height="150"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1035,6 +1043,6 @@
         <button class="btn-pwa-reload" onclick="reloadPwaApp()">새로고침 적용</button>
     </div>
 
-    <script src="/app.js?v=20260910_startup_fix"></script>
+    <script src="/app.js?v=20260910_rmi_bollinger_fix"></script>
 </body>
 </html>
