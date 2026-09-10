@@ -74,7 +74,6 @@ def record_signal_snapshot(
     flow = analysis_data.get("flow_analysis", {})
     tech = analysis_data.get("technical_analysis", {})
     timing = analysis_data.get("timing_analysis", {})
-    smart = analysis_data.get("smart_flow_analysis", {})
     cross = analysis_data.get("cross_analysis", {})
     tf = dec.get("trend_filter", {})
 
@@ -101,8 +100,8 @@ def record_signal_snapshot(
             float(flow.get("ffcs_score", 50.0)),
             float(tech.get("rsi", 50.0)),
             float(tech.get("rmi", 50.0)),
-            float(smart.get("score", 50.0)) if smart.get("score") is not None else None,
-            smart.get("signal_grade", "NEUTRAL"),
+            None,
+            None,
             flow.get("concurrency", {}).get("code", "NONE"),
             float(tech.get("ma60", 0.0)) if tech.get("ma60") else None,
             float(tech.get("ma120", 0.0)) if tech.get("ma120") else None,
@@ -277,16 +276,16 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
     }
 
     # 2. 핵심 3대 신호 추적
-    # 1) Smart Money 우위 (score >= 60 또는 BUY/STRONG_BUY) + BOTH_BUY
-    core_1 = [r for r in rows if (r.get("smart_score", 0) or 0) >= 60.0 and r.get("concurrency_code") == "BOTH_BUY"]
-    # 2) MA60/120 역배열 + BOTH_SELL
+    # 1) 외인기관 쌍끌이 순매수(BOTH_BUY)
+    core_1 = [r for r in rows if r.get("concurrency_code") == "BOTH_BUY"]
+    # 2) MA60/120 역배열 + 동시 순매도(BOTH_SELL)
     core_2 = [r for r in rows if r.get("is_ma_downtrend") == 1 and r.get("concurrency_code") == "BOTH_SELL"]
     # 3) MA60/120 필터로 BUY -> HOLD 된 경우
     core_3 = [r for r in rows if r.get("original_decision") in ["BUY", "AVERAGE"] and r.get("final_decision") == "HOLD"]
 
     core_signal_stats = {
         "smart_both_buy": {
-            "name": "1. Smart Money 우위 + 외인기관 쌍끌이(BOTH_BUY)",
+            "name": "1. 외인기관 쌍끌이 순매수(BOTH_BUY)",
             "count": len(core_1),
             "5D": calc_period_stats(core_1, "status_5d", "ret_5d"),
             "10D": calc_period_stats(core_1, "status_10d", "ret_10d"),

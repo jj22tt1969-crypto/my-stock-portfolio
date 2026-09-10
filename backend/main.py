@@ -18,7 +18,6 @@ from backend.data.collector import get_stock_flow_data, resolve_ticker, fetch_st
 from backend.data.market_collector import fetch_market_indices, fetch_stock_news, fetch_market_index_history
 from backend.engine.flow_engine import analyze_stock_flow
 from backend.engine.decision_engine import analyze_stock_decision
-from backend.engine.smart_flow_engine import analyze_smart_money_flow
 from backend.engine.cross_validation_engine import analyze_cross_indicators
 from backend.engine.stock_identifier import search_stock_or_etf, search_all_stock_or_etf
 from backend.engine.news_engine import fetch_qna_stock_news
@@ -187,10 +186,6 @@ def analyze_flow(ticker: str = Query(..., description="종목명 또는 6자리 
 
     df = flow_data["df"]
     analysis_result = analyze_stock_flow(df)
-    
-    m_info = search_stock_or_etf(flow_data["ticker"])
-    asset_type = m_info[0].get("asset_type", "STOCK") if m_info else "STOCK"
-    smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
 
     return {
         "status": "success",
@@ -204,7 +199,7 @@ def analyze_flow(ticker: str = Query(..., description="종목명 또는 6자리 
         },
         "analysis": analysis_result,
         "investor_breakdown": flow_data.get("investor_breakdown"),
-        "smart_flow_analysis": smart_flow
+        "smart_flow_analysis": None
     }
 
 # 5. 기술적 지표 + 수급 + 의사결정 API
@@ -231,12 +226,10 @@ def analyze_decision(
 
     m_info = search_stock_or_etf(ticker_code)
     asset_type = m_info[0].get("asset_type", "STOCK") if m_info else "STOCK"
-    smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
 
     cross_res = analyze_cross_indicators(
         flow_analysis=res.get("flow_analysis"),
         technical_analysis=res.get("technical_analysis"),
-        smart_flow_analysis=smart_flow,
         decision_analysis=res.get("decision")
     )
 
@@ -245,7 +238,7 @@ def analyze_decision(
         "flow_analysis": res.get("flow_analysis"),
         "technical_analysis": res.get("technical_analysis"),
         "timing_analysis": res.get("timing_analysis"),
-        "smart_flow_analysis": smart_flow,
+        "smart_flow_analysis": None,
         "cross_analysis": cross_res
     }
 
@@ -273,7 +266,7 @@ def analyze_decision(
         },
         "data": res,
         "investor_breakdown": flow_data.get("investor_breakdown"),
-        "smart_flow_analysis": smart_flow,
+        "smart_flow_analysis": None,
         "cross_analysis": cross_res
     }
 
