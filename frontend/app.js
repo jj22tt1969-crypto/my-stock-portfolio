@@ -1481,83 +1481,132 @@ async function openDetailModal(ticker, name) {
 }
 
 // 💡 단순 통합판단 1단계: 수급/기술/추세 해석 헬퍼 함수들 (엔진 보존형 UI/해석 전용)
-function interpretFlowStatus(flow) {
-    if (!flow || !flow.data_available || !flow.periods_analysis) {
-        return { shortTerm: "수급 데이터 부족", midTerm: "데이터 부족", summary: "수급 데이터 부족" };
-    }
-    const pa = flow.periods_analysis || {};
-    const frgn = pa.foreign || {};
-    const inst = pa.institution || {};
+function evalSubjectFlow(subjObj) {
+    if (!subjObj || typeof subjObj !== 'object') return { isMissing: true };
 
-    const f5 = frgn["5d"] ? frgn["5d"].direction : (flow.foreign_direction || "관망");
-    const i5 = inst["5d"] ? inst["5d"].direction : (flow.institution_direction || "관망");
-    const f20 = frgn["20d"] ? frgn["20d"].direction : "중립";
-    const i20 = inst["20d"] ? inst["20d"].direction : "중립";
+    const getVal = (key) => {
+        const item = subjObj[key];
+        if (!item) return null;
+        if (typeof item.net_buy === 'number' && !isNaN(item.net_buy)) return item.net_buy;
+        if (item.direction === '매수') return 1;
+        if (item.direction === '매도') return -1;
+        if (item.direction === '보합') return 0;
+        return null;
+    };
 
-    let shortTerm = "";
-    if (f5 === "매수" && i5 === "매수") shortTerm = "단기 쌍끌이 매수 강화";
-    else if (f5 === "매도" && i5 === "매도") shortTerm = "단기 쌍끌이 매도 가속";
-    else if (f5 === "매수" && i5 === "매도") shortTerm = "단기 외인 매수 / 기관 매도";
-    else if (f5 === "매도" && i5 === "매수") shortTerm = "단기 외인 매도 / 기관 매수";
-    else shortTerm = "단기 수급 혼조/관망";
+    const v1d = getVal('1d');
+    const v3d = getVal('3d');
+    const v5d = getVal('5d');
+    const v10d = getVal('10d');
+    const v20d = getVal('20d');
 
-    let midTerm = "";
-    if (f20 === "매수" && i20 === "매수") midTerm = "중기 쌍끌이 매수 우위";
-    else if (f20 === "매도" && i20 === "매도") midTerm = "중기 수급 이탈 매도 우위";
-    else if (f20 === "매수") midTerm = "중기 외인 매수 주도";
-    else if (i20 === "매수") midTerm = "중기 기관 방어 매수";
-    else midTerm = "중기 수급 중립";
+    const vals = [v1d, v3d, v5d, v10d, v20d];
+    if (vals.every(v => v === null)) return { isMissing: true };
 
-    const consecF = frgn.consecutive_days || 0;
-    const consecDesc = consecF > 0 ? ` (외인 ${consecF}일 연속 매수)` : (consecF < 0 ? ` (외인 ${Math.abs(consecF)}일 연속 매도)` : "");
+    const isAllBuy = vals.filter(v => v !== null).every(v => v > 0);
+    const isAllSell = vals.filter(v => v !== null).every(v => v < 0);
+
+    const isShortBuy = (v1d > 0 && v3d > 0);
+    const isShortSell = (v1d < 0 && v3d < 0);
+    const isMidBuy = (v20d > 0 || v10d > 0);
+    const isMidSell = (v20d < 0 || v10d < 0);
+
+    const isTurnaroundToBuy = (v20d < 0 || v10d < 0) && (v1d > 0 && v3d > 0);
+    const isTurnaroundToSell = (v20d > 0 || v10d > 0) && (v1d < 0 && v3d < 0);
 
     return {
-        shortTerm,
-        midTerm,
-        summary: `${shortTerm} / ${midTerm}${consecDesc}`
+        isMissing: false,
+        isAllBuy,
+        isAllSell,
+        isShortBuy,
+        isShortSell,
+        isMidBuy,
+        isMidSell,
+        isTurnaroundToBuy,
+        isTurnaroundToSell,
+        v1d, v3d, v5d, v10d, v20d
     };
+}
+
+function interpretFlowStatus(flow) {
+    if (!flow || flow.data_available === false) {
+        return { shortTerm: "수급 부족", midTerm: "수급 부족", caseType: "CASE6", summary: "수급 데이터 부족으로 통합 판단을 보류합니다." };
+    }
+
+    const pa = flow.periods_analysis || {};
+    const fEval = evalSubjectFlow(pa.foreign);
+    const iEval = evalSubjectFlow(pa.institution);
+
+    // CASE 6: 둘 다 수급 데이터 없음
+    if (fEval.isMissing && iEval.isMissing) {
+        return { shortTerm: "수급 부족", midTerm: "수급 부족", caseType: "CASE6", summary: "수급 데이터 부족으로 통합 판단을 보류합니다." };
+    }
+
+    // CASE 5: 한쪽 수급 데이터 없음
+    if (fEval.isMissing && !iEval.isMissing) {
+        const instDesc = (iEval.isAllBuy || (iEval.isShortBuy && iEval.isMidBuy)) ? "단·중기 매수 우위" : (iEval.isShortSell ? "단기 매도 우위" : "수급 혼조세");
+        return { shortTerm: "외국인 미확인", midTerm: "기관 " + instDesc, caseType: "CASE5", summary: `외국인 수급 데이터는 확인되지 않으며 기관은 ${instDesc}입니다.` };
+    }
+    if (!fEval.isMissing && iEval.isMissing) {
+        const frgnDesc = (fEval.isAllBuy || (fEval.isShortBuy && fEval.isMidBuy)) ? "단·중기 매수 우위" : (fEval.isShortSell ? "단기 매도 우위" : "수급 혼조세");
+        return { shortTerm: "기관 미확인", midTerm: "외국인 " + frgnDesc, caseType: "CASE5", summary: `기관 수급 데이터는 확인되지 않으며 외국인은 ${frgnDesc}입니다.` };
+    }
+
+    // CASE 2: 외국인과 기관 모두 단·중기 순매수 우위
+    if ((fEval.isAllBuy || (fEval.isShortBuy && fEval.isMidBuy)) && (iEval.isAllBuy || (iEval.isShortBuy && iEval.isMidBuy))) {
+        return { shortTerm: "쌍끌이 매수", midTerm: "단·중기 매수 우위", caseType: "CASE2", summary: "외국인과 기관 모두 단·중기 순매수 우위입니다." };
+    }
+
+    // CASE 3: 중기 매도 우위에서 최근 단기 매수세로 전환 (20D-, 10D-, 5D+, 3D+, 1D+)
+    if (fEval.isTurnaroundToBuy && iEval.isTurnaroundToBuy) {
+        return { shortTerm: "단기 매수 전환", midTerm: "중기 매도 전환", caseType: "CASE3", summary: "중기 매도 우위에서 최근 단기 매수세로 전환되었으며 단기 쌍끌이 매수가 유입 중입니다." };
+    } else if (fEval.isTurnaroundToBuy || iEval.isTurnaroundToBuy) {
+        const subjName = fEval.isTurnaroundToBuy ? "외국인" : "기관";
+        return { shortTerm: "단기 매수 전환", midTerm: "중기 매도 전환", caseType: "CASE3", summary: `중기 매도 우위에서 최근 ${subjName} 중심의 단기 매수세로 전환되었습니다.` };
+    }
+
+    // CASE 4: 중기 매수 흐름은 남아 있으나 최근 단기 매도세 강화 (20D+, 10D+, 5D-, 3D-, 1D-)
+    if (fEval.isTurnaroundToSell || iEval.isTurnaroundToSell) {
+        return { shortTerm: "단기 매도 강화", midTerm: "중기 매수 잔여", caseType: "CASE4", summary: "중기 매수 흐름은 남아 있으나 최근 단기 매도세가 강화되었습니다." };
+    }
+
+    // CASE 1: 기관 단·중기 매수 우위 vs 외국인 기간별 혼조/중기 매도 우위
+    if (iEval.isMidBuy && (fEval.isMidSell || (!fEval.isAllBuy && fEval.v20d < 0))) {
+        return { shortTerm: "기관 매수 / 외인 혼조", midTerm: "기관 우위 / 외인 매도", caseType: "CASE1", summary: "기관은 단·중기 매수 우위이나 외국인은 기간별 혼조이며 중기 매도 우위입니다." };
+    }
+    if (fEval.isMidBuy && (iEval.isMidSell || (!iEval.isAllBuy && iEval.v20d < 0))) {
+        return { shortTerm: "외인 매수 / 기관 혼조", midTerm: "외인 우위 / 기관 매도", caseType: "CASE1", summary: "외국인은 단·중기 매수 우위이나 기관은 기간별 혼조이며 중기 매도 우위입니다." };
+    }
+
+    // 일반 수급 혼조 / 매도 수렴 Fallback
+    if (fEval.isShortSell && iEval.isShortSell) {
+        return { shortTerm: "쌍끌이 매도", midTerm: "단기 동반 이탈", caseType: "MIXED", summary: "외국인과 기관의 동반 단기 매도세로 수급 압박이 지속되고 있습니다." };
+    }
+
+    return { shortTerm: "수급 혼조", midTerm: "방향성 관망", caseType: "MIXED", summary: "외국인과 기관 수급 주체 간 방향성이 엇갈리며 단기 혼조세를 보이고 있습니다." };
 }
 
 function interpretMomentumStatus(tech) {
     if (!tech || tech.data_available === false) {
-        return { status: "기술 데이터 부족", conflicts: [] };
+        return { status: "기술 지표 데이터 부족", summary: "", rsiVal: 50 };
     }
 
-    const rsi = tech.rsi;
-    const rmi = tech.rmi;
-    const mfi = tech.mfi;
+    const rsiVal = tech.rsi !== undefined ? tech.rsi : 50;
+    const rmiVal = tech.rmi !== undefined ? tech.rmi : 50;
+    const mfiVal = tech.mfi !== undefined ? tech.mfi : 50;
 
-    if (rsi === undefined && rmi === undefined && mfi === undefined) {
-        return { status: "기술 지표 데이터 부족", conflicts: [] };
-    }
-
-    const conflicts = [];
-    let status = "중립 모멘텀";
-
-    const rsiVal = rsi !== undefined ? rsi : 50;
-    const rmiVal = rmi !== undefined ? rmi : 50;
-    const mfiVal = mfi !== undefined ? mfi : 50;
-
-    if (rsiVal <= 38 || rmiVal <= 38) {
-        if (mfiVal < 40) {
-            status = "RSI 과매도 반등 시도 / MFI 자금유입 약화";
-            conflicts.push("RSI 과매도 반등 vs MFI 수급 이탈 신호 충돌");
-        } else {
-            status = "과매도 지지 구간 (단기 기술적 반등 기대)";
-        }
-    } else if (rsiVal >= 65 || rmiVal >= 65) {
-        if (mfiVal >= 65) {
-            status = "RSI/MFI 동반 과열 구간 (추격매수 주의)";
-        } else {
-            status = "RSI 단기 과열 / MFI 중립";
-        }
+    let summary = "";
+    if (rsiVal >= 65 || rmiVal >= 65) {
+        summary = "RSI 지표 단기 과열 구간 진입";
+    } else if (rsiVal <= 38 || rmiVal <= 38) {
+        summary = "RSI 과매도 구간 기술적 반등 기댓값 유효";
     } else if (rsiVal >= 50 && rmiVal >= 50) {
-        status = "상승 모멘텀 양호 유지";
-    } else if (rsiVal < 50 && rmiVal < 50) {
-        status = "기술적 모멘텀 약화";
+        summary = "상승 모멘텀 양호 유지";
+    } else {
+        summary = "기술적 모멘텀 약화";
     }
 
-    return { status, conflicts };
+    return { status: summary, summary, rsiVal, rmiVal, mfiVal };
 }
 
 function interpretBollingerStatus(tech, timing) {
@@ -1567,8 +1616,8 @@ function interpretBollingerStatus(tech, timing) {
     const pos = tech ? tech.bollinger_position : null;
 
     if (bb) {
-        if (bb.signal === "BUY") return "볼린저 하단 반등 가능 (과매도 터치/근접)";
-        if (bb.signal === "SELL") return "볼린저 상단 접근/돌파 시도 (저항 경계)";
+        if (bb.signal === "BUY") return "볼린저 하단 반등 가능 구역";
+        if (bb.signal === "SELL") return "볼린저 상단 저항 경계 구역";
     }
     if (pos) {
         if (pos.includes("상단")) return "볼린저 상단 접근";
@@ -1580,7 +1629,7 @@ function interpretBollingerStatus(tech, timing) {
 }
 
 function interpretTrendStatus(tech, dec) {
-    if (!tech) return { trend: "추세 데이터 부족", isDowntrend: false };
+    if (!tech) return { trend: "추세 데이터 부족", isDowntrend: false, isUptrend: false };
 
     const price = tech.latest_close || 0;
     const ma60 = tech.sma_60 || tech.ma60 || 0;
@@ -1588,83 +1637,58 @@ function interpretTrendStatus(tech, dec) {
 
     let trend = "이평선 추세 중립";
     let isDowntrend = false;
+    let isUptrend = false;
 
     if (price > 0 && ma60 > 0 && ma120 > 0) {
         if (price > ma60 && ma60 > ma120) {
-            trend = "정배열 상승 추세 (강한 상승파동)";
+            trend = "MA60/120 정배열 상승 추세";
+            isUptrend = true;
         } else if (price < ma60 && ma60 <= ma120 * 1.01) {
-            trend = "역배열 하락 추세 (하방 압력 우위)";
+            trend = "MA60/120 역배열 하락 추세";
             isDowntrend = true;
         } else if (price < ma60 && ma60 > ma120) {
-            trend = "중기 상승추세 내 단기 조정 구간";
+            trend = "중기 상승 추세 내 단기 조정";
         } else if (price > ma60 && ma60 < ma120) {
-            trend = "하락추세 내 단기 기술적 반등";
-        } else if (Math.abs(ma60 - ma120) / ma120 < 0.01) {
-            trend = "MA60/120 수렴 (추세 전환 탐색)";
+            trend = "하락 추세 속 단기 기술적 반등";
         }
     } else if (tech.is_aligned_bullish) {
         trend = "상승 정배열 추세";
+        isUptrend = true;
     } else if (tech.is_aligned_bearish) {
         trend = "하락 역배열 추세";
         isDowntrend = true;
     }
 
-    return { trend, isDowntrend };
+    return { trend, isDowntrend, isUptrend };
 }
 
 function buildIntegratedOpinion(flow, tech, dec, timing) {
-    const flowRes = interpretFlowStatus(flow);
-    const momRes = interpretMomentumStatus(tech);
-    const bollRes = interpretBollingerStatus(tech, timing);
-    const trendRes = interpretTrendStatus(tech, dec);
-
-    if ((!flow || !flow.data_available) && (!tech || tech.data_available === false)) {
+    if ((!flow || flow.data_available === false) && (!tech || tech.data_available === false)) {
         return "수급 및 기술 지표 데이터 부족으로 통합 판단을 보류합니다.";
     }
 
-    const f5 = flow.periods_analysis ? flow.periods_analysis.foreign?.["5d"]?.direction : flow.foreign_direction;
-    const i5 = flow.periods_analysis ? flow.periods_analysis.institution?.["5d"]?.direction : flow.institution_direction;
-    const rsiVal = tech ? (tech.rsi !== undefined ? tech.rsi : 50) : 50;
-    const mfiVal = tech ? (tech.mfi !== undefined ? tech.mfi : 50) : 50;
+    const flowRes = interpretFlowStatus(flow);
+    const momRes = interpretMomentumStatus(tech);
+    const trendRes = interpretTrendStatus(tech, dec);
 
-    const isFlowBuy = (f5 === "매수" || i5 === "매수");
-    const isBothBuy = (f5 === "매수" && i5 === "매수");
-    const isBothSell = (f5 === "매도" && i5 === "매도");
-    const isTechBuy = (rsiVal <= 38 || momRes.status.includes("반등"));
-    const isTechOverheat = (rsiVal >= 65 || mfiVal >= 65);
-
-    // CASE 6: 외인·기관 모두 매수 + 추세 상승
-    if (isBothBuy && !trendRes.isDowntrend) {
-        return "외인·기관 동시 순매수와 이평선 상승 추세가 조화를 이루어 긍정적인 상승 흐름이 기대됩니다.";
+    if (flowRes.caseType === "CASE6") {
+        return "수급 데이터 부족으로 통합 판단을 보류합니다.";
     }
 
-    // CASE 3: 수급 강한 매수 + RSI/MFI 과열
-    if (isFlowBuy && isTechOverheat) {
-        return "외국인·기관 수급은 긍정적이나 RSI/MFI 지표가 단기 과열 구간에 진입하여 추격매수보다는 눌림목 관찰이 유리합니다.";
+    const flowSummary = flowRes.summary;
+
+    let techAux = "";
+    if (momRes.rsiVal >= 65) {
+        techAux = " RSI 단기 과열에 따른 추격매수 부담이 존재합니다.";
+    } else if (momRes.rsiVal <= 38) {
+        techAux = " 과매도 구간 지지에 따른 기술적 반등 가능성이 존재합니다.";
+    } else if (trendRes.isUptrend) {
+        techAux = " 이평선 상승 정배열 추세가 양호하게 유지 중입니다.";
+    } else if (trendRes.isDowntrend) {
+        techAux = " 중기 이평선 역배열 하락 추세 구간입니다.";
     }
 
-    // CASE 1: 수급 긍정 + 기술 긍정 + 추세 약세
-    if (isFlowBuy && isTechBuy && trendRes.isDowntrend) {
-        return "단기 수급 및 기술적 반등 신호는 긍정적이나 중기 추세(MA60/120)는 아직 역배열 약세 구간이므로 신중한 분할 접근이 적절합니다.";
-    }
-
-    // CASE 4: 수급 매도 + RSI 과매도 + 볼린저 하단
-    if (isBothSell && (rsiVal <= 38 || bollRes.includes("하단"))) {
-        return "볼린저 하단 및 RSI 과매도 구간으로 기술적 반등 가능성이 존재하나 외인·기관 순매도가 진행 중이므로 수급 개선 확인 전까지 관망이 유리합니다.";
-    }
-
-    // CASE 5: 외국인 매수 + 기관 매도 (또는 이와 반대)
-    if ((f5 === "매수" && i5 === "매도") || (f5 === "매도" && i5 === "매수")) {
-        return "수급 주체 간 방향성(외국인 vs 기관)이 상충되어 단기 변동성 관찰 및 횡보 구간 흐름을 지켜볼 필요가 있습니다.";
-    }
-
-    // CASE 2: 수급 부정 + 기술 반등
-    if (isBothSell && isTechBuy) {
-        return "기술적 지표상 반등 가능성은 포착되나 외국인·기관 수급 유출이 지속되어 수급 개선 확인이 필요합니다.";
-    }
-
-    // 기본 종합 문구 (Fallback)
-    return `${flowRes.shortTerm} 상태에서 ${momRes.status}를 나타내고 있으며, ${trendRes.trend} 속에서 TODAY ACTION [${dec.decision || "HOLD"}] 유지가 적절합니다.`;
+    return `${flowSummary}${techAux}`.trim();
 }
 
 // 🤖 AI 투자판단 종합 리포트 UI 렌더링 함수 (3차-N)

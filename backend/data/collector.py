@@ -444,13 +444,10 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
     # ETF 자산군 식별 (Render 해외 IP 환경에서 PyKRX/Naver frgn 지연을 우회하여 ETF 시세 수집 0.3s 직행)
     is_etf = any(b in name.upper() for b in ["ETF", "KODEX", "TIGER", "ACE", "SOL", "RISE", "PLUS", "KBSTAR", "ARIRANG", "HANARO", "KOACT", "HEROES", "WOORI", "UNICORN"])
 
-    # 1. 일별 수급 데이터 수집 (개별주식은 Naver frgn 수집, ETF는 FDR 시세로 직행)
+    # 1. 일별 수급 데이터 수집 (개별주식 및 ETF Naver frgn 수집)
     source_name = "Naver Finance (실시간 융합)"
-    if not is_etf:
-        pages_to_fetch = 1 if min_days <= 20 else 2
-        df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
-    else:
-        df = pd.DataFrame()
+    pages_to_fetch = 1 if min_days <= 20 else 2
+    df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
 
     if (df.empty or len(df) < 5) and not is_etf:
         source_name = "KRX Open Data (PyKRX)"
