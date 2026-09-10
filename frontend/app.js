@@ -1480,6 +1480,193 @@ async function openDetailModal(ticker, name) {
     }
 }
 
+// 💡 단순 통합판단 1단계: 수급/기술/추세 해석 헬퍼 함수들 (엔진 보존형 UI/해석 전용)
+function interpretFlowStatus(flow) {
+    if (!flow || !flow.data_available || !flow.periods_analysis) {
+        return { shortTerm: "수급 데이터 부족", midTerm: "데이터 부족", summary: "수급 데이터 부족" };
+    }
+    const pa = flow.periods_analysis || {};
+    const frgn = pa.foreign || {};
+    const inst = pa.institution || {};
+
+    const f5 = frgn["5d"] ? frgn["5d"].direction : (flow.foreign_direction || "관망");
+    const i5 = inst["5d"] ? inst["5d"].direction : (flow.institution_direction || "관망");
+    const f20 = frgn["20d"] ? frgn["20d"].direction : "중립";
+    const i20 = inst["20d"] ? inst["20d"].direction : "중립";
+
+    let shortTerm = "";
+    if (f5 === "매수" && i5 === "매수") shortTerm = "단기 쌍끌이 매수 강화";
+    else if (f5 === "매도" && i5 === "매도") shortTerm = "단기 쌍끌이 매도 가속";
+    else if (f5 === "매수" && i5 === "매도") shortTerm = "단기 외인 매수 / 기관 매도";
+    else if (f5 === "매도" && i5 === "매수") shortTerm = "단기 외인 매도 / 기관 매수";
+    else shortTerm = "단기 수급 혼조/관망";
+
+    let midTerm = "";
+    if (f20 === "매수" && i20 === "매수") midTerm = "중기 쌍끌이 매수 우위";
+    else if (f20 === "매도" && i20 === "매도") midTerm = "중기 수급 이탈 매도 우위";
+    else if (f20 === "매수") midTerm = "중기 외인 매수 주도";
+    else if (i20 === "매수") midTerm = "중기 기관 방어 매수";
+    else midTerm = "중기 수급 중립";
+
+    const consecF = frgn.consecutive_days || 0;
+    const consecDesc = consecF > 0 ? ` (외인 ${consecF}일 연속 매수)` : (consecF < 0 ? ` (외인 ${Math.abs(consecF)}일 연속 매도)` : "");
+
+    return {
+        shortTerm,
+        midTerm,
+        summary: `${shortTerm} / ${midTerm}${consecDesc}`
+    };
+}
+
+function interpretMomentumStatus(tech) {
+    if (!tech || tech.data_available === false) {
+        return { status: "기술 데이터 부족", conflicts: [] };
+    }
+
+    const rsi = tech.rsi;
+    const rmi = tech.rmi;
+    const mfi = tech.mfi;
+
+    if (rsi === undefined && rmi === undefined && mfi === undefined) {
+        return { status: "기술 지표 데이터 부족", conflicts: [] };
+    }
+
+    const conflicts = [];
+    let status = "중립 모멘텀";
+
+    const rsiVal = rsi !== undefined ? rsi : 50;
+    const rmiVal = rmi !== undefined ? rmi : 50;
+    const mfiVal = mfi !== undefined ? mfi : 50;
+
+    if (rsiVal <= 38 || rmiVal <= 38) {
+        if (mfiVal < 40) {
+            status = "RSI 과매도 반등 시도 / MFI 자금유입 약화";
+            conflicts.push("RSI 과매도 반등 vs MFI 수급 이탈 신호 충돌");
+        } else {
+            status = "과매도 지지 구간 (단기 기술적 반등 기대)";
+        }
+    } else if (rsiVal >= 65 || rmiVal >= 65) {
+        if (mfiVal >= 65) {
+            status = "RSI/MFI 동반 과열 구간 (추격매수 주의)";
+        } else {
+            status = "RSI 단기 과열 / MFI 중립";
+        }
+    } else if (rsiVal >= 50 && rmiVal >= 50) {
+        status = "상승 모멘텀 양호 유지";
+    } else if (rsiVal < 50 && rmiVal < 50) {
+        status = "기술적 모멘텀 약화";
+    }
+
+    return { status, conflicts };
+}
+
+function interpretBollingerStatus(tech, timing) {
+    if (!tech && !timing) return "볼린저 데이터 부족";
+
+    const bb = timing ? timing.bollinger_bands : null;
+    const pos = tech ? tech.bollinger_position : null;
+
+    if (bb) {
+        if (bb.signal === "BUY") return "볼린저 하단 반등 가능 (과매도 터치/근접)";
+        if (bb.signal === "SELL") return "볼린저 상단 접근/돌파 시도 (저항 경계)";
+    }
+    if (pos) {
+        if (pos.includes("상단")) return "볼린저 상단 접근";
+        if (pos.includes("하단")) return "볼린저 하단 접근";
+        if (pos.includes("중앙") || pos.includes("중간")) return "볼린저 중심선 안착";
+    }
+
+    return "볼린저 중심선 부근 안착";
+}
+
+function interpretTrendStatus(tech, dec) {
+    if (!tech) return { trend: "추세 데이터 부족", isDowntrend: false };
+
+    const price = tech.latest_close || 0;
+    const ma60 = tech.sma_60 || tech.ma60 || 0;
+    const ma120 = tech.sma_120 || 0;
+
+    let trend = "이평선 추세 중립";
+    let isDowntrend = false;
+
+    if (price > 0 && ma60 > 0 && ma120 > 0) {
+        if (price > ma60 && ma60 > ma120) {
+            trend = "정배열 상승 추세 (강한 상승파동)";
+        } else if (price < ma60 && ma60 <= ma120 * 1.01) {
+            trend = "역배열 하락 추세 (하방 압력 우위)";
+            isDowntrend = true;
+        } else if (price < ma60 && ma60 > ma120) {
+            trend = "중기 상승추세 내 단기 조정 구간";
+        } else if (price > ma60 && ma60 < ma120) {
+            trend = "하락추세 내 단기 기술적 반등";
+        } else if (Math.abs(ma60 - ma120) / ma120 < 0.01) {
+            trend = "MA60/120 수렴 (추세 전환 탐색)";
+        }
+    } else if (tech.is_aligned_bullish) {
+        trend = "상승 정배열 추세";
+    } else if (tech.is_aligned_bearish) {
+        trend = "하락 역배열 추세";
+        isDowntrend = true;
+    }
+
+    return { trend, isDowntrend };
+}
+
+function buildIntegratedOpinion(flow, tech, dec, timing) {
+    const flowRes = interpretFlowStatus(flow);
+    const momRes = interpretMomentumStatus(tech);
+    const bollRes = interpretBollingerStatus(tech, timing);
+    const trendRes = interpretTrendStatus(tech, dec);
+
+    if ((!flow || !flow.data_available) && (!tech || tech.data_available === false)) {
+        return "수급 및 기술 지표 데이터 부족으로 통합 판단을 보류합니다.";
+    }
+
+    const f5 = flow.periods_analysis ? flow.periods_analysis.foreign?.["5d"]?.direction : flow.foreign_direction;
+    const i5 = flow.periods_analysis ? flow.periods_analysis.institution?.["5d"]?.direction : flow.institution_direction;
+    const rsiVal = tech ? (tech.rsi !== undefined ? tech.rsi : 50) : 50;
+    const mfiVal = tech ? (tech.mfi !== undefined ? tech.mfi : 50) : 50;
+
+    const isFlowBuy = (f5 === "매수" || i5 === "매수");
+    const isBothBuy = (f5 === "매수" && i5 === "매수");
+    const isBothSell = (f5 === "매도" && i5 === "매도");
+    const isTechBuy = (rsiVal <= 38 || momRes.status.includes("반등"));
+    const isTechOverheat = (rsiVal >= 65 || mfiVal >= 65);
+
+    // CASE 6: 외인·기관 모두 매수 + 추세 상승
+    if (isBothBuy && !trendRes.isDowntrend) {
+        return "외인·기관 동시 순매수와 이평선 상승 추세가 조화를 이루어 긍정적인 상승 흐름이 기대됩니다.";
+    }
+
+    // CASE 3: 수급 강한 매수 + RSI/MFI 과열
+    if (isFlowBuy && isTechOverheat) {
+        return "외국인·기관 수급은 긍정적이나 RSI/MFI 지표가 단기 과열 구간에 진입하여 추격매수보다는 눌림목 관찰이 유리합니다.";
+    }
+
+    // CASE 1: 수급 긍정 + 기술 긍정 + 추세 약세
+    if (isFlowBuy && isTechBuy && trendRes.isDowntrend) {
+        return "단기 수급 및 기술적 반등 신호는 긍정적이나 중기 추세(MA60/120)는 아직 역배열 약세 구간이므로 신중한 분할 접근이 적절합니다.";
+    }
+
+    // CASE 4: 수급 매도 + RSI 과매도 + 볼린저 하단
+    if (isBothSell && (rsiVal <= 38 || bollRes.includes("하단"))) {
+        return "볼린저 하단 및 RSI 과매도 구간으로 기술적 반등 가능성이 존재하나 외인·기관 순매도가 진행 중이므로 수급 개선 확인 전까지 관망이 유리합니다.";
+    }
+
+    // CASE 5: 외국인 매수 + 기관 매도 (또는 이와 반대)
+    if ((f5 === "매수" && i5 === "매도") || (f5 === "매도" && i5 === "매수")) {
+        return "수급 주체 간 방향성(외국인 vs 기관)이 상충되어 단기 변동성 관찰 및 횡보 구간 흐름을 지켜볼 필요가 있습니다.";
+    }
+
+    // CASE 2: 수급 부정 + 기술 반등
+    if (isBothSell && isTechBuy) {
+        return "기술적 지표상 반등 가능성은 포착되나 외국인·기관 수급 유출이 지속되어 수급 개선 확인이 필요합니다.";
+    }
+
+    // 기본 종합 문구 (Fallback)
+    return `${flowRes.shortTerm} 상태에서 ${momRes.status}를 나타내고 있으며, ${trendRes.trend} 속에서 TODAY ACTION [${dec.decision || "HOLD"}] 유지가 적절합니다.`;
+}
+
 // 🤖 AI 투자판단 종합 리포트 UI 렌더링 함수 (3차-N)
 // 🤖 AI 투자판단 종합 리포트 UI 렌더링 함수 (TOP & MIDDLE 3단 압축 구조)
 function renderComprehensiveReport(resData) {
@@ -1489,8 +1676,14 @@ function renderComprehensiveReport(resData) {
     const flow = data.flow_analysis || {};
     const tech = data.technical_analysis || {};
     const dec = data.decision || {};
-    const smart = resData.smart_flow_analysis || {};
+    const timing = data.timing_analysis || {};
     const cross = resData.cross_analysis || {};
+
+    const flowRes = interpretFlowStatus(flow);
+    const momRes = interpretMomentumStatus(tech);
+    const bollStr = interpretBollingerStatus(tech, timing);
+    const trendRes = interpretTrendStatus(tech, dec);
+    const integratedOp = buildIntegratedOpinion(flow, tech, dec, timing);
 
     // ① 수급 판단 (외국인·기관)
     const flowTextEl = document.getElementById('compFlowText');
@@ -1498,9 +1691,7 @@ function renderComprehensiveReport(resData) {
         const ffcs = flow.ffcs_score !== undefined ? `${flow.ffcs_score.toFixed(1)}점` : "-";
         const frgn = flow.foreign_net_buy !== undefined ? `${(flow.foreign_net_buy / 100000000).toFixed(1)}억` : "-";
         const inst = flow.institution_net_buy !== undefined ? `${(flow.institution_net_buy / 100000000).toFixed(1)}억` : "-";
-        const fDir = flow.foreign_direction || "관망";
-        const iDir = flow.institution_direction || "관망";
-        flowTextEl.innerHTML = `• <strong>FFCS 수급점수:</strong> ${ffcs}<br>• <strong>최근 1일 수급:</strong> 외인(${frgn}) / 기관(${inst})<br>• <strong>수급 추세:</strong> 외인 [${fDir}] / 기관 [${iDir}]`;
+        flowTextEl.innerHTML = `• <strong>FFCS 수급점수:</strong> ${ffcs}<br>• <strong>단기/중기 수급:</strong> ${flowRes.summary}<br>• <strong>최근 1일 수급:</strong> 외인(${frgn}) / 기관(${inst})`;
     }
 
     // ② 기술적 상태 (RSI·RMI·이평선·볼린저)
@@ -1508,17 +1699,15 @@ function renderComprehensiveReport(resData) {
     if (techTextEl) {
         const rsi = tech.rsi !== undefined ? tech.rsi.toFixed(1) : "-";
         const rmi = tech.rmi !== undefined ? tech.rmi.toFixed(1) : "-";
-        const supp = tech.support_level ? `${tech.support_level.toLocaleString()}원` : "-";
-        const resis = tech.resistance_level ? `${tech.resistance_level.toLocaleString()}원` : "-";
-        const alignStr = tech.is_aligned_bullish ? "<span style='color:#34d399;'>상승 정배열</span>" : (tech.is_aligned_bearish ? "<span style='color:#3b82f6;'>하락 역배열</span>" : "혼조/평행");
-        techTextEl.innerHTML = `• <strong>RSI / RMI:</strong> RSI(${rsi}) | RMI(${rmi})<br>• <strong>지지 / 저항:</strong> 지지(${supp}) / 저항(${resis})<br>• <strong>이평선 배열:</strong> ${alignStr}`;
+        const mfi = tech.mfi !== undefined ? tech.mfi.toFixed(1) : "중립";
+        techTextEl.innerHTML = `• <strong>RSI / RMI / MFI:</strong> RSI(${rsi}) | RMI(${rmi}) | MFI(${mfi})<br>• <strong>기술 모멘텀:</strong> ${momRes.status}<br>• <strong>볼린저 / 추세:</strong> ${bollStr} | ${trendRes.trend}`;
     }
 
     // ③ 종합 해석 & 행동 방향
     const summaryTextEl = document.getElementById('compSummaryText');
     const conflictBadgeEl = document.getElementById('compConflictBadge');
 
-    const isConflict = cross.status_label && cross.status_label.includes("충돌");
+    const isConflict = (cross.status_label && cross.status_label.includes("충돌")) || momRes.conflicts.length > 0;
     if (conflictBadgeEl) {
         conflictBadgeEl.style.display = isConflict ? "inline-block" : "none";
     }
@@ -1531,6 +1720,7 @@ function renderComprehensiveReport(resData) {
         summaryTextEl.innerHTML = `
             <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
             <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
+            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
             <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
         `;
     }
@@ -1547,7 +1737,7 @@ function renderComprehensiveReport(resData) {
     if (bRmi) bRmi.innerText = `RMI: ${tech.rmi !== undefined ? tech.rmi.toFixed(1) : '-'}`;
     if (bMfi) bMfi.innerText = `MFI: ${tech.mfi !== undefined ? tech.mfi.toFixed(1) : '중립'}`;
     if (bBoll) bBoll.innerText = `Bollinger: ${tech.bollinger_position || '중앙'}`;
-    if (bMa60) bMa60.innerText = `MA60: ${tech.sma_60 ? tech.sma_60.toLocaleString() + '원' : '-'}`;
+    if (bMa60) bMa60.innerText = `MA60: ${tech.sma_60 ? tech.sma_60.toLocaleString() + '원' : (tech.ma60 ? tech.ma60.toLocaleString() + '원' : '-')}`;
     if (bMa120) bMa120.innerText = `MA120: ${tech.sma_120 ? tech.sma_120.toLocaleString() + '원' : '-'}`;
 }
 
