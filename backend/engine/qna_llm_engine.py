@@ -4,7 +4,6 @@ from typing import List, Dict, Any, Optional
 
 from backend.data.collector import get_stock_flow_data
 from backend.engine.decision_engine import analyze_stock_decision
-from backend.engine.smart_flow_engine import analyze_smart_money_flow
 from backend.engine.cross_validation_engine import analyze_cross_indicators, perform_cross_validation
 from backend.engine.news_engine import fetch_qna_stock_news
 from backend.engine.official_engine import fetch_official_documents
@@ -101,7 +100,7 @@ def generate_grounded_qna_answer(
     3차-K 신뢰도 최우선 AI Q&A 엔진 (Fact-Only, Zero Hallucination, 5단계 구조화)
     
     ① 확인된 데이터 (기준일시, 출처, 수치)
-    ② 데이터에 근거한 AI 해석 (TODAY ACTION, FCS, RSI, Smart Money 연계)
+    ② 데이터에 근거한 AI 해석 (TODAY ACTION, FCS, RSI 연계)
     ③ 위험요인 / 반대 신호 (충돌 지표, 수급 이탈 등)
     ④ 데이터 부족 또는 불확실성 (미확인 데이터 명시 및 예측 불가 안내)
     ⑤ 최종 요약 (단정적 추천 배지 대신 근거 중심 요약)
@@ -132,7 +131,24 @@ def generate_grounded_qna_answer(
     has_user_stock = user_stock_db is not None
     user_stock_info = {}
 
-    # 3. 주가, 수급, 퀀트 지표, Smart Money, Cross Analysis 수집
+    if has_user_stock:
+        avg_p = user_stock_db.get("avg_price", 0)
+        qty = user_stock_db.get("quantity", 0)
+        user_stock_info = {
+            "has_user_stock": True,
+            "name": user_stock_db.get("name", name),
+            "ticker": user_stock_db.get("ticker", ticker),
+            "avg_price": avg_p,
+            "quantity": qty,
+            "invested_amount": avg_p * qty,
+            "current_price": avg_p,
+            "eval_amount": avg_p * qty,
+            "profit_loss": 0.0,
+            "return_rate": 0.0,
+            "sector": user_stock_db.get("sector", "기타")
+        }
+
+    # 3. 주가, 수급, 퀀트 지표, Cross Analysis 수집
     flow_data = {}
     has_flow_data = False
     if ticker != "MARKET":
@@ -142,7 +158,6 @@ def generate_grounded_qna_answer(
     decision_res = {}
     tech_info = {}
     flow_info = {}
-    smart_flow = {}
     cross_analysis = {}
 
     if has_flow_data:
@@ -152,33 +167,23 @@ def generate_grounded_qna_answer(
         tech_info = res_full.get("technical_analysis", {})
         flow_info = res_full.get("flow_analysis", {})
 
-        # Smart Money Flow 및 Cross Analysis 산출
-        smart_flow = analyze_smart_money_flow(flow_data.get("investor_breakdown"), df, asset_type=asset_type)
-        cross_analysis = analyze_cross_indicators(flow_info, tech_info, smart_flow, decision_res)
+        # Cross Analysis 산출
+        cross_analysis = analyze_cross_indicators(flow_info, tech_info, None, decision_res)
 
         # 보유 종목일 경우 평가액 & 수익률 계산
         if has_user_stock:
-            curr_p = tech_info.get("latest_close", user_stock_db["avg_price"])
-            avg_p = user_stock_db["avg_price"]
-            qty = user_stock_db["quantity"]
+            curr_p = tech_info.get("latest_close", user_stock_db.get("avg_price", 0))
+            avg_p = user_stock_db.get("avg_price", 0)
+            qty = user_stock_db.get("quantity", 0)
             invested = avg_p * qty
             eval_amt = curr_p * qty
             profit_loss = eval_amt - invested
             ret_rate = ((curr_p - avg_p) / avg_p) * 100.0 if avg_p > 0 else 0.0
 
-            user_stock_info = {
-                "has_user_stock": True,
-                "name": user_stock_db["name"],
-                "ticker": user_stock_db["ticker"],
-                "avg_price": avg_p,
-                "quantity": qty,
-                "invested_amount": invested,
-                "current_price": curr_p,
-                "eval_amount": eval_amt,
-                "profit_loss": profit_loss,
-                "return_rate": ret_rate,
-                "sector": user_stock_db.get("sector", "기타")
-            }
+            user_stock_info["current_price"] = curr_p
+            user_stock_info["eval_amount"] = eval_amt
+            user_stock_info["profit_loss"] = profit_loss
+            user_stock_info["return_rate"] = ret_rate
     
     if not user_stock_info:
         user_stock_info = {
@@ -241,13 +246,10 @@ def generate_grounded_qna_answer(
         today_action = decision_res.get("decision", "HOLD")
         rsi_val = tech_info.get("rsi", 50.0)
         rmi_val = tech_info.get("rmi", 50.0)
-        smart_score = smart_flow.get("score") if smart_flow else None
-        smart_label = smart_flow.get("signal_label", "미확인") if smart_flow else "미확인"
-        smart_score_str = f"{smart_score}점 ({smart_label})" if smart_score is not None else "데이터 부족 (판단 보류)"
         
         verified_facts.append(
             f"[📊 앱 퀀트 수급 데이터] 종가: {latest_close:,}원 | TODAY ACTION: {today_action} | "
-            f"FFCS: {ffcs_score}점 | RSI: {rsi_val} | RMI: {rmi_val} | Smart Money: {smart_score_str} "
+            f"FFCS: {ffcs_score}점 | RSI: {rsi_val} | RMI: {rmi_val} "
             f"[기준일시: {current_time_str} / 출처: QUANT AI 엔진 / 상태: 정상]"
         )
 
@@ -269,10 +271,8 @@ def generate_grounded_qna_answer(
     if has_flow_data:
         today_action = decision_res.get("decision", "HOLD")
         ffcs_score = flow_info.get("ffcs_score", 50.0)
-        smart_score = smart_flow.get("score") if smart_flow else None
         ai_analysis_paragraphs.append(
-            f"• [엔진 결과 및 수급 해석]: 기존 투자엔진의 판단은 '{today_action}'(FFCS {ffcs_score}점)이며, "
-            f"큰손 수급(Smart Money Score)은 {smart_score if smart_score is not None else '미확인'}점 수준을 기록하고 있습니다."
+            f"• [엔진 결과 및 수급 해석]: 기존 투자엔진의 판단은 '{today_action}'(FFCS {ffcs_score}점) 수준을 기록하고 있습니다."
         )
         if cross_analysis and cross_analysis.get("reasons"):
             cross_reasons = " / ".join(cross_analysis.get("reasons", []))
@@ -286,10 +286,8 @@ def generate_grounded_qna_answer(
     uncertainties = []
     if is_prediction_query:
         uncertainties.append("⚠️ [예측 불가 안내] AI는 미래 주가나 확실한 상승/하락 여부를 단정적으로 예측할 수 없으며, 확인된 실시간 데이터에 근거한 정보만 제공합니다.")
-    if smart_flow and not smart_flow.get("is_detail_available"):
-        uncertainties.append("⚠️ [수급 미확인] 기관 세부 주체 수급 데이터가 미확인 상태이므로 기관 전체 합계 수급을 보조로 참조합니다.")
     
-    if asset_type == "ETF" or (smart_flow and smart_flow.get("is_etf")):
+    if asset_type == "ETF":
         uncertainties.append("💡 [ETF 수급 특성] ETF 종목 특성상 LP/AP 유동성 공급 및 설정·환매 자금이 포함되어 있습니다.")
         
     if cross_val.get("conflict_detected"):
