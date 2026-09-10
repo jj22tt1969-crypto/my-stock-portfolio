@@ -1991,10 +1991,14 @@ function selectFlowPeriod(periodKey) {
     if (!currentDetailFlowData) return;
     const pData = currentDetailFlowData.periods_analysis || {};
 
-    const frgnVal = (pData.foreign && pData.foreign[periodKey]) ? pData.foreign[periodKey].net_buy / 100000000 : 0;
-    const instVal = (pData.institution && pData.institution[periodKey]) ? pData.institution[periodKey].net_buy / 100000000 : 0;
+    const frgnRaw = (pData.foreign && pData.foreign[periodKey]) ? pData.foreign[periodKey].net_buy : null;
+    const instRaw = (pData.institution && pData.institution[periodKey]) ? pData.institution[periodKey].net_buy : null;
 
-    const formatValStr = (val) => {
+    const formatValStr = (rawVal) => {
+        if (rawVal === null || rawVal === undefined || isNaN(rawVal)) {
+            return `<span style="color: #94a3b8;">- (데이터 없음)</span>`;
+        }
+        const val = rawVal / 100000000;
         if (val > 0) return `<span style="color: #ef4444;">+${val.toFixed(2)} 억원 (순매수)</span>`;
         if (val < 0) return `<span style="color: #3b82f6;">${val.toFixed(2)} 억원 (순매도)</span>`;
         return `<span style="color: #94a3b8;">0.00 억원 (보합)</span>`;
@@ -2004,17 +2008,19 @@ function selectFlowPeriod(periodKey) {
     const instElem = document.getElementById('detailInstNetBuy');
     const concElem = document.getElementById('detailConcurrencyState');
 
-    if (frgnElem) frgnElem.innerHTML = formatValStr(frgnVal);
-    if (instElem) instElem.innerHTML = formatValStr(instVal);
+    if (frgnElem) frgnElem.innerHTML = formatValStr(frgnRaw);
+    if (instElem) instElem.innerHTML = formatValStr(instRaw);
 
     if (concElem) {
-        if (frgnVal > 0 && instVal > 0) {
+        if (frgnRaw === null || instRaw === null || frgnRaw === undefined || instRaw === undefined) {
+            concElem.innerHTML = `<span style="color: #94a3b8;">- (데이터 부족)</span>`;
+        } else if (frgnRaw > 0 && instRaw > 0) {
             concElem.innerHTML = `<span style="color: #ef4444;">🔥 외인+기관 쌍끌이 매수</span>`;
-        } else if (frgnVal < 0 && instVal < 0) {
+        } else if (frgnRaw < 0 && instRaw < 0) {
             concElem.innerHTML = `<span style="color: #3b82f6;">❄️ 외인+기관 쌍끌이 매도</span>`;
-        } else if (frgnVal > 0 && instVal < 0) {
+        } else if (frgnRaw > 0 && instRaw < 0) {
             concElem.innerHTML = `<span style="color: #38bdf8;">🌐 외국인 주도 매수</span>`;
-        } else if (frgnVal < 0 && instVal > 0) {
+        } else if (frgnRaw < 0 && instRaw > 0) {
             concElem.innerHTML = `<span style="color: #f59e0b;">🛡️ 기관 방어 매수</span>`;
         } else {
             concElem.innerHTML = `<span style="color: #94a3b8;">⚖️ 수급 관망 / 보합</span>`;
@@ -2023,35 +2029,46 @@ function selectFlowPeriod(periodKey) {
 }
 
 function renderDetailChart(flow, tech) {
-    const ctx = document.getElementById('stockDetailChart').getContext('2d');
+    const canvas = document.getElementById('stockDetailChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
     if (detailChartInstance) {
         detailChartInstance.destroy();
     }
 
     const periods = ["1d", "3d", "5d", "10d", "20d"];
-    const pData = flow.periods_analysis || {};
-    const foreignFlows = periods.map(p => (pData.foreign && pData.foreign[p]) ? pData.foreign[p].net_buy / 100000000 : 0);
-    const instFlows = periods.map(p => (pData.institution && pData.institution[p]) ? pData.institution[p].net_buy / 100000000 : 0);
+    const pData = flow ? (flow.periods_analysis || {}) : {};
+
+    const foreignFlows = periods.map(p => {
+        const raw = (pData.foreign && pData.foreign[p]) ? pData.foreign[p].net_buy : null;
+        return (raw !== null && raw !== undefined && !isNaN(raw)) ? raw / 100000000 : null;
+    });
+    const instFlows = periods.map(p => {
+        const raw = (pData.institution && pData.institution[p]) ? pData.institution[p].net_buy : null;
+        return (raw !== null && raw !== undefined && !isNaN(raw)) ? raw / 100000000 : null;
+    });
 
     detailChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ["1일 추세", "3일 추세", "5일 추세", "10일 추세", "20일 누적"],
+            labels: ["1일", "3일", "5일", "10일", "20일"],
             datasets: [
                 {
                     label: '외국인 순매수 (억원)',
                     data: foreignFlows,
-                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                    borderColor: '#3b82f6',
-                    borderWidth: 1
+                    backgroundColor: 'rgba(56, 189, 248, 0.7)',
+                    borderColor: '#38bdf8',
+                    borderWidth: 1.5,
+                    borderRadius: 4
                 },
                 {
                     label: '기관 순매수 (억원)',
                     data: instFlows,
-                    backgroundColor: 'rgba(139, 92, 246, 0.7)',
-                    borderColor: '#8b5cf6',
-                    borderWidth: 1
+                    backgroundColor: 'rgba(168, 85, 247, 0.7)',
+                    borderColor: '#a855f7',
+                    borderWidth: 1.5,
+                    borderRadius: 4
                 }
             ]
         },
@@ -2059,12 +2076,40 @@ function renderDetailChart(flow, tech) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { labels: { color: '#94a3b8' } },
-                title: { display: true, text: '기간별 외국인/기관 순매수 수급 동향 (억원)', color: '#f8fafc' }
+                legend: {
+                    position: 'top',
+                    labels: { color: '#cbd5e1', font: { size: 11, weight: '700' } }
+                },
+                title: {
+                    display: true,
+                    text: '기간별 외국인 vs 기관 누적 순매수 동향 (억원)',
+                    color: '#38bdf8',
+                    font: { size: 12, weight: '700' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.raw;
+                            if (val === null || val === undefined) return `${context.dataset.label}: 데이터 없음`;
+                            const sign = val > 0 ? '+' : '';
+                            return `${context.dataset.label}: ${sign}${val.toFixed(2)} 억원`;
+                        }
+                    }
+                }
             },
             scales: {
-                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                x: {
+                    ticks: { color: '#94a3b8', font: { size: 11, weight: '700' } },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                },
+                y: {
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10 },
+                        callback: function(value) { return value + '억'; }
+                    },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                }
             }
         }
     });
