@@ -1796,6 +1796,8 @@ function renderCrossAnalysis(crossData) {
         const reasons = crossData.reasons || ["지표 간 수급/차트 비교 연산 완료"];
         reasonListEl.innerHTML = reasons.map(r => `<li>📌 ${r}</li>`).join('');
     }
+}
+
 // 🏛️ 세부 수급 (유효 데이터 주체만 동적 노출, null 주체 display: none)
 function selectBreakdownPeriod(periodKey) {
     const periods = ['5d', '10d', '20d'];
