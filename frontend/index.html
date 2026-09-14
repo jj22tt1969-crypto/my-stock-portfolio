@@ -15,7 +15,7 @@
     <!-- Google Fonts & Chart.js CDN -->
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/style.css?v=20260909_circle_v5">
+    <link rel="stylesheet" href="/style.css?v=20260914_mobile_refresh">
 </head>
 <body>
     <div class="app-container">
@@ -49,6 +49,12 @@
             </div>
 
             <div class="nav-actions" id="navActionsGroup">
+                <!-- Mobile PWA Refresh Button (Mobile only) -->
+                <button class="refresh-app-btn" id="refreshAppBtn" onclick="refreshMobileApp()" title="최신 서비스 워커 및 리소스를 확인하고 앱을 새로고침합니다">
+                    <span class="refresh-icon" id="refreshIcon">⟳</span>
+                    <span class="refresh-text" id="refreshText">새로고침</span>
+                </button>
+
                 <!-- Theme Switcher Button (Dark Midnight vs Eye-Care Off-White) -->
                 <div class="theme-toggle-container">
                     <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="클릭하여 화면 색상을 다크 모드 또는 눈 피로 감소 회백색 모드로 전환합니다">
@@ -1093,7 +1099,7 @@
         <button class="btn-pwa-reload" onclick="reloadPwaApp()">새로고침 적용</button>
     </div>
 
-    <script src="/app.js?v=20260914_recommend_api_ui"></script>
+    <script src="/app.js?v=20260914_mobile_refresh"></script>
     <script>
         // Sync market index values to mirror ticker items for seamless loop (0 duplicate IDs)
         document.addEventListener('DOMContentLoaded', function() {

@@ -4360,3 +4360,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// 📱 모바일 PWA 최신 리소스 새로고침 기능 (7-E)
+async function refreshMobileApp() {
+    const btn = document.getElementById('refreshAppBtn');
+    const icon = document.getElementById('refreshIcon');
+    const text = document.getElementById('refreshText');
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.style.cursor = 'wait';
+        }
+        if (icon) {
+            icon.textContent = '↻';
+            icon.style.display = 'inline-block';
+            icon.style.animation = 'spin 1s linear infinite';
+        }
+        if (text) {
+            text.textContent = '갱신 중...';
+        }
+
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+                await reg.update();
+            }
+        }
+    } catch (e) {
+        console.warn('Service Worker update check skipped:', e);
+    } finally {
+        window.location.reload();
+    }
+}
+window.refreshMobileApp = refreshMobileApp;

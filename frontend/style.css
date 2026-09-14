@@ -241,6 +241,11 @@ body {
     color: var(--text-secondary);
 }
 
+/* 📱 7-E Mobile PWA Refresh Button (Hidden on Desktop) */
+.refresh-app-btn {
+    display: none !important;
+}
+
 .market-bar {
     display: flex;
     gap: 20px;
@@ -3091,6 +3096,43 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     .nav-actions {
         width: 100%;
         justify-content: space-between;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .refresh-app-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        background: rgba(56, 189, 248, 0.15) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        color: #38bdf8 !important;
+        padding: 5px 10px !important;
+        border-radius: 8px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        min-height: 36px !important;
+        box-sizing: border-box !important;
+        white-space: nowrap !important;
+    }
+
+    .refresh-app-btn:hover {
+        background: rgba(56, 189, 248, 0.25) !important;
+        border-color: #38bdf8 !important;
+    }
+
+    .refresh-app-btn:disabled {
+        opacity: 0.6 !important;
+        cursor: wait !important;
+    }
+
+    .refresh-app-btn .refresh-icon {
+        font-size: 14px !important;
+        display: inline-block !important;
     }
 
     .market-bar {
