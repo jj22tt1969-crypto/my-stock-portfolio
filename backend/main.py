@@ -27,6 +27,7 @@ from backend.engine.qna_llm_engine import generate_grounded_qna_answer
 from backend.engine.calendar_engine import fetch_upcoming_events
 from backend.engine import portfolio_engine as pe
 from backend.db import database as db
+from backend.router import recommend_router
 import uvicorn
 
 app = FastAPI(
@@ -34,6 +35,8 @@ app = FastAPI(
     description="외국인/기관 수급 사이클, 기술적 지표, Buy/Sell/Watering Score 및 종합 판단 대시보드 API",
     version="1.0.0"
 )
+
+app.include_router(recommend_router.router)
 
 app.add_middleware(
     CORSMiddleware,
