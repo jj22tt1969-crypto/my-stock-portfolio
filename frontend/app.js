@@ -4094,8 +4094,18 @@ async function ftDeleteSignal(signalId) {
 window.ftDeleteSignal = ftDeleteSignal;
 
 // ─────────────────────────────────────────────────────────────
-// 🎯 AI 전체시장 종목/ETF 추천 기능 (2단계 신규 독립 UI 전용)
+// 🎯 AI 전체시장 종목/ETF 추천 기능 (Phase 5-B Backend API 연결)
 // ─────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 function selectRecQuickPrompt(promptText) {
     const txtArea = document.getElementById('recQuestionText');
@@ -4106,41 +4116,247 @@ function selectRecQuickPrompt(promptText) {
 }
 window.selectRecQuickPrompt = selectRecQuickPrompt;
 
-function renderRecommendPlaceholder(queryText) {
+function getRecGradeBadge(grade) {
+    const map = {
+        'STRONG_CANDIDATE': { label: '강한 후보', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
+        'CANDIDATE': { label: '후보', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' },
+        'WATCH': { label: '관찰', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
+        'EXCLUDE': { label: '제외', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' }
+    };
+    const item = map[grade] || { label: grade || '관찰', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' };
+    return `<span style="padding: 3px 8px; font-size: 11.5px; font-weight: 800; border-radius: 6px; color: ${item.color}; background: ${item.bg}; border: 1px solid ${item.color}40;">${item.label}</span>`;
+}
+
+function getRecConfidenceBadge(conf) {
+    const map = {
+        'HIGH': { label: '높음', color: '#10b981' },
+        'MEDIUM': { label: '보통', color: '#38bdf8' },
+        'LOW': { label: '낮음', color: '#94a3b8' }
+    };
+    const item = map[conf] || { label: '보통', color: '#38bdf8' };
+    return `<span style="font-size: 11.5px; color: ${item.color}; font-weight: 700;">신뢰도: ${item.label}</span>`;
+}
+
+function getRecIntentLabel(intent) {
+    const map = {
+        'STOCK_SHORT_RECOMMEND': '⚡ 단기 종목 추천',
+        'STOCK_MID_RECOMMEND': '🧺 중기 종목 추천',
+        'ETF_SHORT_RECOMMEND': '⚡ 단기 ETF 추천',
+        'ETF_MID_RECOMMEND': '🧺 중기 ETF 추천',
+        'FLOW_JOINT_BUY': '🔥 외국인·기관 쌍끌이',
+        'FLOW_IMPROVING': '📈 최근 수급 개선',
+        'TREND_NOT_OVERHEATED': '🛡️ 비과열 상승추세',
+        'PULLBACK_CANDIDATE': '🎯 눌림목 후보',
+        'PORTFOLIO_SHORT_RANK': '📱 보유종목 단기 유망순',
+        'NORMAL_RECOMMENDATION_UNKNOWN': '🎯 AI Quant 종목 추천'
+    };
+    return map[intent] || '🎯 AI Quant 종목 추천';
+}
+
+function formatSafeValue(val, suffix = '', precision = 1) {
+    if (val === null || val === undefined || isNaN(val)) {
+        return '-';
+    }
+    if (typeof val === 'number') {
+        return val.toFixed(precision) + suffix;
+    }
+    return val + suffix;
+}
+
+function renderRecommendError(errorMsg) {
+    const cardEl = document.getElementById('recAnswerCard');
+    if (!cardEl) return;
+    cardEl.style.display = 'block';
+    cardEl.innerHTML = `
+        <div style="padding: 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; color: #fca5a5;">
+            <div style="font-size: 14px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                ⚠️ 분석 요청 처리 실패
+            </div>
+            <div style="font-size: 12.5px; line-height: 1.5; color: #fecdd3;">
+                ${escapeHtml(errorMsg)}
+            </div>
+        </div>
+    `;
+}
+
+function renderRecommendResult(data) {
     const cardEl = document.getElementById('recAnswerCard');
     if (!cardEl) return;
 
     cardEl.style.display = 'block';
-    cardEl.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed rgba(56, 189, 248, 0.3); padding-bottom: 8px;">
-            <div style="font-size: 14.5px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
-                🎯 AI 전체시장 종목 추천 엔진 준비 중
+
+    const intentLabel = getRecIntentLabel(data.intent);
+    const elapsedSec = data.elapsed_ms ? (data.elapsed_ms / 1000).toFixed(2) : '-';
+
+    let html = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed rgba(56, 189, 248, 0.3); padding-bottom: 10px;">
+            <div style="font-size: 15px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                ${intentLabel}
             </div>
-            <span style="padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
-                2단계 UI 전용 (Placeholder)
+            <span style="font-size: 11.5px; color: #94a3b8; font-weight: 600;">
+                분석시간 ${elapsedSec}초
             </span>
         </div>
-        <div style="font-size: 13px; color: #f1f5f9; font-weight: 700; margin-bottom: 6px;">
-            📌 입력한 질문: "<span style="color: #38bdf8;">${queryText}</span>"
-        </div>
-        <div style="font-size: 12.5px; color: #cbd5e1; line-height: 1.6;">
-            추천 엔진을 준비 중입니다.<br>
-            다음 단계에서 KOSPI·KOSDAQ 전체시장 3,800여개 종목/ETF 3단계 다단계 스크리닝 엔진과 연결됩니다.
+        <div style="font-size: 13px; color: #f1f5f9; font-weight: 600; margin-bottom: 12px; line-height: 1.5;">
+            ${escapeHtml(data.message || '')}
         </div>
     `;
-}
-window.renderRecommendPlaceholder = renderRecommendPlaceholder;
 
-function submitRecommendQuestion() {
+    if (data.requested_count > data.returned_count && data.returned_count > 0) {
+        html += `
+            <div style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px;">
+                요청한 ${data.requested_count}개 중 현재 기준을 충족한 종목은 ${data.returned_count}개입니다.
+            </div>
+        `;
+    }
+
+    const results = data.results || [];
+    if (results.length === 0) {
+        html += `
+            <div style="padding: 18px; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); text-align: center; color: #cbd5e1; font-size: 13px;">
+                현재 조건에 부합하는 종목이 없습니다.
+            </div>
+        `;
+    } else {
+        html += `<div style="display: flex; flex-direction: column; gap: 12px;">`;
+        results.forEach((item, idx) => {
+            const rank = idx + 1;
+            const priceStr = item.price ? Number(item.price).toLocaleString() + '원' : '-';
+            const gradeBadge = getRecGradeBadge(item.grade);
+            const confBadge = getRecConfidenceBadge(item.confidence);
+            const reasons = item.reasons || [];
+
+            html += `
+                <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #0f172a; font-size: 11.5px; font-weight: 900; padding: 2px 7px; border-radius: 6px;">#${rank}</span>
+                            <span style="font-size: 14.5px; font-weight: 800; color: #f8fafc;">${escapeHtml(item.name)}</span>
+                            <span style="font-size: 12px; color: #94a3b8; font-family: monospace;">(${escapeHtml(item.ticker)})</span>
+                            <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: #cbd5e1;">${escapeHtml(item.market || 'KOSPI')}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-size: 13.5px; font-weight: 700; color: #38bdf8;">${priceStr}</span>
+                            ${gradeBadge}
+                            ${confBadge}
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 12px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.5); padding: 10px; border-radius: 8px;">
+                        <div><span style="color: #94a3b8;">수급 패턴:</span> <strong style="color: #38bdf8;">${escapeHtml(item.flow_pattern || '-')}</strong></div>
+                        <div><span style="color: #94a3b8;">FFCS 점수:</span> <strong style="color: #f59e0b;">${formatSafeValue(item.ffcs, '점')}</strong></div>
+                        <div><span style="color: #94a3b8;">TODAY ACTION:</span> <strong style="color: #10b981;">${escapeHtml(item.today_action || 'HOLD')}</strong></div>
+                        <div><span style="color: #94a3b8;">6M 추세:</span> <strong style="${(item.trend_6m || 0) >= 0 ? 'color: #ef4444;' : 'color: #3b82f6;'}">${formatSafeValue(item.trend_6m, '%')}</strong></div>
+                        <div><span style="color: #94a3b8;">RSI / RMI / MFI:</span> <span style="color: #e2e8f0;">${formatSafeValue(item.rsi)} / ${formatSafeValue(item.rmi)} / ${formatSafeValue(item.mfi)}</span></div>
+                        <div><span style="color: #94a3b8;">MA60 / MA120:</span> <span style="color: #e2e8f0;">${item.ma60 ? item.ma60.toLocaleString() : '-'} / ${item.ma120 ? item.ma120.toLocaleString() : '-'}</span></div>
+                    </div>
+
+                    ${reasons.length > 0 ? `
+                        <div style="font-size: 12px; color: #cbd5e1; background: rgba(56, 189, 248, 0.06); border-left: 3px solid #38bdf8; padding: 8px 10px; border-radius: 4px;">
+                            <div style="font-weight: 700; color: #38bdf8; margin-bottom: 4px;">💡 근거 및 투자 포인트:</div>
+                            <ul style="margin: 0; padding-left: 16px; line-height: 1.5;">
+                                ${reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }
+
+    cardEl.innerHTML = html;
+}
+
+async function submitRecommendQuestion() {
     const txtArea = document.getElementById('recQuestionText');
+    const btnSubmit = document.getElementById('btnRecSubmit');
+    const cardEl = document.getElementById('recAnswerCard');
+
     const question = txtArea ? txtArea.value.trim() : '';
 
     if (!question) {
-        alert('추천 질문을 입력해주거나 상단 예제 질문을 선택해주세요.');
+        alert('추천 질문을 입력해 주세요.');
         if (txtArea) txtArea.focus();
         return;
     }
 
-    renderRecommendPlaceholder(question);
+    if (btnSubmit && btnSubmit.disabled) return;
+
+    // Loading UI
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.6';
+        btnSubmit.style.cursor = 'not-allowed';
+    }
+
+    if (cardEl) {
+        cardEl.style.display = 'block';
+        cardEl.innerHTML = `
+            <div style="padding: 24px 16px; text-align: center; color: #38bdf8;">
+                <div class="spinner" style="margin: 0 auto 12px auto; width: 28px; height: 28px; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <div style="font-size: 14.5px; font-weight: 800; margin-bottom: 6px;">전체 시장을 분석 중입니다...</div>
+                <div style="font-size: 12px; color: #94a3b8;">KOSPI·KOSDAQ 수급 및 기술지표 다단계 스크리닝 진행 중 (최대 45초)</div>
+            </div>
+        `;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 타임아웃
+
+    try {
+        const response = await fetch('/api/recommend/ask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question: question }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let errorText = `서버 응답 오류 (HTTP ${response.status})`;
+            try {
+                const errData = await response.json();
+                if (errData.detail) errorText = errData.detail;
+            } catch (e) {}
+            throw new Error(errorText);
+        }
+
+        const data = await response.json();
+        if (data.status === 'unavailable') {
+            renderRecommendError(data.message || '현재 추천 엔진을 사용할 수 없습니다.');
+        } else {
+            renderRecommendResult(data);
+        }
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            renderRecommendError('전체시장 분석 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+        } else {
+            renderRecommendError(`추천 분석 중 오류가 발생했습니다: ${err.message || '네트워크 연결 실패'}`);
+        }
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.style.opacity = '1';
+            btnSubmit.style.cursor = 'pointer';
+        }
+    }
 }
 window.submitRecommendQuestion = submitRecommendQuestion;
+
+// DOMContentLoaded 이벤트 연결 (Ctrl+Enter / Cmd+Enter 바인딩)
+document.addEventListener('DOMContentLoaded', function() {
+    const recTxt = document.getElementById('recQuestionText');
+    if (recTxt) {
+        recTxt.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                submitRecommendQuestion();
+            }
+        });
+    }
+});
