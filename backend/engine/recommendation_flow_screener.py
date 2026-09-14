@@ -104,8 +104,11 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     f_all_valid = f_st_valid and f_mt_valid
     i_all_valid = i_st_valid and i_mt_valid
 
-    # 필수 단기 수급이 둘 다 유효하지 않은 경우 DATA_INSUFFICIENT 즉시 반환
-    if not f_st_valid and not i_st_valid:
+    # 6개 단기 수급 항목 (Foreign 1D, 3D, 5D 및 Institution 1D, 3D, 5D) 전원 유효성 검증
+    st_6_valid = f_st_valid and i_st_valid
+
+    # 6개 단기 수급 중 하나라도 유효하지 않은 경우 DATA_INSUFFICIENT / TIER_D 즉시 반환
+    if not st_6_valid:
         return {
             **candidate,
             "flow_status": "DATA_INSUFFICIENT",
