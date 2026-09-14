@@ -78,10 +78,19 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
 
     # 3. 단기/중기 수급 판단 보조 변수
     # 단기 (1D, 3D, 5D)
-    f_st_pos_cnt = sum(1 for v in [f1, f3, f5] if v > 0)
-    f_st_neg_cnt = sum(1 for v in [f1, f3, f5] if v < 0)
-    i_st_pos_cnt = sum(1 for v in [i1, i3, i5] if v > 0)
-    i_st_neg_cnt = sum(1 for v in [i1, i3, i5] if v < 0)
+    def _is_pos(v):
+        if v is None or pd.isna(v):
+            return False
+        return float(v) > 0
+
+    f_st_strict_buy = _is_pos(f1) and _is_pos(f3) and _is_pos(f5)
+    i_st_strict_buy = _is_pos(i1) and _is_pos(i3) and _is_pos(i5)
+    is_strict_joint_buy = f_st_strict_buy and i_st_strict_buy
+
+    f_st_pos_cnt = sum(1 for v in [f1, f3, f5] if _is_pos(v))
+    f_st_neg_cnt = sum(1 for v in [f1, f3, f5] if v is not None and not pd.isna(v) and float(v) < 0)
+    i_st_pos_cnt = sum(1 for v in [i1, i3, i5] if _is_pos(v))
+    i_st_neg_cnt = sum(1 for v in [i1, i3, i5] if v is not None and not pd.isna(v) and float(v) < 0)
 
     f_st_buy = (f_st_pos_cnt >= 2 and (f1 + f3 + f5) > 0)
     f_st_sell = (f_st_neg_cnt >= 2 and (f1 + f3 + f5) < 0)
@@ -93,8 +102,8 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     i_mt_neg = (i10 <= 0 or i20 <= 0 or (i10 + i20) <= 0)
 
     # 전 기간 (1D~20D)
-    f_all_pos = all(v > 0 for v in [f1, f3, f5, f10, f20])
-    i_all_pos = all(v > 0 for v in [i1, i3, i5, i10, i20])
+    f_all_pos = all(_is_pos(v) for v in [f1, f3, f5, f10, f20])
+    i_all_pos = all(_is_pos(v) for v in [i1, i3, i5, i10, i20])
 
     # 4. 수급 패턴 식별 (Prioritized Pattern Classification)
     pattern = "MIXED"
@@ -112,8 +121,8 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
         else:
             reasons.append("기관 1D~20D 전 기간 지속 매집 유입")
 
-    # B. JOINT_BUY (외국인·기관 동반 순매수 / 쌍끌이)
-    elif f_st_buy and i_st_buy:
+    # B. JOINT_BUY (외국인·기관 엄격 동반 순매수 / 6개 수급 1D/3D/5D 모두 > 0)
+    elif is_strict_joint_buy:
         pattern = "JOINT_BUY"
         tier = "TIER_A"
         reasons.append("외국인·기관 단기(1D/3D/5D) 동반 순매수(쌍끌이)")
