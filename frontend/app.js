@@ -1417,10 +1417,32 @@ async function openDetailModal(ticker, name) {
 
     try {
         const resp = await fetch(`/api/decision/analyze?ticker=${ticker}`);
-        if (!resp.ok) return;
+        if (!resp.ok) {
+            document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+            renderDetailChart(null, null);
+            return;
+        }
         const resData = await resp.json();
 
-        if (resData.status !== "success") return;
+        if (resData.status !== "success") {
+            document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+            const compFlowTextEl = document.getElementById('compFlowText');
+            if (compFlowTextEl) compFlowTextEl.innerHTML = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+            const compTechTextEl = document.getElementById('compTechText');
+            if (compTechTextEl) compTechTextEl.innerHTML = "지표 상태 조회 보류";
+            const compSummaryTextEl = document.getElementById('compSummaryText');
+            if (compSummaryTextEl) compSummaryTextEl.innerHTML = "수급/차트 분석 보류 중";
+
+            const frgnElem = document.getElementById('detailForeignNetBuy');
+            const instElem = document.getElementById('detailInstNetBuy');
+            const concElem = document.getElementById('detailConcurrencyState');
+            if (frgnElem) frgnElem.innerHTML = `<span style="color: #94a3b8;">- (데이터 없음)</span>`;
+            if (instElem) instElem.innerHTML = `<span style="color: #94a3b8;">- (데이터 없음)</span>`;
+            if (concElem) concElem.innerHTML = `<span style="color: #94a3b8;">⚠️ 수급 데이터 부족</span>`;
+
+            renderDetailChart(null, null);
+            return;
+        }
         const data = resData.data;
 
         const flow = data.flow_analysis || {};
