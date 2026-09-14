@@ -3352,7 +3352,19 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     }
 
     .answer-grid {
-        grid-template-columns: 1fr !important;
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .ans-section-box,
+    .ans-section-box.full-width {
+        display: block !important;
+        grid-column: auto !important;
+        grid-column-start: auto !important;
+        grid-column-end: auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        margin-bottom: 12px !important;
     }
 
     /* Touch target expansion for buttons and prompts */
@@ -4491,8 +4503,86 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
-    p, span, td, th, div {
-        overflow-wrap: break-word;
+    /* 17. 📱 모바일 7-D — AI Q&A 모바일 레이아웃 고도화 (DART 세로 텍스트, Verified Facts 1열, 종목 배지 잘림 방지) */
+    .official-card-item {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important;
+        gap: 10px !important;
+        padding: 10px 12px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .official-source-badge {
+        min-width: 50px !important;
+        max-width: 65px !important;
+    }
+    .official-card-body {
+        min-width: 0 !important;
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+    .official-card-title,
+    .official-card-title a {
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        word-break: keep-all !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+    }
+
+    div.answer-grid,
+    .qna-answer-card .answer-grid,
+    #qaAnswerCard .answer-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        grid-template-columns: 1fr !important;
+        width: 100% !important;
+    }
+    div.answer-grid > div,
+    .qna-answer-card .ans-section-box,
+    #qaAnswerCard .ans-section-box,
+    .ans-section-box,
+    .ans-section-box.full-width {
+        grid-column: 1 / -1 !important;
+        grid-column-start: 1 !important;
+        grid-column-end: -1 !important;
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+        margin-bottom: 12px !important;
+        flex: 1 1 100% !important;
+        float: none !important;
+    }
+    .ans-section-box h4 {
+        word-break: keep-all !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+    }
+
+    .qna-context-bar,
+    .context-search-box {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        gap: 8px !important;
+        box-sizing: border-box !important;
+    }
+    #qaTickerInput {
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    #qaTargetBadge {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        text-align: center !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
     }
 }
 
@@ -4655,6 +4745,25 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     #techBadgesBar span {
         font-size: 10px !important;
         padding: 2px 5px !important;
+    }
+@media (max-width: 900px) {
+    .answer-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        grid-template-columns: 1fr !important;
+        width: 100% !important;
+    }
+    .ans-section-box,
+    .ans-section-box.full-width {
+        grid-column: 1 / -1 !important;
+        grid-column-start: 1 !important;
+        grid-column-end: -1 !important;
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+        margin-bottom: 12px !important;
+        flex: 1 1 100% !important;
     }
 }
 
