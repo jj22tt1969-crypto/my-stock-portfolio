@@ -31,12 +31,21 @@
             
             <!-- Live Market Indices Banner -->
             <div class="market-bar" id="marketBar">
-                <div class="market-item clickable-index" onclick="openIndexChartModal('KOSPI', '코스피 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스피</span> <span class="m-val" id="kospiVal">-</span></div>
-                <div class="market-item clickable-index" onclick="openIndexChartModal('KOSDAQ', '코스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스닥</span> <span class="m-val" id="kosdaqVal">-</span></div>
-                <div class="market-item clickable-index" onclick="openIndexChartModal('USDKRW', '원/달러 환율')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">USD/KRW</span> <span class="m-val" id="usdVal">-</span></div>
-                <div class="market-item clickable-index" onclick="openIndexChartModal('SP500', 'S&P 500 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">S&P 500</span> <span class="m-val" id="sp500Val">-</span></div>
-                <div class="market-item clickable-index" onclick="openIndexChartModal('NASDAQ', '나스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">나스닥</span> <span class="m-val" id="nasdaqVal">-</span></div>
+                <div class="market-bar-track">
+                    <!-- Main Set (Original IDs for real-time JS updates) -->
+                    <div class="market-item clickable-index" onclick="openIndexChartModal('KOSPI', '코스피 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스피</span> <span class="m-val" id="kospiVal">-</span></div>
+                    <div class="market-item clickable-index" onclick="openIndexChartModal('KOSDAQ', '코스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">코스닥</span> <span class="m-val" id="kosdaqVal">-</span></div>
+                    <div class="market-item clickable-index" onclick="openIndexChartModal('USDKRW', '원/달러 환율')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">USD/KRW</span> <span class="m-val" id="usdVal">-</span></div>
+                    <div class="market-item clickable-index" onclick="openIndexChartModal('SP500', 'S&P 500 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">S&P 500</span> <span class="m-val" id="sp500Val">-</span></div>
+                    <div class="market-item clickable-index" onclick="openIndexChartModal('NASDAQ', '나스닥 지수')" title="클릭 시 최근 6개월 추이 차트 보기"><span class="m-label">나스닥</span> <span class="m-val" id="nasdaqVal">-</span></div>
 
+                    <!-- Mirror Set (For Seamless Mobile Ticker Loop - NO Duplicate IDs) -->
+                    <div class="market-item clickable-index market-mirror-item" onclick="openIndexChartModal('KOSPI', '코스피 지수')"><span class="m-label">코스피</span> <span class="m-val m-mirror-kospi">-</span></div>
+                    <div class="market-item clickable-index market-mirror-item" onclick="openIndexChartModal('KOSDAQ', '코스닥 지수')"><span class="m-label">코스닥</span> <span class="m-val m-mirror-kosdaq">-</span></div>
+                    <div class="market-item clickable-index market-mirror-item" onclick="openIndexChartModal('USDKRW', '원/달러 환율')"><span class="m-label">USD/KRW</span> <span class="m-val m-mirror-usd">-</span></div>
+                    <div class="market-item clickable-index market-mirror-item" onclick="openIndexChartModal('SP500', 'S&P 500 지수')"><span class="m-label">S&P 500</span> <span class="m-val m-mirror-sp500">-</span></div>
+                    <div class="market-item clickable-index market-mirror-item" onclick="openIndexChartModal('NASDAQ', '나스닥 지수')"><span class="m-label">나스닥</span> <span class="m-val m-mirror-nasdaq">-</span></div>
+                </div>
             </div>
 
             <div class="nav-actions" id="navActionsGroup">
@@ -1049,11 +1058,11 @@
 
     <!-- Mobile Bottom Navigation Bar (< 768px) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
-        <button class="mobile-nav-btn active" id="mNavPortfolio" onclick="switchAssetType('PORTFOLIO')">
+        <button class="mobile-nav-btn" id="mNavPortfolio" onclick="switchAssetType('PORTFOLIO')">
             <span class="m-nav-icon">🏠</span>
             <span class="m-nav-label">Portfolio</span>
         </button>
-        <button class="mobile-nav-btn" id="mNavStock" onclick="switchAssetType('STOCK')">
+        <button class="mobile-nav-btn active" id="mNavStock" onclick="switchAssetType('STOCK')">
             <span class="m-nav-icon">📊</span>
             <span class="m-nav-label">개별종목</span>
         </button>
@@ -1085,5 +1094,29 @@
     </div>
 
     <script src="/app.js?v=20260914_recommend_api_ui"></script>
+    <script>
+        // Sync market index values to mirror ticker items for seamless loop (0 duplicate IDs)
+        document.addEventListener('DOMContentLoaded', function() {
+            var pairs = [
+                ['kospiVal', '.m-mirror-kospi'],
+                ['kosdaqVal', '.m-mirror-kosdaq'],
+                ['usdVal', '.m-mirror-usd'],
+                ['sp500Val', '.m-mirror-sp500'],
+                ['nasdaqVal', '.m-mirror-nasdaq']
+            ];
+            pairs.forEach(function(pair) {
+                var target = document.getElementById(pair[0]);
+                if (target) {
+                    var updateMirror = function() {
+                        var mirrors = document.querySelectorAll(pair[1]);
+                        mirrors.forEach(function(m) { m.innerText = target.innerText; });
+                    };
+                    var observer = new MutationObserver(updateMirror);
+                    observer.observe(target, { childList: true, characterData: true, subtree: true });
+                    updateMirror();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
