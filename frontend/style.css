@@ -3095,10 +3095,11 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
 
     .market-bar {
         width: 100%;
-        overflow-x: auto;
+        overflow-x: hidden !important;
         white-space: nowrap;
         padding-bottom: 4px;
-        -webkit-overflow-scrolling: touch;
+        -webkit-overflow-scrolling: auto !important;
+        touch-action: pan-y !important;
     }
 
     .market-item {
@@ -3220,9 +3221,12 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     .market-bar {
         width: 100% !important;
         overflow: hidden !important;
+        overflow-x: hidden !important;
         white-space: nowrap !important;
         box-sizing: border-box !important;
         padding: 6px 12px !important;
+        -webkit-overflow-scrolling: auto !important;
+        touch-action: pan-y !important;
     }
 
     .market-bar-track {
@@ -3231,10 +3235,6 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         width: max-content !important;
         animation: tickerSlide 25s linear infinite !important;
         will-change: transform;
-    }
-
-    .market-bar-track:hover {
-        animation-play-state: paused !important;
     }
 
     .market-item {
@@ -4665,10 +4665,16 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
 
 @keyframes tickerSlide {
     0% {
-        transform: translateX(0);
+        transform: translateX(-50%);
     }
     100% {
-        transform: translateX(-50%);
+        transform: translateX(0);
+    }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .market-bar-track:hover {
+        animation-play-state: paused !important;
     }
 }
 
