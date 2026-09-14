@@ -15,16 +15,21 @@ logger = logging.getLogger(__name__)
 def _extract_period_flow(df: pd.DataFrame, col: str, period: int) -> Dict[str, Any]:
     """
     DataFrame에서 최근 N일간의 지정 수급 컬럼(foreign_net_buy / institution_net_buy) 합계 및 방향 추출
+    데이터 미존재 또는 NaN/None 포함 시 net_buy: None, valid: False 반환 (0으로 왜곡 금지)
     """
     if df is None or df.empty or len(df) < period or col not in df.columns:
-        return {"net_buy": 0.0, "direction": "중립"}
+        return {"net_buy": None, "direction": "중립", "valid": False}
 
-    sub_df = df.iloc[-period:]
-    val = float(sub_df[col].sum())
+    sub = df.iloc[-period:][col]
+    if sub.isna().any() or any(v is None for v in sub.values):
+        return {"net_buy": None, "direction": "중립", "valid": False}
+
+    val = float(sub.sum())
     direction = "매수" if val > 0 else ("매도" if val < 0 else "중립")
     return {
         "net_buy": round(val, 2),
-        "direction": direction
+        "direction": direction,
+        "valid": True
     }
 
 
@@ -32,6 +37,7 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     """
     단일 후보(STOCK 또는 ETF)에 대해 기존 collector의 get_stock_flow_data를 호출하여
     1D/3D/5D/10D/20D 수급 데이터 확보 및 패턴/Tier 분류
+    데이터 부족/누락 시 0으로 변환하지 않고 DATA_INSUFFICIENT / TIER_D 처리
     """
     ticker = candidate.get("ticker", "")
     name = candidate.get("name", "")
@@ -43,13 +49,15 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
         logger.warning(f"[FlowScreener] Exception fetching flow for {name}({ticker}): {e}")
         flow_res = None
 
+    def_flow_dict = {p: {"net_buy": None, "direction": "중립", "valid": False} for p in ["1d", "3d", "5d", "10d", "20d"]}
+
     if not flow_res or not flow_res.get("data_available", False):
         return {
             **candidate,
             "flow_status": flow_res.get("status_code", "FETCH_FAILED") if flow_res else "FETCH_FAILED",
             "data_available": False,
-            "foreign": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
-            "institution": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
+            "foreign": def_flow_dict,
+            "institution": def_flow_dict,
             "flow_pattern": "DATA_INSUFFICIENT",
             "flow_tier": "TIER_D",
             "flow_reasons": ["수급 데이터 수집 실패 또는 데이터 부족"]
@@ -61,8 +69,8 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
             **candidate,
             "flow_status": "DATA_INSUFFICIENT",
             "data_available": False,
-            "foreign": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
-            "institution": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
+            "foreign": def_flow_dict,
+            "institution": def_flow_dict,
             "flow_pattern": "DATA_INSUFFICIENT",
             "flow_tier": "TIER_D",
             "flow_reasons": ["유효 거래일 데이터 5일 미만"]
@@ -76,42 +84,70 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     f1, f3, f5, f10, f20 = [foreign_flows[f"{p}d"]["net_buy"] for p in periods]
     i1, i3, i5, i10, i20 = [inst_flows[f"{p}d"]["net_buy"] for p in periods]
 
-    # 3. 단기/중기 수급 판단 보조 변수
-    # 단기 (1D, 3D, 5D)
+    # 3. 데이터 유효성 검증 헬퍼 함수
+    def _is_valid(v):
+        return v is not None and not pd.isna(v)
+
     def _is_pos(v):
-        if v is None or pd.isna(v):
-            return False
-        return float(v) > 0
+        return _is_valid(v) and float(v) > 0
 
-    f_st_strict_buy = _is_pos(f1) and _is_pos(f3) and _is_pos(f5)
-    i_st_strict_buy = _is_pos(i1) and _is_pos(i3) and _is_pos(i5)
-    is_strict_joint_buy = f_st_strict_buy and i_st_strict_buy
+    def _is_neg(v):
+        return _is_valid(v) and float(v) < 0
 
+    # 기간별 유효성 플래그
+    f_st_valid = _is_valid(f1) and _is_valid(f3) and _is_valid(f5)
+    i_st_valid = _is_valid(i1) and _is_valid(i3) and _is_valid(i5)
+
+    f_mt_valid = _is_valid(f10) and _is_valid(f20)
+    i_mt_valid = _is_valid(i10) and _is_valid(i20)
+
+    f_all_valid = f_st_valid and f_mt_valid
+    i_all_valid = i_st_valid and i_mt_valid
+
+    # 필수 단기 수급이 둘 다 유효하지 않은 경우 DATA_INSUFFICIENT 즉시 반환
+    if not f_st_valid and not i_st_valid:
+        return {
+            **candidate,
+            "flow_status": "DATA_INSUFFICIENT",
+            "data_available": False,
+            "foreign": foreign_flows,
+            "institution": inst_flows,
+            "flow_pattern": "DATA_INSUFFICIENT",
+            "flow_tier": "TIER_D",
+            "flow_reasons": ["수급 데이터 부족"]
+        }
+
+    # 단기 수급 가공 (유효한 경우만 계산)
     f_st_pos_cnt = sum(1 for v in [f1, f3, f5] if _is_pos(v))
-    f_st_neg_cnt = sum(1 for v in [f1, f3, f5] if v is not None and not pd.isna(v) and float(v) < 0)
+    f_st_neg_cnt = sum(1 for v in [f1, f3, f5] if _is_neg(v))
     i_st_pos_cnt = sum(1 for v in [i1, i3, i5] if _is_pos(v))
-    i_st_neg_cnt = sum(1 for v in [i1, i3, i5] if v is not None and not pd.isna(v) and float(v) < 0)
+    i_st_neg_cnt = sum(1 for v in [i1, i3, i5] if _is_neg(v))
 
-    f_st_buy = (f_st_pos_cnt >= 2 and (f1 + f3 + f5) > 0)
-    f_st_sell = (f_st_neg_cnt >= 2 and (f1 + f3 + f5) < 0)
-    i_st_buy = (i_st_pos_cnt >= 2 and (i1 + i3 + i5) > 0)
-    i_st_sell = (i_st_neg_cnt >= 2 and (i1 + i3 + i5) < 0)
+    f_st_buy = f_st_valid and (f_st_pos_cnt >= 2 and (f1 + f3 + f5) > 0)
+    f_st_sell = f_st_valid and (f_st_neg_cnt >= 2 and (f1 + f3 + f5) < 0)
+    i_st_buy = i_st_valid and (i_st_pos_cnt >= 2 and (i1 + i3 + i5) > 0)
+    i_st_sell = i_st_valid and (i_st_neg_cnt >= 2 and (i1 + i3 + i5) < 0)
 
-    # 중기 (10D, 20D)
-    f_mt_neg = (f10 <= 0 or f20 <= 0 or (f10 + f20) <= 0)
-    i_mt_neg = (i10 <= 0 or i20 <= 0 or (i10 + i20) <= 0)
+    # 중기 수급 가공 (유효한 경우만 계산)
+    f_mt_neg = f_mt_valid and (f10 <= 0 or f20 <= 0 or (f10 + f20) <= 0)
+    i_mt_neg = i_mt_valid and (i10 <= 0 or i20 <= 0 or (i10 + i20) <= 0)
 
-    # 전 기간 (1D~20D)
-    f_all_pos = all(_is_pos(v) for v in [f1, f3, f5, f10, f20])
-    i_all_pos = all(_is_pos(v) for v in [i1, i3, i5, i10, i20])
+    # 전 기간 수급 가공 (유효하고 전 기간 > 0 인 경우만)
+    f_all_pos = f_all_valid and all(float(v) > 0 for v in [f1, f3, f5, f10, f20])
+    i_all_pos = i_all_valid and all(float(v) > 0 for v in [i1, i3, i5, i10, i20])
+
+    # 엄격한 JOINT_BUY (6개 값 모두 유효하고 > 0)
+    f_st_strict_buy = f_st_valid and float(f1) > 0 and float(f3) > 0 and float(f5) > 0
+    i_st_strict_buy = i_st_valid and float(i1) > 0 and float(i3) > 0 and float(i5) > 0
+    is_strict_joint_buy = f_st_strict_buy and i_st_strict_buy
 
     # 4. 수급 패턴 식별 (Prioritized Pattern Classification)
     pattern = "MIXED"
     tier = "TIER_C"
     reasons = []
 
-    # A. PERSISTENT_ACCUMULATION (단기/중기 전 기간 지속 매집)
-    if (f_all_pos and i5 >= 0) or (i_all_pos and f5 >= 0) or (f_all_pos and i_all_pos):
+    # A. PERSISTENT_ACCUMULATION (5개 값 모두 유효하고전 기간 > 0 인 주체가 존재할 때만 허용)
+    if (f_all_pos and _is_valid(i5) and i5 >= 0) or (i_all_pos and _is_valid(f5) and f5 >= 0) or (f_all_pos and i_all_pos):
         pattern = "PERSISTENT_ACCUMULATION"
         tier = "TIER_A"
         if f_all_pos and i_all_pos:
@@ -121,32 +157,34 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
         else:
             reasons.append("기관 1D~20D 전 기간 지속 매집 유입")
 
-    # B. JOINT_BUY (외국인·기관 엄격 동반 순매수 / 6개 수급 1D/3D/5D 모두 > 0)
+    # B. JOINT_BUY (외국인·기관 6개 단기 수급 모두 유효 및 > 0)
     elif is_strict_joint_buy:
         pattern = "JOINT_BUY"
         tier = "TIER_A"
         reasons.append("외국인·기관 단기(1D/3D/5D) 동반 순매수(쌍끌이)")
 
-    # C. FLOW_IMPROVING (중기 약세/매도에서 최근 단기 수급 개선)
-    elif (f_mt_neg and f_st_buy) or (i_mt_neg and i_st_buy):
+    # C. FLOW_IMPROVING (단기/중기 필수 데이터가 모두 유효할 때만 허용)
+    elif (f_mt_valid and f_st_valid and f_mt_neg and f_st_buy) or (i_mt_valid and i_st_valid and i_mt_neg and i_st_buy):
         pattern = "FLOW_IMPROVING"
-        # 외국인/기관 모두 단기 전환 시 TIER_A, 한쪽만 강하게 전환 시 TIER_A or TIER_B
-        if f_st_buy and i_st_buy:
+        f_improving = f_mt_valid and f_st_valid and f_mt_neg and f_st_buy
+        i_improving = i_mt_valid and i_st_valid and i_mt_neg and i_st_buy
+
+        if f_improving and i_improving:
             tier = "TIER_A"
             reasons.append("중기 약세 탈출, 외국인·기관 단기 수급 턴어라운드 동반 순매수")
-        elif f_st_buy and i5 >= 0:
+        elif f_improving and _is_valid(i5) and i5 >= 0:
             tier = "TIER_A"
             reasons.append("중기 매도세 극복, 외국인 단기 수급 강한 개선 전환")
-        elif i_st_buy and f5 >= 0:
+        elif i_improving and _is_valid(f5) and f5 >= 0:
             tier = "TIER_A"
             reasons.append("중기 매도세 극복, 기관 단기 수급 강한 개선 전환")
         else:
             tier = "TIER_B"
-            improving_target = "외국인" if f_st_buy else "기관"
+            improving_target = "외국인" if f_improving else "기관"
             reasons.append(f"중기 매도 대비 {improving_target} 단기 수급 개선 유입")
 
-    # D. DETERIORATING (최근 단기 수급 악화)
-    elif (f_st_sell and i_st_sell) or (f_st_sell and i5 <= 0) or (i_st_sell and f5 <= 0):
+    # D. DETERIORATING (단기 수급 악화)
+    elif (f_st_sell and i_st_sell) or (f_st_sell and _is_valid(i5) and i5 <= 0) or (i_st_sell and _is_valid(f5) and f5 <= 0):
         pattern = "DETERIORATING"
         tier = "TIER_D"
         if f_st_sell and i_st_sell:
@@ -157,8 +195,7 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     # E. MIXED (기타 방향 엇갈림 or 기간별 혼조)
     else:
         pattern = "MIXED"
-        # 단기 긍정 수급이 일부 존재하면 TIER_B, 그렇지 않으면 TIER_C
-        if (f1 > 0 and f5 > 0) or (i1 > 0 and i5 > 0):
+        if (_is_pos(f1) and _is_pos(f5)) or (_is_pos(i1) and _is_pos(i5)):
             tier = "TIER_B"
             reasons.append("외국인/기관 수급 방향 엇갈림 속 부분적 단기 순매수")
         else:
@@ -189,6 +226,8 @@ def process_candidates_flow_parallel(
     if not candidates:
         return results
 
+    def_flow_dict = {p: {"net_buy": None, "direction": "중립", "valid": False} for p in ["1d", "3d", "5d", "10d", "20d"]}
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_cand = {executor.submit(analyze_candidate_flow, cand): cand for cand in candidates}
         for future in concurrent.futures.as_completed(future_to_cand):
@@ -202,8 +241,8 @@ def process_candidates_flow_parallel(
                     **cand,
                     "flow_status": "TIMEOUT",
                     "data_available": False,
-                    "foreign": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
-                    "institution": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
+                    "foreign": def_flow_dict,
+                    "institution": def_flow_dict,
                     "flow_pattern": "DATA_INSUFFICIENT",
                     "flow_tier": "TIER_D",
                     "flow_reasons": ["수급 분석 타임아웃 발생"]
@@ -214,8 +253,8 @@ def process_candidates_flow_parallel(
                     **cand,
                     "flow_status": "EXCEPTION",
                     "data_available": False,
-                    "foreign": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
-                    "institution": {p: {"net_buy": 0.0, "direction": "중립"} for p in ["1d", "3d", "5d", "10d", "20d"]},
+                    "foreign": def_flow_dict,
+                    "institution": def_flow_dict,
                     "flow_pattern": "DATA_INSUFFICIENT",
                     "flow_tier": "TIER_D",
                     "flow_reasons": [f"수급 분석 중 예외 발생: {str(e)}"]
@@ -235,18 +274,22 @@ def _compress_stage3_candidates(
     Tier 및 수급 긍정 가점 기준으로 Stage3 정밀분석 대상 후보 압축
     - 1순위: TIER_A (지속매집, 쌍끌이, 강력 턴어라운드)
     - 2순위: TIER_B (부분적 긍정 수급, 개선 전환)
-    - TIER_C/D는 정밀분석 압축 후보에서 기본 제외
+    - TIER_C/D는 정밀분석 압축 후보에서 기본 제외 (DATA_INSUFFICIENT는 TIER_D이므로 자동 제외)
     - 시장 수급 조건 충족 종목이 적으면 억지로 숫자를 채우지 않음 (가짜 후보 생성 금지)
     """
     tier_a = [c for c in analyzed_candidates if c.get("flow_tier") == "TIER_A"]
     tier_b = [c for c in analyzed_candidates if c.get("flow_tier") == "TIER_B"]
 
     def _flow_score(c):
-        # 수급 긍정 결합도 계산 (정렬 보조용)
-        f_5d = c.get("foreign", {}).get("5d", {}).get("net_buy", 0.0)
-        i_5d = c.get("institution", {}).get("5d", {}).get("net_buy", 0.0)
-        f_1d = c.get("foreign", {}).get("1d", {}).get("net_buy", 0.0)
-        i_1d = c.get("institution", {}).get("1d", {}).get("net_buy", 0.0)
+        # 수급 긍정 결합도 계산 (정렬 보조용, None은 0.0 처리하여 비교 안전성 확보)
+        def _val(group, period):
+            v = c.get(group, {}).get(period, {}).get("net_buy")
+            return float(v) if v is not None and not pd.isna(v) else 0.0
+
+        f_5d = _val("foreign", "5d")
+        i_5d = _val("institution", "5d")
+        f_1d = _val("foreign", "1d")
+        i_1d = _val("institution", "1d")
         return (f_5d + i_5d) + (f_1d + i_1d)
 
     tier_a_sorted = sorted(tier_a, key=_flow_score, reverse=True)
