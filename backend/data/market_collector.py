@@ -112,18 +112,20 @@ def fetch_market_indices() -> dict:
         indices["kospi"]["status"] = "데이터 수집 실패"
         indices["kosdaq"]["status"] = "데이터 수집 실패"
 
-    # 2. 환율
-    url_market = "https://finance.naver.com/marketindex/"
+    # 2. 환율 (Naver Marketindex API)
+    url_usd_api = "https://api.stock.naver.com/marketindex/exchange/FX_USDKRW"
     try:
-        resp = requests.get(url_market, headers=HEADERS, timeout=5, verify=False)
+        resp = requests.get(url_usd_api, headers=HEADERS, timeout=5, verify=False)
         if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            usd_tag = soup.select_one("a.head.usd div.head_info span.value")
-            if usd_tag:
-                v = extract_float(usd_tag.text)
-                indices["exchange_rate"] = {"name": "원/달러 환율", "value": v, "unit": "원", "status": "정상"}
+            data = resp.json()
+            info = data.get("exchangeInfo", {}) if "exchangeInfo" in data else data
+            close_price_raw = info.get("closePrice") or info.get("calcPrice") or data.get("closePrice")
+            if close_price_raw:
+                v = extract_float(str(close_price_raw))
+                if v > 0:
+                    indices["exchange_rate"] = {"name": "원/달러 환율", "value": v, "unit": "원", "status": "정상"}
     except Exception as e:
-        logger.warning(f"Market index fetch warning: {e}")
+        logger.warning(f"Market USD index fetch warning: {e}")
         indices["exchange_rate"]["status"] = "데이터 수집 실패"
 
     # 3. 해외지수 (S&P500, NASDAQ, DOW) - Yahoo Finance API 활용
