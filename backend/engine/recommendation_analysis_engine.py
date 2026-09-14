@@ -22,6 +22,22 @@ from backend.engine.decision_engine import (
 logger = logging.getLogger(__name__)
 
 
+_QUANT_CHART_CACHE: Dict[str, tuple] = {}
+_CHART_CACHE_TTL = 600  # 10분 TTL
+
+
+def _get_cached_chart_analysis(ticker: str, timeframe: str = 'day') -> Optional[Dict[str, Any]]:
+    now = time.time()
+    if ticker in _QUANT_CHART_CACHE:
+        ts, res = _QUANT_CHART_CACHE[ticker]
+        if now - ts < _CHART_CACHE_TTL:
+            return res
+    res = fetch_stock_chart_analysis(ticker, timeframe=timeframe)
+    if res and res.get("status") == "success":
+        _QUANT_CHART_CACHE[ticker] = (now, res)
+    return res
+
+
 def classify_etf_type(name: str) -> str:
     """
     ETF 상품명 기반 9가지 상세 자산군/유형 분류
@@ -110,9 +126,9 @@ def analyze_quant_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
             "pullback_candidate": False
         }
 
-    # 1. 차트/가격 데이터 수집 (collector 기존 fetch_stock_chart_analysis 재사용)
+    # 1. 차트/가격 데이터 수집 (collector 기존 fetch_stock_chart_analysis 재사용 + 캐시 적용)
     try:
-        chart_res = fetch_stock_chart_analysis(ticker, timeframe='day')
+        chart_res = _get_cached_chart_analysis(ticker, timeframe='day')
     except Exception as e:
         logger.warning(f"[QuantEngine] Chart fetch exception for {name}({ticker}): {e}")
         chart_res = None
@@ -288,7 +304,10 @@ def analyze_quant_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
             mid_reasons.append("중기 수급 이탈 및 악화")
     elif flow_t == "TIER_A" and trend_up and not overheated and rsi_latest <= 65.0:
         mid_grade = "STRONG_CANDIDATE"
-        mid_reasons.append("중기 매집 수급 + 60/120일선 정배열 상승 구조 충족")
+        if ma60_val >= ma120_val:
+            mid_reasons.append("중기 매집 수급 + 60/120일선 정배열 상승 구조 충족")
+        else:
+            mid_reasons.append(f"중기 매집 수급 + 60일선 지지 및 6개월 추세 상승(+{trend_6m}%)")
     elif flow_t in ["TIER_A", "TIER_B"] and close_latest >= ma60_val * 0.95 and flow_p != "DETERIORATING":
         mid_grade = "CANDIDATE"
         mid_reasons.append("중기 수급 유입 및 60일선 지지 구조 형성")
