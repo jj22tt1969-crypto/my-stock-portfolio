@@ -563,6 +563,47 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- ───────────────────────────────────────────────────────────── -->
+                        <!-- 🎯 AI 전체시장 종목/ETF 추천 영역 (독립 2단계 신규 추가) -->
+                        <!-- ───────────────────────────────────────────────────────────── -->
+                        <div class="qna-recommend-card" id="recDashboardCard" style="margin-top: 24px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 16px; padding: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
+                            <div class="rec-header-row" style="margin-bottom: 16px; border-bottom: 1px dashed rgba(255, 255, 255, 0.1); padding-bottom: 12px;">
+                                <h3 style="font-size: 16.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    🎯 AI 전체시장 종목/ETF 추천
+                                </h3>
+                                <p style="font-size: 12.5px; color: #94a3b8; margin: 6px 0 0 0; line-height: 1.4;">
+                                    KOSPI·KOSDAQ 전체 종목 및 국내 ETF를 외국인·기관 수급과 기술지표를 기반으로 탐색합니다.
+                                </p>
+                            </div>
+
+                            <!-- 신규 빠른 추천 질문 칩 6개 -->
+                            <div class="rec-quick-prompts-row" id="recQuickPrompts" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+                                <span style="font-size: 12px; font-weight: 700; color: #cbd5e1; display: flex; align-items: center; margin-right: 4px;">💡 추천 예제:</span>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('단기 매매 후보 5개 찾아줘')">⚡ 단기 매매 후보 5개</button>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('중기 ETF 3개 추천해줘')">🧺 중기 ETF 3개</button>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('외국인 기관 쌍끌이 종목 찾아줘')">🔥 외인·기관 쌍끌이</button>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('최근 수급이 개선된 종목 알려줘')">📈 최근 수급 개선</button>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('과열되지 않은 상승추세 종목 찾아줘')">🛡️ 비과열 상승추세</button>
+                                <button class="prompt-chip rec-chip" onclick="selectRecQuickPrompt('현재 보유종목 중 단기 유망순으로 보여줘')">📱 보유종목 단기 유망순</button>
+                            </div>
+
+                            <!-- 추천 질문 입력 폼 -->
+                            <div class="rec-input-form" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+                                <textarea id="recQuestionText" placeholder="전체시장 추천 질문을 입력하세요... (예: 단기 수급이 강하게 들어오는 KOSPI 50 종목 3개 추천해줘)" rows="3" style="width: 100%; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; color: #f8fafc; padding: 12px; font-size: 13.5px; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button id="btnRecSubmit" class="btn btn-primary" onclick="submitRecommendQuestion()" style="background: linear-gradient(135deg, #0284c7, #38bdf8); border: none; color: #0f172a; font-weight: 800; padding: 10px 22px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px;">
+                                        🎯 종목 추천받기
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 추천 결과 영역 (Placeholder) -->
+                            <div class="rec-answer-card" id="recAnswerCard" style="display: none; background: rgba(30, 41, 59, 0.6); border: 1px dashed rgba(56, 189, 248, 0.4); border-radius: 12px; padding: 16px; margin-top: 14px;">
+                                <!-- submitRecommendQuestion 실행 시 placeholder 주입 -->
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -1043,6 +1084,6 @@
         <button class="btn-pwa-reload" onclick="reloadPwaApp()">새로고침 적용</button>
     </div>
 
-    <script src="/app.js?v=20260910_rmi_bollinger_fix"></script>
+    <script src="/app.js?v=20260914_recommend_ui_fix"></script>
 </body>
 </html>

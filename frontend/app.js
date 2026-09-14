@@ -4092,3 +4092,55 @@ async function ftDeleteSignal(signalId) {
     }
 }
 window.ftDeleteSignal = ftDeleteSignal;
+
+// ─────────────────────────────────────────────────────────────
+// 🎯 AI 전체시장 종목/ETF 추천 기능 (2단계 신규 독립 UI 전용)
+// ─────────────────────────────────────────────────────────────
+
+function selectRecQuickPrompt(promptText) {
+    const txtArea = document.getElementById('recQuestionText');
+    if (txtArea) {
+        txtArea.value = promptText;
+        txtArea.focus();
+    }
+}
+window.selectRecQuickPrompt = selectRecQuickPrompt;
+
+function renderRecommendPlaceholder(queryText) {
+    const cardEl = document.getElementById('recAnswerCard');
+    if (!cardEl) return;
+
+    cardEl.style.display = 'block';
+    cardEl.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed rgba(56, 189, 248, 0.3); padding-bottom: 8px;">
+            <div style="font-size: 14.5px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                🎯 AI 전체시장 종목 추천 엔진 준비 중
+            </div>
+            <span style="padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                2단계 UI 전용 (Placeholder)
+            </span>
+        </div>
+        <div style="font-size: 13px; color: #f1f5f9; font-weight: 700; margin-bottom: 6px;">
+            📌 입력한 질문: "<span style="color: #38bdf8;">${queryText}</span>"
+        </div>
+        <div style="font-size: 12.5px; color: #cbd5e1; line-height: 1.6;">
+            추천 엔진을 준비 중입니다.<br>
+            다음 단계에서 KOSPI·KOSDAQ 전체시장 3,800여개 종목/ETF 3단계 다단계 스크리닝 엔진과 연결됩니다.
+        </div>
+    `;
+}
+window.renderRecommendPlaceholder = renderRecommendPlaceholder;
+
+function submitRecommendQuestion() {
+    const txtArea = document.getElementById('recQuestionText');
+    const question = txtArea ? txtArea.value.trim() : '';
+
+    if (!question) {
+        alert('추천 질문을 입력해주거나 상단 예제 질문을 선택해주세요.');
+        if (txtArea) txtArea.focus();
+        return;
+    }
+
+    renderRecommendPlaceholder(question);
+}
+window.submitRecommendQuestion = submitRecommendQuestion;
