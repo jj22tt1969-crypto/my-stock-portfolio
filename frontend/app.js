@@ -1734,9 +1734,25 @@ function renderComprehensiveReport(resData) {
     // ① 수급 판단 (외국인·기관)
     const flowTextEl = document.getElementById('compFlowText');
     if (flowTextEl) {
-        const ffcs = flow.ffcs_score !== undefined ? `${flow.ffcs_score.toFixed(1)}점` : "-";
-        const frgn = flow.foreign_net_buy !== undefined ? `${(flow.foreign_net_buy / 100000000).toFixed(1)}억` : "-";
-        const inst = flow.institution_net_buy !== undefined ? `${(flow.institution_net_buy / 100000000).toFixed(1)}억` : "-";
+        const ffcs = flow.ffcs_score !== undefined && flow.ffcs_score !== null ? `${Number(flow.ffcs_score).toFixed(1)}점` : "데이터 없음";
+
+        const format1DFlow = (val) => {
+            if (val === null || val === undefined || isNaN(val)) {
+                return "데이터 없음";
+            }
+            const eok = val / 100000000;
+            if (eok > 0) return `+${eok.toFixed(2)}억`;
+            if (eok < 0) return `${eok.toFixed(2)}억`;
+            return `0.00억`;
+        };
+
+        const pData = flow.periods_analysis || {};
+        const frgnRaw = (pData.foreign && pData.foreign['1d']) ? pData.foreign['1d'].net_buy : null;
+        const instRaw = (pData.institution && pData.institution['1d']) ? pData.institution['1d'].net_buy : null;
+
+        const frgn = format1DFlow(frgnRaw);
+        const inst = format1DFlow(instRaw);
+
         flowTextEl.innerHTML = `• <strong>FFCS 수급점수:</strong> ${ffcs}<br>• <strong>단기/중기 수급:</strong> ${flowRes.summary}<br>• <strong>최근 1일 수급:</strong> 외인(${frgn}) / 기관(${inst})`;
     }
 
