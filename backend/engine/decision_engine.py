@@ -26,7 +26,7 @@ def calculate_buy_score(flow_res: Dict[str, Any], tech_res: Dict[str, Any]) -> D
     concurrency_code = flow_res.get("concurrency", {}).get("code", "")
     if concurrency_code == "BOTH_BUY":
         score += 15.0
-        reasons.append("외국인+기관 쌍끌이 동시 순매수")
+        reasons.append("최근 5일 누적 외국인·기관 동반 순매수")
     elif concurrency_code == "FRGN_BUY_INST_SELL":
         score += 10.0
     elif concurrency_code == "FRGN_SELL_INST_BUY":
@@ -101,7 +101,7 @@ def calculate_sell_score(flow_res: Dict[str, Any], tech_res: Dict[str, Any]) -> 
 
     if concurrency_code == "BOTH_SELL":
         score += 35.0
-        reasons.append("외국인+기관 쌍끌이 동시 순매도 발생")
+        reasons.append("최근 5일 누적 외국인·기관 동반 순매도")
     elif f_dir == "매도":
         score += 20.0
         reasons.append("외국인 매도세 전환")
@@ -388,7 +388,7 @@ def apply_conditional_trend_filter(
     # 예외 1: 외국인 + 기관/연기금 동시 순매수
     concurrency_code = flow_res.get("concurrency", {}).get("code", "")
     if concurrency_code == "BOTH_BUY":
-        exceptions.append("외인+기관 쌍끌이 동시 순매수")
+        exceptions.append("최근 5일 누적 외국인·기관 동반 순매수")
 
     # 예외 2: RMI / RSI 과매도 구간 반등 (RSI <= 38)
     rsi_val = tech_res.get("rsi", 50.0)

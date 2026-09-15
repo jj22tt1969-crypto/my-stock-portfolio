@@ -119,16 +119,16 @@ def determine_concurrency(foreign_net: float, inst_net: float) -> Dict[str, str]
     """
     if foreign_net > 0 and inst_net > 0:
         code = "BOTH_BUY"
-        desc = "외국인 + 기관 동시매수 (쌍끌이 매수)"
+        desc = "최근 5일 누적 외국인·기관 동반 순매수"
     elif foreign_net < 0 and inst_net < 0:
         code = "BOTH_SELL"
-        desc = "외국인 + 기관 동시매도 (쌍끌이 매도)"
+        desc = "최근 5일 누적 외국인·기관 동반 순매도"
     elif foreign_net > 0 and inst_net < 0:
         code = "FRGN_BUY_INST_SELL"
-        desc = "외국인 매수 + 기관 매도 (외국인 주도 장세)"
+        desc = "최근 5일 누적 외국인 순매수 vs 기관 순매도 (외국인 주도 장세)"
     elif foreign_net < 0 and inst_net > 0:
         code = "FRGN_SELL_INST_BUY"
-        desc = "외국인 매도 + 기관 매수 (기관 방어 장세)"
+        desc = "최근 5일 누적 외국인 순매도 vs 기관 순매수 (기관 방어 장세)"
     else:
         code = "NEUTRAL"
         desc = "수급 관망 / 중립"
@@ -239,16 +239,16 @@ def calculate_ffcs(df: pd.DataFrame, period_analysis: Dict[str, Any]) -> Dict[st
     
     if concurrency_info["code"] == "BOTH_BUY":
         score_concurrency = 15.0
-        key_reasons.append("외국인과 기관의 쌍끌이 동시 순매수 포착")
+        key_reasons.append("최근 5일 누적 외국인·기관 동반 순매수 포착")
     elif concurrency_info["code"] == "BOTH_SELL":
         score_concurrency = 0.0
-        key_reasons.append("외국인과 기관의 쌍끌이 동시 순매도 포착")
+        key_reasons.append("최근 5일 누적 외국인·기관 동반 순매도 포착")
     elif concurrency_info["code"] == "FRGN_BUY_INST_SELL":
         score_concurrency = 10.0
-        key_reasons.append("외국인 매수 vs 기관 매도 (외국인 주도 장세)")
+        key_reasons.append("최근 5일 누적 외국인 순매수 vs 기관 순매도 (외국인 주도 장세)")
     elif concurrency_info["code"] == "FRGN_SELL_INST_BUY":
         score_concurrency = 5.0
-        key_reasons.append("외국인 매도 vs 기관 매수 (기관 방어 장세)")
+        key_reasons.append("최근 5일 누적 외국인 순매도 vs 기관 순매수 (기관 방어 장세)")
     else:
         score_concurrency = 7.5
 
