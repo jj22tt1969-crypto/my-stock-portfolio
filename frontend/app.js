@@ -1408,8 +1408,28 @@ function renderStockCards(items) {
 // 4. 상세 모달 및 차트 시각화
 let currentDetailFlowData = null;
 let currentInvestorBreakdownData = null;
+let activeDetailTicker = null;
 
 async function openDetailModal(ticker, name) {
+    const targetTickerStr = String(ticker);
+    activeDetailTicker = targetTickerStr;
+
+    // ⚡ 1. 사전 State 초기화: 이전 수급 객체가 재사용되지 않도록 초기화
+    currentDetailFlowData = null;
+    currentInvestorBreakdownData = null;
+
+    // ⚡ 2. 사전 Chart Destroy: 모달 오픈 즉시 이전 종목 차트 제거
+    if (detailChartInstance) {
+        try { detailChartInstance.destroy(); } catch (e) {}
+        detailChartInstance = null;
+    }
+    if (typeof Chart !== 'undefined' && Chart.getChart) {
+        const existingChart = Chart.getChart('stockDetailChart');
+        if (existingChart) {
+            try { existingChart.destroy(); } catch (e) {}
+        }
+    }
+
     const modal = document.getElementById('detailModal');
     modal.style.display = 'flex';
 
@@ -1417,14 +1437,19 @@ async function openDetailModal(ticker, name) {
 
     try {
         const resp = await fetch(`/api/decision/analyze?ticker=${ticker}`);
+        if (activeDetailTicker !== targetTickerStr) return; // ⚡ Race Condition Guard
+
         if (!resp.ok) {
+            if (activeDetailTicker !== targetTickerStr) return;
             document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
             renderDetailChart(null, null);
             return;
         }
         const resData = await resp.json();
+        if (activeDetailTicker !== targetTickerStr) return; // ⚡ Race Condition Guard
 
         if (resData.status !== "success") {
+            if (activeDetailTicker !== targetTickerStr) return;
             document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
             const compFlowTextEl = document.getElementById('compFlowText');
             if (compFlowTextEl) compFlowTextEl.innerHTML = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
