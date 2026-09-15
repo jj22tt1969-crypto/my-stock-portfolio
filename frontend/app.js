@@ -1433,10 +1433,20 @@ async function openDetailModal(ticker, name, focusSection = null) {
     const modal = document.getElementById('detailModal');
     modal.style.display = 'flex';
 
-    // ⚡ 4-D 모달 스크롤 초기화: 이전 종목의 scroll 위치가 남아있지 않도록 맨 위로 초기화
-    const modalBody = modal.querySelector('.modal-body') || modal.querySelector('.modal-content');
-    if (modalBody) {
-        modalBody.scrollTop = 0;
+    // ⚡ 모달 레이아웃 구조 보정: 모달 팝업 박스가 화면(85vh) 내에 피트되고 .modal-body 내부에서 스크롤되도록 고정
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.style.maxHeight = '85vh';
+        modalContent.style.display = 'flex';
+        modalContent.style.flexDirection = 'column';
+        modalContent.style.overflow = 'hidden';
+    }
+    const scrollContainer = modal.querySelector('.modal-body') || modalContent;
+    if (scrollContainer) {
+        scrollContainer.style.flex = '1';
+        scrollContainer.style.overflowY = 'auto';
+        scrollContainer.style.maxHeight = 'none';
+        scrollContainer.scrollTop = 0;
     }
 
     document.getElementById('modalStockTitle').innerText = `${name} (${ticker}) 상세 수급 & 기술적 차트`;
@@ -1541,18 +1551,20 @@ async function openDetailModal(ticker, name, focusSection = null) {
 
         renderDetailChart(flow, tech);
 
-        // ⚡ 4-D 수급 동향 focusSection 지정 시 모달 내부 '수급 상세분석' 영역으로 자동 위치 보정
-        if (focusSection === 'flow') {
+        // ⚡ 4-F 수급 동향 focusSection 지정 시 또는 차트 렌더링 후 스크롤 및 resize 동시 처리
+        setTimeout(() => {
+            if (activeDetailTicker !== targetTickerStr) return;
+            const scrollEl = modal.querySelector('.modal-body') || modal.querySelector('.modal-content');
             const targetSection = modal.querySelector('.flow-detail-section') || document.getElementById('stockDetailChart');
-            if (modalBody && targetSection) {
-                requestAnimationFrame(() => {
-                    if (activeDetailTicker !== targetTickerStr) return;
-                    const bodyRect = modalBody.getBoundingClientRect();
-                    const targetRect = targetSection.getBoundingClientRect();
-                    modalBody.scrollTop += (targetRect.top - bodyRect.top - 12);
-                });
+            if (focusSection === 'flow' && scrollEl && targetSection) {
+                const containerRect = scrollEl.getBoundingClientRect();
+                const targetRect = targetSection.getBoundingClientRect();
+                scrollEl.scrollTop += (targetRect.top - containerRect.top - 10);
             }
-        }
+            if (detailChartInstance) {
+                try { detailChartInstance.resize(); } catch (e) {}
+            }
+        }, 80);
 
     } catch (e) {
         console.error(e);
@@ -1826,7 +1838,7 @@ function renderComprehensiveReport(resData) {
     const summaryTextEl = document.getElementById('compSummaryText');
     const conflictBadgeEl = document.getElementById('compConflictBadge');
 
-    const isConflict = (cross.status_label && cross.status_label.includes("충돌")) || momRes.conflicts.length > 0;
+    const isConflict = (cross && cross.status_label && cross.status_label.includes("충돌")) || (momRes && Array.isArray(momRes.conflicts) && momRes.conflicts.length > 0);
     if (conflictBadgeEl) {
         conflictBadgeEl.style.display = isConflict ? "inline-block" : "none";
     }
@@ -2114,6 +2126,20 @@ function renderDetailChart(flow, tech) {
             }
         }
     });
+
+    // ⚡ 4-F Canvas resize 보정: scroll 이전 0x0 상태에서 생성된 Chart가 내용 없이 표시되는 것을 방지
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            if (detailChartInstance) {
+                try { detailChartInstance.resize(); } catch (e) {}
+            }
+        });
+    });
+    setTimeout(() => {
+        if (detailChartInstance) {
+            try { detailChartInstance.resize(); } catch (e) {}
+        }
+    }, 100);
 }
 
 function closeDetailModal() {
