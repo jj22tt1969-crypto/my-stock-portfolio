@@ -2095,6 +2095,20 @@ function renderDetailChart(flow, tech) {
             }
         }
     });
+
+    // ⚡ 4-B Canvas Resize Timing Sync: DOM layout 확정 시점에 맞춰 Chart.js resize() 실행 보정
+    if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(() => {
+            if (detailChartInstance) {
+                try { detailChartInstance.resize(); } catch (e) {}
+            }
+        });
+    }
+    setTimeout(() => {
+        if (detailChartInstance) {
+            try { detailChartInstance.resize(); } catch (e) {}
+        }
+    }, 50);
 }
 
 function closeDetailModal() {
