@@ -1392,7 +1392,7 @@ function renderStockCards(items) {
 
                     <!-- Footer -->
                     <div class="card-footer">
-                        <button class="btn-detail" onclick="openDetailModal('${item.ticker}', '${item.name}')">📈 수급 동향</button>
+                        <button class="btn-detail" onclick="openDetailModal('${item.ticker}', '${item.name}', 'flow')">📈 수급 동향</button>
                         <div class="footer-action-btns">
                             <button class="btn-edit" onclick="openEditStockModal(${item.id}, '${item.name}', ${item.avg_price}, ${item.quantity}, '${item.buy_date || ''}', '${item.investment_purpose || '장기투자'}', '${item.sector || '기타'}')">✏️ 수정</button>
                             <button class="btn-delete" onclick="handleDeleteStock(${item.id}, '${item.name}')">삭제</button>
@@ -1410,7 +1410,7 @@ let currentDetailFlowData = null;
 let currentInvestorBreakdownData = null;
 let activeDetailTicker = null;
 
-async function openDetailModal(ticker, name) {
+async function openDetailModal(ticker, name, focusSection = null) {
     const targetTickerStr = String(ticker);
     activeDetailTicker = targetTickerStr;
 
@@ -1432,6 +1432,12 @@ async function openDetailModal(ticker, name) {
 
     const modal = document.getElementById('detailModal');
     modal.style.display = 'flex';
+
+    // ⚡ 4-D 모달 스크롤 초기화: 이전 종목의 scroll 위치가 남아있지 않도록 맨 위로 초기화
+    const modalBody = modal.querySelector('.modal-body') || modal.querySelector('.modal-content');
+    if (modalBody) {
+        modalBody.scrollTop = 0;
+    }
 
     document.getElementById('modalStockTitle').innerText = `${name} (${ticker}) 상세 수급 & 기술적 차트`;
 
@@ -1534,6 +1540,19 @@ async function openDetailModal(ticker, name) {
         renderCrossAnalysis(resData.cross_analysis);
 
         renderDetailChart(flow, tech);
+
+        // ⚡ 4-D 수급 동향 focusSection 지정 시 모달 내부 '수급 상세분석' 영역으로 자동 위치 보정
+        if (focusSection === 'flow') {
+            const targetSection = modal.querySelector('.flow-detail-section') || document.getElementById('stockDetailChart');
+            if (modalBody && targetSection) {
+                requestAnimationFrame(() => {
+                    if (activeDetailTicker !== targetTickerStr) return;
+                    const bodyRect = modalBody.getBoundingClientRect();
+                    const targetRect = targetSection.getBoundingClientRect();
+                    modalBody.scrollTop += (targetRect.top - bodyRect.top - 12);
+                });
+            }
+        }
 
     } catch (e) {
         console.error(e);
@@ -2095,20 +2114,6 @@ function renderDetailChart(flow, tech) {
             }
         }
     });
-
-    // ⚡ 4-B Canvas Resize Timing Sync: DOM layout 확정 시점에 맞춰 Chart.js resize() 실행 보정
-    if (typeof requestAnimationFrame !== 'undefined') {
-        requestAnimationFrame(() => {
-            if (detailChartInstance) {
-                try { detailChartInstance.resize(); } catch (e) {}
-            }
-        });
-    }
-    setTimeout(() => {
-        if (detailChartInstance) {
-            try { detailChartInstance.resize(); } catch (e) {}
-        }
-    }, 50);
 }
 
 function closeDetailModal() {
@@ -3606,7 +3611,7 @@ function renderSingleQuoteCard(data, ticker, name) {
                 <button class="btn-detail" onclick="openStockHistoryModal('${safeTicker}', '${safeName}')" style="flex: 1; min-height: 40px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8;">
                     📈 6개월 추세선 & MFI 차트
                 </button>
-                <button class="btn-detail" onclick="openDetailModal('${safeTicker}', '${safeName}')" style="flex: 1; min-height: 40px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <button class="btn-detail" onclick="openDetailModal('${safeTicker}', '${safeName}', 'flow')" style="flex: 1; min-height: 40px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     📊 수급 동향
                 </button>
             </div>
