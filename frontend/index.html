@@ -112,7 +112,7 @@
                         <div style="position: relative; width: 100%;">
                             <input type="text" id="sidebarQuoteInput" placeholder="종목명 또는 코드 (예: 삼성전자, NAVER)" 
                                    oninput="handleSidebarQuoteSearch(this.value, event)" 
-                                   onkeydown="handleSidebarQuoteSearch(this.value, event); if(event.key==='Enter'){event.preventDefault(); submitSidebarQuoteSearch();}"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault(); submitSidebarQuoteSearch();}"
                                    style="width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 10px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; outline: none;" autocomplete="off">
                             <div id="sidebarQuoteCandidateList" class="suggestions-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; max-height: 220px; overflow-y: auto; background: var(--card-bg-solid); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin-top: 4px;"></div>
                         </div>

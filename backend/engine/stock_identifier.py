@@ -1,5 +1,8 @@
+import logging
 import re
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 # 주식 및 ETF 마스터 데이터베이스 (확장 가능한 마스터 레코드)
 STOCK_ETF_MASTER = [
@@ -171,6 +174,59 @@ BRAND_ALIAS_MAP = {
     "코액트": "KOACT"
 }
 
+# 전역 검색 유니버스 캐시
+_MERGED_SEARCH_UNIVERSE_CACHE: List[Dict[str, Any]] = []
+
+def get_search_universe() -> List[Dict[str, Any]]:
+    """
+    STOCK_ETF_MASTER + KRX 전체 상장 종목 병합 유니버스 반환.
+    ticker 기준 중복 제거하며 STOCK_ETF_MASTER 항목을 최우선 적용합니다.
+    KRX 로딩 실패 시 STOCK_ETF_MASTER만으로 안전하게 Fallback 동작합니다.
+    """
+    global _MERGED_SEARCH_UNIVERSE_CACHE
+    if _MERGED_SEARCH_UNIVERSE_CACHE:
+        return _MERGED_SEARCH_UNIVERSE_CACHE
+
+    master_tickers = set()
+    universe = []
+
+    # 1. STOCK_ETF_MASTER 항목 추가 (우선순위 1위)
+    for item in STOCK_ETF_MASTER:
+        t = str(item.get("ticker", "")).strip()
+        if t and t not in master_tickers:
+            master_tickers.add(t)
+            universe.append({
+                "name": item.get("name", ""),
+                "ticker": t,
+                "market": item.get("market", "KOSPI"),
+                "asset_type": item.get("asset_type", "STOCK"),
+                "manager": item.get("manager", "")
+            })
+
+    # 2. KRX 전체 상장종목 로딩 및 병합 (장애 Fallback 적용)
+    try:
+        from backend.engine.krx_loader import load_krx_all_stocks
+        krx_stocks = load_krx_all_stocks()
+        for item in krx_stocks:
+            t = str(item.get("ticker", "")).strip()
+            if t and t not in master_tickers:
+                master_tickers.add(t)
+                raw_type = str(item.get("asset_type", "STOCK")).upper()
+                asset_type = "ETF" if raw_type == "ETF" else "STOCK"
+
+                universe.append({
+                    "name": item.get("name", ""),
+                    "ticker": t,
+                    "market": item.get("market", "KOSPI"),
+                    "asset_type": asset_type,
+                    "manager": item.get("manager", "")
+                })
+    except Exception as e:
+        logger.warning(f"[StockIdentifier] KRX universe merge fallback (using STOCK_ETF_MASTER only): {e}")
+
+    _MERGED_SEARCH_UNIVERSE_CACHE = universe
+    return _MERGED_SEARCH_UNIVERSE_CACHE
+
 
 def search_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, Any]]:
     """
@@ -201,8 +257,9 @@ def search_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, A
 
     results = []
     target_type = asset_type.upper() if asset_type else "ALL"
+    universe = get_search_universe()
 
-    for item in STOCK_ETF_MASTER:
+    for item in universe:
         item_type = item["asset_type"].upper()
         name_upper = item["name"].upper()
         ticker = item["ticker"]
@@ -236,42 +293,12 @@ def search_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, A
             if target_type != "ALL" and target_type == item_type:
                 score += 10
 
-            results.append({**item, "match_type": match_type, "score": score})
-
-        if target_type != "ALL" and target_type != item_type:
-            # 타겟 자산 유형(STOCK/ETF)이 지정된 경우 비대상은 기본 스킵하되 점수 조정으로 후순위화
-            pass
-
-        name_upper = item["name"].upper()
-        ticker = item["ticker"]
-        manager = item["manager"].upper()
-
-        score = 0
-        match_type = ""
-
-        # 1. Exact ticker match
-        if q == ticker:
-            score = 100
-            match_type = "EXACT_TICKER"
-        # 2. Exact name match
-        elif q == name_upper or q_mapped == name_upper:
-            score = 95
-            match_type = "EXACT_NAME"
-        # 3. Starts with name match
-        elif name_upper.startswith(q) or name_upper.startswith(q_mapped):
-            score = 88
-            match_type = "STARTS_WITH_NAME"
-        # 4. Partial name or ticker match
-        elif q in ticker or q in name_upper or q_mapped in name_upper or (manager and (q in manager or q_mapped in manager)):
-            score = 75 if (q in name_upper or q_mapped in name_upper) else 60
-            match_type = "PARTIAL"
-
-        if score > 0:
-            # asset_type 필터 가중치 (선택한 모드와 일치하면 +10점)
-            if target_type != "ALL" and target_type == item_type:
-                score += 10
-
-            results.append({**item, "match_type": match_type, "score": score})
+            results.append({
+                **item,
+                "type": item["asset_type"],
+                "match_type": match_type,
+                "score": score
+            })
 
     # 점수 높은 순 정렬
     results.sort(key=lambda x: x["score"], reverse=True)
@@ -288,8 +315,7 @@ def get_stock_by_ticker_or_name(query: str, asset_type: str = "ALL") -> Dict[str
 
 def search_all_stock_or_etf(query: str, asset_type: str = "ALL") -> List[Dict[str, Any]]:
     """
-    STOCK_ETF_MASTER를 기반으로 코스피, 코스닥 대표 상장종목 및 ETF를 초고속(1ms 미만)으로 탐색합니다.
-    (해외 클라우드 IP 접속 블로킹을 방지하기 위해 외부 fdr.StockListing 다운로드를 배제하고 안전한 static 마스터를 활용합니다.)
+    STOCK_ETF_MASTER 및 KRX 전체 상장 종목을 기반으로 상장종목 및 ETF를 탐색합니다.
     """
     if not query or not query.strip():
         return []

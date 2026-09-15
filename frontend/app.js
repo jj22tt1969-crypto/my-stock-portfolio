@@ -3179,6 +3179,7 @@ function closeIndexChartModal() {
 // 좌측 사이드바 '주식현재가' 검색 & 카드 시각화 로직
 // ==========================================
 let sidebarQuoteDebounceTimer = null;
+let sidebarQuoteSearchSeq = 0;
 let selectedSidebarTicker = "";
 let selectedSidebarName = "";
 let sidebarHighlightIndex = -1;
@@ -3236,7 +3237,10 @@ function handleSidebarQuoteSearch(val, event) {
     selectedSidebarTicker = ""; // 입력 변경 시 이전 선택 초기화
     sidebarHighlightIndex = -1;
 
-    if (!val || !val.trim()) {
+    const seq = ++sidebarQuoteSearchSeq;
+    const query = String(val || '').trim();
+
+    if (!query) {
         hideSidebarQuoteSuggestions();
         return;
     }
@@ -3244,9 +3248,15 @@ function handleSidebarQuoteSearch(val, event) {
     // ⚡ 쾌속 반응 (30ms 초고속 디바운스)
     sidebarQuoteDebounceTimer = setTimeout(async () => {
         try {
-            const resp = await fetch(`/api/qna/search-target?query=${encodeURIComponent(val.trim())}`);
+            const resp = await fetch(`/api/qna/search-target?query=${encodeURIComponent(query)}`);
             if (!resp.ok) return;
             const data = await resp.json();
+
+            // 🛡️ Latest Query Guard
+            if (seq !== sidebarQuoteSearchSeq) return;
+            const input = document.getElementById('sidebarQuoteInput');
+            if (!input || input.value.trim() !== query) return;
+
             renderSidebarQuoteCandidates(data.candidates || []);
         } catch (e) {
             console.error("Sidebar quote search error:", e);
