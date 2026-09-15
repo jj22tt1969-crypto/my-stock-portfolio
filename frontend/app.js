@@ -3315,11 +3315,125 @@ function selectSidebarQuoteSuggestion(name, ticker) {
     submitSidebarQuoteSearch();
 }
 
+// ==========================================
+// 📱 모바일 현재가 종목 검색 자동완성 전용 로직
+// ==========================================
+let mobileQuoteSearchSeq = 0;
+let mobileQuoteDebounceTimer = null;
+let selectedMobileTicker = "";
+
+function hideMobileQuoteSuggestions() {
+    if (mobileQuoteDebounceTimer) clearTimeout(mobileQuoteDebounceTimer);
+    const listEl = document.getElementById('mobileQuoteCandidateList');
+    if (listEl) {
+        listEl.style.display = 'none';
+        listEl.innerHTML = '';
+    }
+}
+
+// 🛡️ 스크롤 및 외부 클릭 시 모바일 드롭다운 닫기 이벤트
+window.addEventListener('scroll', () => {
+    hideMobileQuoteSuggestions();
+}, { passive: true });
+
+document.addEventListener('click', (e) => {
+    const mobileBox = document.querySelector('.mobile-quote-search-bar');
+    if (mobileBox && !mobileBox.contains(e.target)) {
+        hideMobileQuoteSuggestions();
+    }
+});
+
+function handleMobileQuoteSearch(val) {
+    if (mobileQuoteDebounceTimer) clearTimeout(mobileQuoteDebounceTimer);
+    selectedMobileTicker = ""; // 입력 변경 시 이전 선택 초기화
+
+    const seq = ++mobileQuoteSearchSeq;
+    const query = String(val || '').trim();
+
+    if (!query) {
+        hideMobileQuoteSuggestions();
+        return;
+    }
+
+    // ⚡ 쾌속 반응 (30ms 초고속 디바운스)
+    mobileQuoteDebounceTimer = setTimeout(async () => {
+        try {
+            const resp = await fetch(`/api/qna/search-target?query=${encodeURIComponent(query)}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+
+            // 🛡️ Latest Query Guard
+            if (seq !== mobileQuoteSearchSeq) return;
+            const input = document.getElementById('mobileQuoteInput');
+            if (!input || input.value.trim() !== query) return;
+
+            renderMobileQuoteCandidates(data.candidates || []);
+        } catch (e) {
+            console.error("Mobile quote search error:", e);
+        }
+    }, 30);
+}
+
+function renderMobileQuoteCandidates(candidates) {
+    const listEl = document.getElementById('mobileQuoteCandidateList');
+    if (!listEl) return;
+
+    const seenTickers = new Set();
+    const uniqueCandidates = (candidates || []).filter(c => {
+        if (!c.ticker || seenTickers.has(c.ticker)) return false;
+        seenTickers.add(c.ticker);
+        return true;
+    });
+
+    if (!uniqueCandidates || uniqueCandidates.length === 0) {
+        listEl.innerHTML = `<div style="padding: 10px; font-size: 11px; color: #94a3b8; text-align: center;">검색 결과가 없습니다.</div>`;
+        listEl.style.display = 'block';
+        return;
+    }
+
+    let html = '';
+    uniqueCandidates.forEach(item => {
+        const isEtf = item.asset_type === 'ETF' || item.type === 'ETF';
+        const typeBadge = isEtf
+            ? `<span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 6px;">ETF</span>`
+            : `<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 6px;">${item.market || 'KOSPI'}</span>`;
+
+        const escapedName = (item.name || '').replace(/'/g, "\\'");
+        html += `
+            <div class="candidate-item" onclick="selectMobileQuoteSuggestion('${escapedName}', '${item.ticker}')"
+                 style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-color, #e2e8f0);">${item.name}</span>
+                    ${typeBadge}
+                </div>
+                <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">${item.ticker}</span>
+            </div>
+        `;
+    });
+
+    listEl.innerHTML = html;
+    listEl.style.display = 'block';
+}
+
+function selectMobileQuoteSuggestion(name, ticker) {
+    const mobileInput = document.getElementById('mobileQuoteInput');
+    if (mobileInput) {
+        mobileInput.value = name;
+    }
+    selectedMobileTicker = ticker;
+    hideMobileQuoteSuggestions();
+}
+
 function submitMobileQuoteSearch() {
+    hideMobileQuoteSuggestions();
     const mobileInput = document.getElementById('mobileQuoteInput');
     const sidebarInput = document.getElementById('sidebarQuoteInput');
     if (mobileInput && sidebarInput) {
         sidebarInput.value = mobileInput.value.trim();
+        if (selectedMobileTicker) {
+            selectedSidebarTicker = selectedMobileTicker;
+            selectedMobileTicker = "";
+        }
     }
     submitSidebarQuoteSearch();
 }
