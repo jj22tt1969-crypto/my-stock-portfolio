@@ -1445,6 +1445,19 @@ async function openDetailModal(ticker, name) {
         }
         const data = resData.data;
 
+        // ⚡ Live Sync: 상세 모달 실시간 응답 수신 시, 동일 ticker의 메인 카드가 DOM에 존재하면 동일 response로 동기화 갱신
+        try {
+            const targetTicker = resData.ticker || ticker;
+            const targetName = resData.name || name;
+            const safeTicker = String(targetTicker).replace(/'/g, "\\'");
+            const mainCardEl = document.getElementById(`stock-card-quote-${safeTicker}`);
+            if (mainCardEl) {
+                renderSingleQuoteCard(data, targetTicker, targetName);
+            }
+        } catch (syncErr) {
+            console.warn("[LiveSync] Main card sync warning:", syncErr);
+        }
+
         const flow = data.flow_analysis || {};
         const tech = data.technical_analysis || {};
         const dec = data.decision || {};
