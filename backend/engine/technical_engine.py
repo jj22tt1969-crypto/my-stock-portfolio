@@ -17,7 +17,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
     df = df.copy()
     close = df['close_price'].astype(float)
     volume = df['volume'].astype(float)
-    trading_val = df['trading_value'].astype(float)
+    trading_val = df['trading_value'].astype(float) if ('trading_value' in df.columns and not df['trading_value'].empty) else (close * volume)
 
     # 1. 이동평균선 (MA5, MA20, MA60)
     df['ma5'] = close.rolling(window=5, min_periods=1).mean()
@@ -151,6 +151,56 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
             "ma120_slope": round(ma120_slope, 2)
         }
 
+    # 7. 거래량 & 거래대금 상세 분석 (STEP 2.1: 당일 제외 직전 20일 평균 기준 & turnover_source 구분)
+    if len(df) < 21:
+        volume_analysis = {
+            "available": False,
+            "reason": "거래량/거래대금 분석을 위한 데이터 수량 부족 (최소 21일 이상 필요)"
+        }
+    else:
+        latest_vol = float(volume.iloc[-1])
+        has_tval = ('trading_value' in df.columns and not df['trading_value'].empty and not pd.isna(df['trading_value'].iloc[-1]))
+        tval_series = trading_val if has_tval else (close * volume)
+        turnover_source = "ACTUAL" if has_tval else "ESTIMATED"
+
+        latest_tval = float(tval_series.iloc[-1])
+
+        # 당일을 제외한 직전 20거래일 평균 (iloc[-21:-1])
+        prev_v20_avg = float(volume.iloc[-21:-1].mean())
+        prev_t20_avg = float(tval_series.iloc[-21:-1].mean())
+
+        v_ratio = round(latest_vol / prev_v20_avg, 2) if prev_v20_avg > 0 else 1.0
+        t_ratio = round(latest_tval / prev_t20_avg, 2) if prev_t20_avg > 0 else 1.0
+
+        comb_ratio = (v_ratio + t_ratio) / 2.0
+
+        if comb_ratio >= 2.0:
+            v_state = "VERY_HIGH"
+        elif comb_ratio >= 1.3:
+            v_state = "HIGH"
+        elif comb_ratio >= 0.7:
+            v_state = "NORMAL"
+        else:
+            v_state = "LOW"
+
+        v_reasons = [
+            f"현재 거래량이 직전 20일 평균의 {v_ratio:.1f}배",
+            f"현재 거래대금이 직전 20일 평균의 {t_ratio:.1f}배"
+        ]
+        if v_ratio >= 1.5 and t_ratio >= 1.5:
+            v_reasons.append("거래량과 거래대금 모두 동반 급증")
+        elif v_ratio < 0.7 and t_ratio < 0.7:
+            v_reasons.append("거래량과 거래대금 모두 관망세 저조")
+
+        volume_analysis = {
+            "available": True,
+            "volume_ratio": v_ratio,
+            "turnover_ratio": t_ratio,
+            "turnover_source": turnover_source,
+            "volume_state": v_state,
+            "volume_reasons": v_reasons[:3]
+        }
+
     return {
         "data_available": True,
         "latest_close": int(latest_close),
@@ -173,5 +223,6 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
         "dist_to_resistance": round(dist_to_resistance, 2),
         "is_aligned_bullish": is_aligned_bullish,
         "is_aligned_bearish": is_aligned_bearish,
-        "trend_analysis": trend_analysis
+        "trend_analysis": trend_analysis,
+        "volume_analysis": volume_analysis
     }
