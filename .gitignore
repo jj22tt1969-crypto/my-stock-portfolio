@@ -5,3 +5,8 @@ __pycache__/
 .idea/
 .vscode/
 *_backup_sqlite.db
+*.db
+portfolio.db
+backend/data/portfolio.db
+*.zip
+GEMINI.md
