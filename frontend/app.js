@@ -1808,6 +1808,44 @@ function renderComprehensiveReport(resData) {
         const mfi = tech.mfi !== undefined ? tech.mfi.toFixed(1) : "중립";
         techTextEl.innerHTML = `• <strong>RSI / RMI / MFI:</strong> RSI(${rsi}) | RMI(${rmi}) | MFI(${mfi})<br>• <strong>기술 모멘텀:</strong> ${momRes.status}<br>• <strong>볼린저 / 추세:</strong> ${bollStr} | ${trendRes.trend}`;
     }
+
+    // ③ 종합 해석 & 행동 방향
+    const summaryTextEl = document.getElementById('compSummaryText');
+    const conflictBadgeEl = document.getElementById('compConflictBadge');
+
+    const isConflict = (cross && cross.status_label && cross.status_label.includes("충돌")) || (momRes && Array.isArray(momRes.conflicts) && momRes.conflicts.length > 0);
+    if (conflictBadgeEl) {
+        conflictBadgeEl.style.display = isConflict ? "inline-block" : "none";
+    }
+
+    if (summaryTextEl) {
+        const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
+        const actionStr = dec.decision || "HOLD";
+        const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
+
+        summaryTextEl.innerHTML = `
+            <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
+            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
+            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
+            <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
+            ${renderStepAnalysisSummaryHTML(tech, flow)}
+        `;
+    }
+
+    // 하단 주요 기술지표 뱃지 바 업데이트
+    const bRsi = document.getElementById('badgeRsi');
+    const bRmi = document.getElementById('badgeRmi');
+    const bMfi = document.getElementById('badgeMfi');
+    const bBoll = document.getElementById('badgeBoll');
+    const bMa60 = document.getElementById('badgeMa60');
+    const bMa120 = document.getElementById('badgeMa120');
+
+    if (bRsi) bRsi.innerText = `RSI: ${tech.rsi !== undefined ? tech.rsi.toFixed(1) : '-'}`;
+    if (bRmi) bRmi.innerText = `RMI: ${tech.rmi !== undefined ? tech.rmi.toFixed(1) : '-'}`;
+    if (bMfi) bMfi.innerText = `MFI: ${tech.mfi !== undefined ? tech.mfi.toFixed(1) : '중립'}`;
+    if (bBoll) bBoll.innerText = `Bollinger: ${tech.bollinger_position || '중앙'}`;
+    if (bMa60) bMa60.innerText = `MA60: ${tech.sma_60 ? tech.sma_60.toLocaleString() + '원' : (tech.ma60 ? tech.ma60.toLocaleString() + '원' : '-')}`;
+    if (bMa120) bMa120.innerText = `MA120: ${tech.sma_120 ? tech.sma_120.toLocaleString() + '원' : '-'}`;
 }
 
 // STEP 1~3 신규 분석 데이터(추세, 거래강도, 수급근거) 표시용 HTML 헬퍼 함수
@@ -1877,45 +1915,6 @@ function renderStepAnalysisSummaryHTML(tech, flow) {
     }
 
     return html;
-}
-
-    // ③ 종합 해석 & 행동 방향
-    const summaryTextEl = document.getElementById('compSummaryText');
-    const conflictBadgeEl = document.getElementById('compConflictBadge');
-
-    const isConflict = (cross && cross.status_label && cross.status_label.includes("충돌")) || (momRes && Array.isArray(momRes.conflicts) && momRes.conflicts.length > 0);
-    if (conflictBadgeEl) {
-        conflictBadgeEl.style.display = isConflict ? "inline-block" : "none";
-    }
-
-    if (summaryTextEl) {
-        const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
-        const actionStr = dec.decision || "HOLD";
-        const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
-
-        summaryTextEl.innerHTML = `
-            <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
-            <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
-            ${renderStepAnalysisSummaryHTML(tech, flow)}
-        `;
-    }
-
-    // 하단 주요 기술지표 뱃지 바 업데이트
-    const bRsi = document.getElementById('badgeRsi');
-    const bRmi = document.getElementById('badgeRmi');
-    const bMfi = document.getElementById('badgeMfi');
-    const bBoll = document.getElementById('badgeBoll');
-    const bMa60 = document.getElementById('badgeMa60');
-    const bMa120 = document.getElementById('badgeMa120');
-
-    if (bRsi) bRsi.innerText = `RSI: ${tech.rsi !== undefined ? tech.rsi.toFixed(1) : '-'}`;
-    if (bRmi) bRmi.innerText = `RMI: ${tech.rmi !== undefined ? tech.rmi.toFixed(1) : '-'}`;
-    if (bMfi) bMfi.innerText = `MFI: ${tech.mfi !== undefined ? tech.mfi.toFixed(1) : '중립'}`;
-    if (bBoll) bBoll.innerText = `Bollinger: ${tech.bollinger_position || '중앙'}`;
-    if (bMa60) bMa60.innerText = `MA60: ${tech.sma_60 ? tech.sma_60.toLocaleString() + '원' : (tech.ma60 ? tech.ma60.toLocaleString() + '원' : '-')}`;
-    if (bMa120) bMa120.innerText = `MA120: ${tech.sma_120 ? tech.sma_120.toLocaleString() + '원' : '-'}`;
 }
 
 // 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) UI 렌더링 함수
