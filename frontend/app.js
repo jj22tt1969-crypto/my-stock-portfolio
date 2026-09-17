@@ -1808,6 +1808,76 @@ function renderComprehensiveReport(resData) {
         const mfi = tech.mfi !== undefined ? tech.mfi.toFixed(1) : "중립";
         techTextEl.innerHTML = `• <strong>RSI / RMI / MFI:</strong> RSI(${rsi}) | RMI(${rmi}) | MFI(${mfi})<br>• <strong>기술 모멘텀:</strong> ${momRes.status}<br>• <strong>볼린저 / 추세:</strong> ${bollStr} | ${trendRes.trend}`;
     }
+}
+
+// STEP 1~3 신규 분석 데이터(추세, 거래강도, 수급근거) 표시용 HTML 헬퍼 함수
+function renderStepAnalysisSummaryHTML(tech, flow) {
+    let html = '';
+
+    // 1. [추세]
+    const trend = tech?.trend_analysis;
+    if (trend && trend.available !== false) {
+        const stateMap = {
+            'STRONG_UP': '강한 상승',
+            'UP': '상승',
+            'NEUTRAL': '중립/전환',
+            'DOWN': '하락',
+            'STRONG_DOWN': '강한 하락'
+        };
+        const stateKo = stateMap[trend.trend_state] || trend.trend_state || '중립';
+        const reasons = (trend.trend_reasons || []).slice(0, 2).join(', ');
+        html += `
+        <div class="step-summary-block trend-block" style="margin-top:8px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.82rem;">
+            <span style="color:#60a5fa; font-weight:600;">[추세]</span> 
+            <strong style="color:#f8fafc;">${stateKo}</strong> <span style="color:#cbd5e1;">(${trend.trend_score}점)</span> 
+            ${reasons ? `<span style="color:#94a3b8; font-size:0.78rem;">- ${reasons}</span>` : ''}
+        </div>`;
+    } else if (trend && trend.available === false) {
+        html += `<div class="step-summary-block trend-block" style="margin-top:8px; padding:6px 10px; background:rgba(30,41,59,0.3); border:1px solid rgba(255,255,255,0.04); border-radius:6px; font-size:0.8rem; color:#64748b;">[추세] 데이터 부족 (125일 필요)</div>`;
+    }
+
+    // 2. [거래 강도]
+    const vol = tech?.volume_analysis;
+    if (vol && vol.available !== false) {
+        const stateMap = {
+            'VERY_HIGH': '매우 높음',
+            'HIGH': '높음',
+            'NORMAL': '보통',
+            'LOW': '낮음'
+        };
+        const stateKo = stateMap[vol.volume_state] || vol.volume_state || '보통';
+        const tSourceTag = vol.turnover_source === 'ESTIMATED' ? '<span style="color:#f59e0b; font-size:0.75rem;">(추정대금)</span>' : '';
+        html += `
+        <div class="step-summary-block vol-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.82rem;">
+            <span style="color:#34d399; font-weight:600;">[거래 강도]</span> 
+            <strong style="color:#f8fafc;">${stateKo}</strong> 
+            <span style="color:#cbd5e1; font-size:0.78rem;">(거래량 ${vol.volume_ratio}배 / 거래대금 ${vol.turnover_ratio}배 ${tSourceTag})</span>
+        </div>`;
+    }
+
+    // 3. [수급 근거]
+    if (flow && flow.flow_state) {
+        const stateMap = {
+            'STRONG_IMPROVING': '강한 수급 개선',
+            'IMPROVING': '수급 개선',
+            'NEUTRAL': '수급 중립',
+            'WEAKENING': '수급 약화',
+            'STRONG_WEAKENING': '강한 수급 약화'
+        };
+        const stateKo = stateMap[flow.flow_state] || flow.flow_state || '수급 중립';
+        const fReasons = (flow.flow_reasons || []).slice(0, 3);
+        const fRisks = (flow.flow_risks || []).slice(0, 2);
+
+        html += `
+        <div class="step-summary-block flow-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.82rem;">
+            <div style="margin-bottom:2px;"><span style="color:#a78bfa; font-weight:600;">[수급 판단]</span> <strong style="color:#f8fafc;">${stateKo}</strong></div>
+            ${fReasons.length > 0 ? `<div style="color:#cbd5e1; font-size:0.78rem;">✔ ${fReasons.join(' / ')}</div>` : ''}
+            ${fRisks.length > 0 ? `<div style="color:#f87171; font-size:0.78rem; margin-top:2px;">⚠️ 리스크: ${fRisks.join(' / ')}</div>` : ''}
+        </div>`;
+    }
+
+    return html;
+}
 
     // ③ 종합 해석 & 행동 방향
     const summaryTextEl = document.getElementById('compSummaryText');
@@ -1828,6 +1898,7 @@ function renderComprehensiveReport(resData) {
             <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
             <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
             <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
+            ${renderStepAnalysisSummaryHTML(tech, flow)}
         `;
     }
 
@@ -3697,6 +3768,7 @@ function renderSingleQuoteCard(data, ticker, name) {
                         <span style="font-weight: 500; color: #e0e7ff;">${detailedTimingText}</span>
                     </div>
                 </div>
+                ${renderStepAnalysisSummaryHTML(tech, flow)}
             </div>
 
             <!-- 📌 3번 줄: 수급 & 점수 지표 (밀착 및 항시 오픈) -->

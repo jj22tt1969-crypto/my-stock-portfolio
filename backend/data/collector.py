@@ -275,7 +275,7 @@ def fetch_naver_frgn_data(ticker: str, pages: int = 1) -> pd.DataFrame:
     네이버 증권 일별 외국인·기관 수급 JSON REST API 연동 (0.15s 초고속 정밀 파싱 & certifi SSL 검증)
     """
     records = []
-    page_size = 20 if pages <= 1 else 40
+    page_size = max(20, pages * 20)
     url = f"https://m.stock.naver.com/api/stock/{ticker}/trend?page=1&pageSize={page_size}"
 
     try:
@@ -477,18 +477,19 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
     # ETF 자산군 식별 (Render 해외 IP 환경에서 PyKRX/Naver frgn 지연을 우회하여 ETF 시세 수집 0.3s 직행)
     is_etf = any(b in name.upper() for b in ["ETF", "KODEX", "TIGER", "ACE", "SOL", "RISE", "PLUS", "KBSTAR", "ARIRANG", "HANARO", "KOACT", "HEROES", "WOORI", "UNICORN"])
 
-    # 1. 일별 수급 데이터 수집 (개별주식 및 ETF Naver frgn 수집)
+    # 1. 일별 수급 데이터 수집 (개별주식 및 ETF Naver frgn 수집: MA120 추세 분석을 위해 160거래일 row 확보)
     source_name = "Naver Finance (실시간 융합)"
-    pages_to_fetch = 1 if min_days <= 20 else 2
+    fetch_days = max(min_days, 160)
+    pages_to_fetch = max(2, (fetch_days + 19) // 20)  # 160일 시 8페이지 (160거래일) 수집
     df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
 
     if (df.empty or len(df) < 5) and not is_etf:
         source_name = "KRX Open Data (PyKRX)"
-        df = fetch_pykrx_flow_data(ticker, days=min_days)
+        df = fetch_pykrx_flow_data(ticker, days=fetch_days)
 
     if df.empty or len(df) < 5:
         source_name = "FinanceDataReader (KRX Data)"
-        df = fetch_fdr_flow_data(ticker, days=min_days)
+        df = fetch_fdr_flow_data(ticker, days=fetch_days)
 
     if df.empty or len(df) < 5:
         fail_res = {
