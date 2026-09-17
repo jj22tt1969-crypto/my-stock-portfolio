@@ -67,10 +67,89 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
     # 지지선/저항선 대비 현재가 이격도 (%)
     dist_to_support = ((latest_close - support_level) / support_level * 100) if support_level > 0 else 0.0
     dist_to_resistance = ((resistance_level - latest_close) / latest_close * 100) if latest_close > 0 else 0.0
-
     # 이동평균 배열 상태 (정배열: MA5 > MA20 > MA60)
     is_aligned_bullish = (ma5_val > ma20_val > ma60_val)
     is_aligned_bearish = (ma5_val < ma20_val < ma60_val)
+
+    # 6. 중장기 추세 분석 (STEP 1: 기존 MA/현재가 재사용, MA120 및 5d 전 slope를 위해 125일 필요)
+    df['ma120'] = close.rolling(window=120, min_periods=120).mean()
+    ma120_val = float(df['ma120'].iloc[-1]) if not pd.isna(df['ma120'].iloc[-1]) else 0.0
+
+    ma60_5d_ago = float(df['ma60'].iloc[-6]) if len(df) >= 6 and not pd.isna(df['ma60'].iloc[-6]) else ma60_val
+    ma120_5d_ago = float(df['ma120'].iloc[-6]) if len(df) >= 6 and not pd.isna(df['ma120'].iloc[-6]) else ma120_val
+    ma60_slope = ((ma60_val - ma60_5d_ago) / ma60_5d_ago * 100) if ma60_5d_ago > 0 else 0.0
+    ma120_slope = ((ma120_val - ma120_5d_ago) / ma120_5d_ago * 100) if ma120_5d_ago > 0 else 0.0
+
+    if len(close) < 125:
+        trend_analysis = {
+            "available": False,
+            "reason": "추세 진단을 위한 데이터 수량 부족 (최소 125일 이상 필요)"
+        }
+    else:
+        t_score = 50.0
+        t_reasons = []
+
+        if latest_close > ma60_val:
+            t_score += 15.0
+            t_reasons.append(f"현재가({int(latest_close):,}원)가 MA60({int(ma60_val):,}원) 위")
+        else:
+            t_score -= 15.0
+            t_reasons.append(f"현재가({int(latest_close):,}원)가 MA60({int(ma60_val):,}원) 아래")
+
+        if ma60_val > ma120_val:
+            t_score += 15.0
+            t_reasons.append(f"MA60({int(ma60_val):,}원)이 MA120({int(ma120_val):,}원) 위")
+        else:
+            t_score -= 15.0
+            t_reasons.append(f"MA60({int(ma60_val):,}원)이 MA120({int(ma120_val):,}원) 아래")
+
+        if ma20_val > ma60_val:
+            t_score += 10.0
+        else:
+            t_score -= 10.0
+
+        if ma60_slope > 0.1:
+            t_score += 5.0
+            t_reasons.append("MA60 기울기 상승")
+        elif ma60_slope < -0.1:
+            t_score -= 5.0
+            t_reasons.append("MA60 기울기 하락")
+
+        if ma120_slope > 0.05:
+            t_score += 5.0
+        elif ma120_slope < -0.05:
+            t_score -= 5.0
+
+        final_t_score = round(float(np.clip(t_score, 0, 100)), 1)
+
+        if final_t_score >= 80.0:
+            t_state = "STRONG_UP"
+        elif final_t_score >= 60.0:
+            t_state = "UP"
+        elif final_t_score >= 40.0:
+            t_state = "NEUTRAL"
+        elif final_t_score >= 20.0:
+            t_state = "DOWN"
+        else:
+            t_state = "STRONG_DOWN"
+
+        if final_t_score >= 75.0 or final_t_score <= 25.0:
+            t_strength = "STRONG"
+        elif final_t_score >= 60.0 or final_t_score <= 40.0:
+            t_strength = "NORMAL"
+        else:
+            t_strength = "WEAK"
+
+        trend_analysis = {
+            "available": True,
+            "trend_state": t_state,
+            "trend_score": final_t_score,
+            "trend_strength": t_strength,
+            "trend_reasons": t_reasons[:3],
+            "ma120": round(ma120_val, 1),
+            "ma60_slope": round(ma60_slope, 2),
+            "ma120_slope": round(ma120_slope, 2)
+        }
 
     return {
         "data_available": True,
@@ -78,6 +157,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
         "ma5": round(ma5_val, 1),
         "ma20": round(ma20_val, 1),
         "ma60": round(ma60_val, 1),
+        "ma120": round(ma120_val, 1),
         "rsi": round(rsi_val, 1),
         "macd": {
             "macd": round(macd_val, 1),
@@ -92,5 +172,6 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
         "dist_to_support": round(dist_to_support, 2),
         "dist_to_resistance": round(dist_to_resistance, 2),
         "is_aligned_bullish": is_aligned_bullish,
-        "is_aligned_bearish": is_aligned_bearish
+        "is_aligned_bearish": is_aligned_bearish,
+        "trend_analysis": trend_analysis
     }
