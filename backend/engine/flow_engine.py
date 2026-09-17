@@ -334,10 +334,88 @@ def analyze_stock_flow(df: pd.DataFrame) -> Dict[str, Any]:
     # 5. Foreign Flow Cycle Score (FFCS) 및 6단계 사이클 판정
     ffcs_info = calculate_ffcs(df, periods_analysis)
 
+    # 6. STEP 3.1: 수급 판단근거(flow_reasons) 및 위험요인(flow_risks) 조립 (상충 검증 및 보정)
+    ffcs_val = ffcs_info["score"]
+    stage_val = ffcs_info["stage"]  # "강한 매도", "매도 둔화", "매집 초기", "본격 매집", "분배 초기", "본격 매도"
+
+    improving_stages = ["본격 매집", "매집 초기"]
+    weakening_stages = ["분배 초기", "강한 매도", "본격 매도"]
+
+    is_ffcs_improving = (ffcs_val >= 55.0)
+    is_ffcs_weakening = (ffcs_val <= 40.0)
+    is_stage_improving = (stage_val in improving_stages)
+    is_stage_weakening = (stage_val in weakening_stages)
+
+    flow_reasons = []
+    flow_risks = []
+
+    # FFCS 점수와 수급 사이클 상충 검사
+    is_conflict = (is_ffcs_improving and is_stage_weakening) or (is_ffcs_weakening and is_stage_improving)
+
+    if is_conflict:
+        flow_state = "NEUTRAL"
+        flow_risks.append(f"FFCS({ffcs_val:.1f}점) 판단과 최근 수급 사이클[{stage_val}] 신호가 서로 상충됨")
+    else:
+        if ffcs_val >= 75.0 and stage_val == "본격 매집":
+            flow_state = "STRONG_IMPROVING"
+        elif ffcs_val >= 55.0 or is_stage_improving:
+            flow_state = "IMPROVING"
+        elif ffcs_val <= 25.0 and stage_val in ["강한 매도", "본격 매도"]:
+            flow_state = "STRONG_WEAKENING"
+        elif ffcs_val <= 40.0 or is_stage_weakening:
+            flow_state = "WEAKENING"
+        else:
+            flow_state = "NEUTRAL"
+
+    # (1) 외국인 연속 순매수 / 매도
+    f_consec = periods_analysis.get("foreign", {}).get("consecutive_days", 0)
+    if f_consec > 0:
+        flow_reasons.append(f"외국인 {f_consec}일 연속 순매수")
+    elif f_consec < 0:
+        flow_risks.append(f"외국인 {abs(f_consec)}일 연속 순매도")
+
+    # (2) 기관 연속 순매수 / 매도
+    i_consec = periods_analysis.get("institution", {}).get("consecutive_days", 0)
+    if i_consec > 0:
+        flow_reasons.append(f"기관 {i_consec}일 연속 순매수")
+    elif i_consec < 0:
+        flow_risks.append(f"기관 {abs(i_consec)}일 연속 순매도")
+
+    # (3) 외국인·기관 동조화
+    conc_code = concurrency_info.get("code", "")
+    if conc_code == "BOTH_BUY":
+        flow_reasons.append("최근 5일 누적 외국인·기관 동반 순매수")
+    elif conc_code == "BOTH_SELL":
+        flow_risks.append("최근 5일 누적 외국인·기관 동반 순매도")
+
+    # (4) FFCS 및 사이클 상태
+    if not is_conflict:
+        flow_reasons.append(f"FFCS {ffcs_val:.1f}점으로 수급 [{stage_val}] 구간")
+
+    # (5) 20일 중장기 수급 누적 충돌 여부 (리스크 감지)
+    f20_sum = periods_analysis.get("foreign", {}).get("20d", {}).get("net_buy", 0)
+    if f5_sum > 0 and f20_sum < 0:
+        flow_risks.append("20일 누적 외국인 수급은 여전히 순매도 상태")
+    elif f5_sum < 0 and f20_sum > 0:
+        flow_risks.append("최근 5일 매도 전환되나 20일 누적은 여전히 순매수")
+
+    # (6) 수급 다이버전스
+    div_type = divergence_info.get("type", "NONE")
+    if div_type == "POSITIVE":
+        flow_reasons.append("긍정적 수급 다이버전스 (주가 안정 속 외국인 매집)")
+    elif div_type == "NEGATIVE":
+        flow_risks.append("부정적 수급 다이버전스 (주가 상승 대비 외국인 이탈)")
+
+    flow_reasons = list(dict.fromkeys(flow_reasons))[:4]
+    flow_risks = list(dict.fromkeys(flow_risks))[:3]
+
     return {
         "data_available": True,
         "ffcs_score": ffcs_info["score"],
         "cycle_stage": ffcs_info["stage"],
+        "flow_state": flow_state,
+        "flow_reasons": flow_reasons,
+        "flow_risks": flow_risks,
         "foreign_direction": foreign_direction,
         "institution_direction": institution_direction,
         "concurrency": concurrency_info,
