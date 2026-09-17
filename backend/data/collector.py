@@ -270,12 +270,50 @@ def fetch_naver_realtime_price(ticker: str) -> dict:
         return None
 
 
+def fetch_naver_fchart_prices(ticker: str, count: int = 200) -> pd.DataFrame:
+    """
+    네이버 증권 fchart XML API에서 200일분 일별 종가·거래량 역사 데이터 수집 (MA120 기술적 분석용)
+    """
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=day&count={count}&requestType=0"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    try:
+        ca_path = get_ssl_ca_bundle_path()
+        resp = http_session.get(url, headers=headers, timeout=(2.0, 4.0), verify=ca_path)
+        if resp.status_code != 200:
+            return pd.DataFrame()
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(resp.text)
+        items = root.findall(".//item")
+        records = []
+        for item in items:
+            data_attr = item.attrib.get('data', '')
+            parts = data_attr.split('|')
+            if len(parts) >= 6:
+                bdate = parts[0]
+                date_str = f"{bdate[:4]}-{bdate[4:6]}-{bdate[6:8]}"
+                close_p = int(float(parts[4]))
+                vol = int(parts[5])
+                records.append({
+                    'date': date_str,
+                    'close_price': close_p,
+                    'volume': vol,
+                    'trading_value': close_p * vol
+                })
+        df = pd.DataFrame(records)
+        df.sort_values(by='date', ascending=True, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        return df
+    except Exception as e:
+        logger.warning(f"fchart price fetch failed for ticker {ticker}: {e}")
+        return pd.DataFrame()
+
+
 def fetch_naver_frgn_data(ticker: str, pages: int = 1) -> pd.DataFrame:
     """
     네이버 증권 일별 외국인·기관 수급 JSON REST API 연동 (0.15s 초고속 정밀 파싱 & certifi SSL 검증)
     """
     records = []
-    page_size = max(20, pages * 20)
+    page_size = min(max(20, pages * 20), 40)
     url = f"https://m.stock.naver.com/api/stock/{ticker}/trend?page=1&pageSize={page_size}"
 
     try:
@@ -477,11 +515,31 @@ def get_stock_flow_data(ticker_or_name: str, min_days: int = 20) -> dict:
     # ETF 자산군 식별 (Render 해외 IP 환경에서 PyKRX/Naver frgn 지연을 우회하여 ETF 시세 수집 0.3s 직행)
     is_etf = any(b in name.upper() for b in ["ETF", "KODEX", "TIGER", "ACE", "SOL", "RISE", "PLUS", "KBSTAR", "ARIRANG", "HANARO", "KOACT", "HEROES", "WOORI", "UNICORN"])
 
-    # 1. 일별 수급 데이터 수집 (개별주식 및 ETF Naver frgn 수집: MA120 추세 분석을 위해 160거래일 row 확보)
+    # 1. 일별 수급 데이터 수집 (개별주식 및 ETF Naver frgn 수집: 수급 40일 + fchart 역사 시세 200일 융합)
     source_name = "Naver Finance (실시간 융합)"
     fetch_days = max(min_days, 160)
-    pages_to_fetch = max(2, (fetch_days + 19) // 20)  # 160일 시 8페이지 (160거래일) 수집
-    df = fetch_naver_frgn_data(ticker, pages=pages_to_fetch)
+    df = fetch_naver_frgn_data(ticker, pages=2)
+
+    if not df.empty and len(df) < fetch_days:
+        try:
+            df_fchart = fetch_naver_fchart_prices(ticker, count=fetch_days + 40)
+            if not df_fchart.empty:
+                earliest_frgn_date = df['date'].iloc[0]
+                older_prices = df_fchart[df_fchart['date'] < earliest_frgn_date].copy()
+                if not older_prices.empty:
+                    older_prices['diff'] = older_prices['close_price'].diff().fillna(0).astype(int)
+                    older_prices['foreign_net_buy'] = 0
+                    older_prices['institution_net_buy'] = 0
+                    older_prices['foreign_net_qty'] = 0
+                    older_prices['institution_net_qty'] = 0
+                    older_prices['foreign_holding_ratio'] = 0.0
+                    prev_c = older_prices['close_price'] - older_prices['diff']
+                    older_prices['change_rate'] = np.where(prev_c > 0, (older_prices['diff'] / prev_c * 100).round(2), 0.0)
+                    df = pd.concat([older_prices, df], ignore_index=True)
+                    df.sort_values(by='date', ascending=True, inplace=True)
+                    df.reset_index(drop=True, inplace=True)
+        except Exception as e:
+            logger.warning(f"Failed to merge historical prices for {ticker}: {e}")
 
     if (df.empty or len(df) < 5) and not is_etf:
         source_name = "KRX Open Data (PyKRX)"
