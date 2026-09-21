@@ -291,10 +291,16 @@ def fetch_naver_fchart_prices(ticker: str, count: int = 200) -> pd.DataFrame:
             if len(parts) >= 6:
                 bdate = parts[0]
                 date_str = f"{bdate[:4]}-{bdate[4:6]}-{bdate[6:8]}"
+                open_p = int(float(parts[1]))
+                high_p = int(float(parts[2]))
+                low_p = int(float(parts[3]))
                 close_p = int(float(parts[4]))
                 vol = int(parts[5])
                 records.append({
                     'date': date_str,
+                    'open_price': open_p,
+                    'high_price': high_p,
+                    'low_price': low_p,
                     'close_price': close_p,
                     'volume': vol,
                     'trading_value': close_p * vol

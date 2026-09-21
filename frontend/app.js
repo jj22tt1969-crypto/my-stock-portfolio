@@ -1914,6 +1914,62 @@ function renderStepAnalysisSummaryHTML(tech, flow) {
         </div>`;
     }
 
+    // 4. [시장 대비 강도 (Relative Strength)]
+    const rsData = tech?.relative_strength_analysis;
+    if (rsData) {
+        if (rsData.available === false) {
+            const isEtfReason = (rsData.reason && rsData.reason.includes("ETF"));
+            const emptyText = isEtfReason ? "ETF 벤치마크 미설정" : "데이터 부족";
+            html += `
+            <div class="step-summary-block rs-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.3); border:1px solid rgba(255,255,255,0.04); border-radius:6px; font-size:0.8rem; color:#94a3b8;">
+                <span style="color:#f59e0b; font-weight:600;">[시장 대비 강도]</span> ${emptyText}
+            </div>`;
+        } else if (rsData.available === true) {
+            const rsStateMap = {
+                'STRONG': '매우 강함',
+                'OUTPERFORM': '강함',
+                'NEUTRAL': '중립',
+                'UNDERPERFORM': '약함',
+                'WEAK': '매우 약함'
+            };
+            const rsStateKo = rsStateMap[rsData.rs_state] || rsData.rs_state || '중립';
+
+            let stateColor = '#cbd5e1';
+            if (rsData.rs_state === 'STRONG' || rsData.rs_state === 'OUTPERFORM') {
+                stateColor = '#f87171';
+            } else if (rsData.rs_state === 'WEAK' || rsData.rs_state === 'UNDERPERFORM') {
+                stateColor = '#60a5fa';
+            }
+
+            const rs20Str = (rsData.rs_20d >= 0 ? `+${rsData.rs_20d}` : `${rsData.rs_20d}`);
+            const bmName = rsData.benchmark || 'KOSPI';
+
+            let subRsParts = [];
+            if (rsData.rs_5d !== null && rsData.rs_5d !== undefined) {
+                subRsParts.push(`5일 ${rsData.rs_5d >= 0 ? '+' : ''}${rsData.rs_5d}%p`);
+            }
+            if (rsData.rs_60d !== null && rsData.rs_60d !== undefined) {
+                subRsParts.push(`60일 ${rsData.rs_60d >= 0 ? '+' : ''}${rsData.rs_60d}%p`);
+            }
+            const subRsText = subRsParts.length > 0 ? ` (${subRsParts.join(' / ')})` : '';
+            const rsReasons = (rsData.rs_reasons || []).slice(0, 2).join(' • ');
+
+            html += `
+            <div class="step-summary-block rs-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.82rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+                    <div>
+                        <span style="color:#f59e0b; font-weight:600;">[시장 대비 강도]</span> 
+                        <strong style="color:${stateColor}; margin-left:4px;">${rsStateKo}</strong>
+                        <span style="color:#e2e8f0; font-weight:600; margin-left:6px;">20일 ${rs20Str}%p</span> 
+                        <span style="color:#94a3b8; font-size:0.78rem;">/ ${bmName}</span>
+                    </div>
+                    ${subRsText ? `<span style="color:#94a3b8; font-size:0.75rem;">${subRsText}</span>` : ''}
+                </div>
+                ${rsReasons ? `<div style="color:#cbd5e1; font-size:0.78rem;">✔ ${rsReasons}</div>` : ''}
+            </div>`;
+        }
+    }
+
     return html;
 }
 

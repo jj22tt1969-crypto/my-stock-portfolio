@@ -138,6 +138,117 @@ def calculate_relative_strength(
     }
 
 
+def calculate_price_risk_analysis(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    가격 리스크 분석 (risk_analysis):
+    - True Range 및 ATR(14) (SMA_14 방식)
+    - ATR% (ATR / 현재가 * 100)
+    - 유효 기간 내 최고가 (period_high) 및 유효 거래일 수 (period_high_days)
+    - 최고가 대비 현재 낙폭 (drawdown_from_high_pct)
+    - 4단계 리스크 상태 (risk_state) & 사유 (risk_reasons)
+    """
+    if df.empty or len(df) < 5:
+        return {
+            "available": False,
+            "reason": "가격 리스크 분석을 위한 데이터 부족"
+        }
+
+    df = df.copy()
+    latest_close = float(df['close_price'].iloc[-1])
+    if latest_close <= 0:
+        return {
+            "available": False,
+            "reason": "유효하지 않은 현재가"
+        }
+
+    # 1. 고점 및 낙폭 연산 (high_price 컬럼 존재 여부 확인)
+    has_high = ('high_price' in df.columns and df['high_price'].notna().any()) or ('high' in df.columns and df['high'].notna().any())
+    has_low = ('low_price' in df.columns and df['low_price'].notna().any()) or ('low' in df.columns and df['low'].notna().any())
+
+    high_col = 'high_price' if 'high_price' in df.columns else ('high' if 'high' in df.columns else None)
+    low_col = 'low_price' if 'low_price' in df.columns else ('low' if 'low' in df.columns else None)
+
+    if has_high and high_col:
+        high_series = df[high_col].astype(float)
+        period_high = float(high_series.max())
+    else:
+        period_high = float(df['close_price'].max())
+
+    period_high_days = len(df)
+    drawdown_from_high_pct = round(((latest_close / period_high) - 1.0) * 100.0, 2) if period_high > 0 else 0.0
+
+    # 2. ATR(14) 계산 (high/low가 모두 있어야만 실제 ATR 계산, close로 임의 대체 금지)
+    atr_14 = None
+    atr_pct = None
+    atr_available = False
+
+    if has_high and has_low and high_col and low_col and len(df) >= 15:
+        highs = df[high_col].astype(float)
+        lows = df[low_col].astype(float)
+        closes = df['close_price'].astype(float)
+
+        valid_mask = (highs > 0) & (lows > 0) & (closes > 0) & (highs >= lows)
+        if valid_mask.sum() >= 15:
+            df_valid = df[valid_mask].copy()
+            h = df_valid[high_col].astype(float)
+            l = df_valid[low_col].astype(float)
+            c = df_valid['close_price'].astype(float)
+            prev_c = c.shift(1)
+
+            tr1 = h - l
+            tr2 = (h - prev_c).abs()
+            tr3 = (l - prev_c).abs()
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+            # SMA_14 (Simple Moving Average 14일 롤링)
+            atr_series = tr.rolling(window=14, min_periods=14).mean()
+            if not pd.isna(atr_series.iloc[-1]) and atr_series.iloc[-1] > 0:
+                atr_14 = float(atr_series.iloc[-1])
+                atr_pct = round((atr_14 / latest_close) * 100.0, 2)
+                atr_available = True
+
+    # 3. risk_state 판정 (atr_pct가 유효할 때만 연산, 결측 시 None)
+    if atr_pct is not None:
+        if atr_pct < 2.0:
+            risk_state = "LOW"
+            state_desc = "낮음"
+        elif atr_pct < 4.0:
+            risk_state = "NORMAL"
+            state_desc = "보통"
+        elif atr_pct < 7.0:
+            risk_state = "HIGH"
+            state_desc = "높음"
+        else:
+            risk_state = "VERY_HIGH"
+            state_desc = "매우 높음"
+    else:
+        risk_state = None
+        state_desc = None
+
+    # 4. risk_reasons 생성 (최대 3개)
+    risk_reasons = []
+    if atr_available and atr_14 is not None and atr_pct is not None:
+        risk_reasons.append(f"ATR 14일 {int(round(atr_14)):,}원, 현재가 대비 {atr_pct:.1f}%")
+        if state_desc:
+            risk_reasons.append(f"일평균 가격 변동성은 {state_desc} 수준")
+    else:
+        risk_reasons.append("고가/저가 OHLC 데이터 부족으로 ATR 연산 제외됨")
+
+    risk_reasons.append(f"최근 {period_high_days}거래일 고점 대비 {drawdown_from_high_pct:+.1f}%")
+
+    return {
+        "available": True,
+        "atr_14": int(round(atr_14)) if atr_14 is not None else None,
+        "atr_pct": atr_pct,
+        "atr_method": "SMA_14",
+        "period_high": int(period_high),
+        "period_high_days": period_high_days,
+        "drawdown_from_high_pct": drawdown_from_high_pct,
+        "risk_state": risk_state,
+        "risk_reasons": risk_reasons[:3]
+    }
+
+
 def calculate_technical_indicators(
     df: pd.DataFrame, 
     benchmark_df: Any = None, 
@@ -351,6 +462,9 @@ def calculate_technical_indicators(
         asset_type=asset_type
     )
 
+    # 9. 가격 리스크 분석 (ATR & Drawdown)
+    risk_analysis = calculate_price_risk_analysis(df=df)
+
     return {
         "data_available": True,
         "latest_close": int(latest_close),
@@ -375,6 +489,7 @@ def calculate_technical_indicators(
         "is_aligned_bearish": is_aligned_bearish,
         "trend_analysis": trend_analysis,
         "volume_analysis": volume_analysis,
-        "relative_strength_analysis": relative_strength_analysis
+        "relative_strength_analysis": relative_strength_analysis,
+        "risk_analysis": risk_analysis
     }
 
