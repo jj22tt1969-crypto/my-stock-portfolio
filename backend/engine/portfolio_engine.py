@@ -125,7 +125,19 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
                 diff = float(latest_row['diff'])
 
                 return_rate_tmp = ((current_price - avg_price) / avg_price * 100) if avg_price > 0 else 0.0
-                decision_result = analyze_stock_decision(df, return_rate=return_rate_tmp)
+
+                stock_market = stock.get("market", "KOSPI")
+                stock_asset_type = stock.get("asset_type", "STOCK")
+                from backend.data.market_collector import fetch_market_index_history
+                benchmark_df = fetch_market_index_history(stock_market, count=180) if stock_asset_type != "ETF" else None
+
+                decision_result = analyze_stock_decision(
+                    df, 
+                    return_rate=return_rate_tmp,
+                    benchmark_df=benchmark_df,
+                    market=stock_market,
+                    asset_type=stock_asset_type
+                )
                 
             return {
                 "stock": stock,

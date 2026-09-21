@@ -2,7 +2,148 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any
 
-def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
+def calculate_relative_strength(
+    df: pd.DataFrame, 
+    benchmark_df: Any = None, 
+    market: str = "KOSPI", 
+    asset_type: str = "STOCK"
+) -> Dict[str, Any]:
+    """
+    시장 대비 상대강도(Relative Strength) 계산:
+    - 개별 주식의 5/20/60 거래일 수익률을 해당 시장(KOSPI / KOSDAQ)과 비교
+    - ETF는 벤치마크 미정의로 available: False 반환
+    """
+    if str(asset_type).upper() == "ETF":
+        return {
+            "available": False,
+            "reason": "ETF 벤치마크 정보 없음"
+        }
+
+    if benchmark_df is None:
+        return {
+            "available": False,
+            "reason": "벤치마크 지수 데이터 미제공"
+        }
+
+    bm_data = None
+    if isinstance(benchmark_df, dict):
+        if benchmark_df.get("status") == "success" and "dates" in benchmark_df and "closes" in benchmark_df:
+            bm_data = pd.DataFrame({
+                "date": benchmark_df["dates"],
+                "close_price": benchmark_df["closes"]
+            })
+    elif isinstance(benchmark_df, pd.DataFrame):
+        bm_data = benchmark_df
+
+    if bm_data is None or bm_data.empty or "date" not in bm_data.columns or "close_price" not in bm_data.columns:
+        return {
+            "available": False,
+            "reason": "유효하지 않은 벤치마크 데이터"
+        }
+
+    if df.empty or "date" not in df.columns or "close_price" not in df.columns:
+        return {
+            "available": False,
+            "reason": "유효하지 않은 종목 가격 데이터"
+        }
+
+    # 날짜 정렬 및 공통 거래일 Inner Join
+    df_clean = df[['date', 'close_price']].copy()
+    df_clean['date'] = df_clean['date'].astype(str)
+    df_clean['stock_close'] = df_clean['close_price'].astype(float)
+
+    bm_clean = bm_data[['date', 'close_price']].copy()
+    bm_clean['date'] = bm_clean['date'].astype(str)
+    bm_clean['bm_close'] = bm_clean['close_price'].astype(float)
+
+    merged = pd.merge(df_clean[['date', 'stock_close']], bm_clean[['date', 'bm_close']], on='date', how='inner')
+    merged.sort_values(by='date', ascending=True, inplace=True)
+    merged.reset_index(drop=True, inplace=True)
+
+    common_days = len(merged)
+    if common_days < 6:
+        return {
+            "available": False,
+            "reason": f"공통 거래일 부족 (최소 6일 이상 필요, 현재 {common_days}일)"
+        }
+
+    bm_name = market.upper() if market else "KOSPI"
+    latest_common_date = merged['date'].iloc[-1]
+
+    def get_period_metrics(days_required: int):
+        if common_days < days_required + 1:
+            return None, None, None
+        stock_curr = merged['stock_close'].iloc[-1]
+        stock_prev = merged['stock_close'].iloc[-(days_required + 1)]
+        bm_curr = merged['bm_close'].iloc[-1]
+        bm_prev = merged['bm_close'].iloc[-(days_required + 1)]
+
+        if stock_prev <= 0 or bm_prev <= 0:
+            return None, None, None
+
+        s_ret = (stock_curr / stock_prev - 1.0) * 100.0
+        b_ret = (bm_curr / bm_prev - 1.0) * 100.0
+        rs_val = s_ret - b_ret
+        return round(s_ret, 2), round(b_ret, 2), round(rs_val, 2)
+
+    s_ret_5d, b_ret_5d, rs_5d = get_period_metrics(5)
+    s_ret_20d, b_ret_20d, rs_20d = get_period_metrics(20)
+    s_ret_60d, b_ret_60d, rs_60d = get_period_metrics(60)
+
+    if rs_20d is None:
+        return {
+            "available": False,
+            "reason": f"20일 상대강도 연산 위한 공통 거래일 부족 (필요 21일, 현재 {common_days}일)"
+        }
+
+    if rs_20d >= 10.0:
+        rs_state = "STRONG"
+    elif rs_20d >= 3.0:
+        rs_state = "OUTPERFORM"
+    elif rs_20d > -3.0:
+        rs_state = "NEUTRAL"
+    elif rs_20d > -10.0:
+        rs_state = "UNDERPERFORM"
+    else:
+        rs_state = "WEAK"
+
+    rs_reasons = []
+    rs_reasons.append(f"최근 20일 종목 {s_ret_20d:+.1f}%, {bm_name} {b_ret_20d:+.1f}%")
+    rs_reasons.append(f"시장 대비 20일 상대강도 {rs_20d:+.1f}%p")
+
+    if rs_60d is not None:
+        if rs_60d > 0:
+            rs_reasons.append(f"60일 기준 시장 대비 +{rs_60d:.1f}%p 상회")
+        else:
+            rs_reasons.append(f"60일 기준 시장 대비 {rs_60d:.1f}%p 하회")
+    elif rs_5d is not None:
+        rs_reasons.append(f"5일 상대강도 {rs_5d:+.1f}%p")
+
+    return {
+        "available": True,
+        "benchmark": bm_name,
+        "benchmark_date": latest_common_date,
+        "common_days": common_days,
+        "rs_5d": rs_5d,
+        "rs_20d": rs_20d,
+        "rs_60d": rs_60d,
+        "stock_return_5d": s_ret_5d,
+        "benchmark_return_5d": b_ret_5d,
+        "stock_return_20d": s_ret_20d,
+        "benchmark_return_20d": b_ret_20d,
+        "stock_return_60d": s_ret_60d,
+        "benchmark_return_60d": b_ret_60d,
+        "rs_state": rs_state,
+        "rs_reasons": rs_reasons[:3]
+    }
+
+
+def calculate_technical_indicators(
+    df: pd.DataFrame, 
+    benchmark_df: Any = None, 
+    market: str = "KOSPI", 
+    asset_type: str = "STOCK"
+) -> Dict[str, Any]:
     """
     기술적 분석 지표 계산:
     - 5/20/60일 이동평균 (MA5, MA20, MA60)
@@ -10,6 +151,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
     - MACD (12, 26, 9)
     - 거래량/거래대금 추세
     - 지지선 및 저항선 (최근 20일/60일 피봇 및 저가/고가 기준)
+    - 상대강도 (Relative Strength)
     """
     if df.empty or len(df) < 5:
         return {"data_available": False, "error": "기술적 분석을 위한 데이터가 부족합니다."}
@@ -201,6 +343,14 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
             "volume_reasons": v_reasons[:3]
         }
 
+    # 8. 시장 대비 상대강도 분석 (Relative Strength)
+    relative_strength_analysis = calculate_relative_strength(
+        df=df,
+        benchmark_df=benchmark_df,
+        market=market,
+        asset_type=asset_type
+    )
+
     return {
         "data_available": True,
         "latest_close": int(latest_close),
@@ -224,5 +374,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, Any]:
         "is_aligned_bullish": is_aligned_bullish,
         "is_aligned_bearish": is_aligned_bearish,
         "trend_analysis": trend_analysis,
-        "volume_analysis": volume_analysis
+        "volume_analysis": volume_analysis,
+        "relative_strength_analysis": relative_strength_analysis
     }
+

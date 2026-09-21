@@ -210,6 +210,9 @@ def analyze_decision(
     ticker: str = Query(..., description="종목명 또는 종목코드"),
     return_rate: float = Query(0.0, description="현재 수익률 (%)")
 ):
+    if not isinstance(return_rate, (int, float)):
+        return_rate = 0.0
+
     ticker_code, name = resolve_ticker(ticker)
     if not ticker_code:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
@@ -224,10 +227,21 @@ def analyze_decision(
         }
 
     df = flow_data["df"]
-    res = analyze_stock_decision(df, return_rate=return_rate)
 
     m_info = search_stock_or_etf(ticker_code)
     asset_type = m_info[0].get("asset_type", "STOCK") if m_info else "STOCK"
+    market = m_info[0].get("market", "KOSPI") if m_info else "KOSPI"
+
+    from backend.data.market_collector import fetch_market_index_history
+    benchmark_df = fetch_market_index_history(market, count=180) if asset_type != "ETF" else None
+
+    res = analyze_stock_decision(
+        df, 
+        return_rate=return_rate, 
+        benchmark_df=benchmark_df, 
+        market=market, 
+        asset_type=asset_type
+    )
 
     cross_res = analyze_cross_indicators(
         flow_analysis=res.get("flow_analysis"),

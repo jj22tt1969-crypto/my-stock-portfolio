@@ -429,7 +429,13 @@ def apply_conditional_trend_filter(
     }
 
 
-def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[str, Any]:
+def analyze_stock_decision(
+    df: pd.DataFrame, 
+    return_rate: float = 0.0,
+    benchmark_df: Any = None,
+    market: str = "KOSPI",
+    asset_type: str = "STOCK"
+) -> Dict[str, Any]:
     """
     단일 종목 통합 수급+기술적 분석+의사결정 판단 메인 함수 (5차 조건부 추세필터 탑재)
     """
@@ -439,7 +445,7 @@ def analyze_stock_decision(df: pd.DataFrame, return_rate: float = 0.0) -> Dict[s
     # 1. 수급 분석 엔진
     flow_res = analyze_stock_flow(df)
     # 2. 기술적 분석 엔진
-    tech_res = calculate_technical_indicators(df)
+    tech_res = calculate_technical_indicators(df, benchmark_df=benchmark_df, market=market, asset_type=asset_type)
 
     if not flow_res.get("data_available", False) or not tech_res.get("data_available", False):
         return {"data_available": False, "error": "데이터 분석 실패"}
