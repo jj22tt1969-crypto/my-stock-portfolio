@@ -1970,6 +1970,64 @@ function renderStepAnalysisSummaryHTML(tech, flow) {
         }
     }
 
+    // 5. [가격 리스크 (Risk Analysis)]
+    const rData = tech?.risk_analysis;
+    if (rData) {
+        if (rData.available === false) {
+            html += `
+            <div class="step-summary-block risk-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.3); border:1px solid rgba(255,255,255,0.04); border-radius:6px; font-size:0.8rem; color:#94a3b8;">
+                <span style="color:#f87171; font-weight:600;">[가격 리스크]</span> 데이터 부족
+            </div>`;
+        } else if (rData.available === true) {
+            const riskStateMap = {
+                'LOW': '낮음',
+                'NORMAL': '보통',
+                'HIGH': '높음',
+                'VERY_HIGH': '매우 높음'
+            };
+
+            const hasAtr = (rData.atr_pct !== null && rData.atr_pct !== undefined && rData.risk_state !== null);
+            const riskStateKo = hasAtr ? (riskStateMap[rData.risk_state] || '보통') : null;
+
+            let stateColor = '#cbd5e1';
+            if (hasAtr && (rData.risk_state === 'HIGH' || rData.risk_state === 'VERY_HIGH')) {
+                stateColor = '#fbbf24';
+            }
+
+            const pDays = rData.period_high_days || 180;
+            const ddStr = rData.drawdown_from_high_pct !== null && rData.drawdown_from_high_pct !== undefined 
+                ? `${rData.drawdown_from_high_pct >= 0 ? '+' : ''}${rData.drawdown_from_high_pct}%` 
+                : '-';
+            const ddText = `${pDays}일 고점 대비 ${ddStr}`;
+
+            const rReasons = (rData.risk_reasons || []).slice(0, 2).join(' • ');
+
+            let summaryHeader = '';
+            if (hasAtr) {
+                summaryHeader = `
+                    <span style="color:#f87171; font-weight:600;">[가격 리스크]</span> 
+                    <span style="color:#cbd5e1; margin-left:4px;">변동성 <strong style="color:${stateColor};">${riskStateKo}</strong></span>
+                    <span style="color:#e2e8f0; font-weight:600; margin-left:6px;">ATR ${rData.atr_pct}%</span>
+                    <span style="color:#94a3b8; font-size:0.78rem; margin-left:6px;">| ${ddText}</span>
+                `;
+            } else {
+                summaryHeader = `
+                    <span style="color:#f87171; font-weight:600;">[가격 리스크]</span> 
+                    <span style="color:#94a3b8; margin-left:4px; font-size:0.8rem;">변동성: 데이터 부족</span>
+                    <span style="color:#94a3b8; font-size:0.78rem; margin-left:6px;">| ${ddText}</span>
+                `;
+            }
+
+            html += `
+            <div class="step-summary-block risk-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.82rem;">
+                <div style="margin-bottom:2px;">
+                    ${summaryHeader}
+                </div>
+                ${rReasons ? `<div style="color:#cbd5e1; font-size:0.78rem;">✔ ${rReasons}</div>` : ''}
+            </div>`;
+        }
+    }
+
     return html;
 }
 
