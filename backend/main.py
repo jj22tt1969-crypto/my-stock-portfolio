@@ -58,13 +58,24 @@ def get_server_health():
 @app.on_event("startup")
 async def startup_warmup_cache():
     """
-    서버 가동 시 KRX 전종목 캐시를 미리 사전 워밍업(Warm-up)하여
-    사용자가 최초 접속했을 때 화면 출력이 0.001초 만에 즉시 이뤄지도록 보장합니다.
+    서버 가동 시:
+    1. KRX 전종목 캐시 사전 워밍업 (Stage 1 Screener 즉시 응답 보장)
+    2. Recommendation Snapshot Pre-Warm 백그라운드 실행
+       (Cold Run 45초 문제 해결 - 첫 추천 요청이 도착하기 전에 스냅샷 확보)
     """
     loop = asyncio.get_event_loop()
+
+    # 1. KRX 전종목 캐시 워밍
     try:
         from backend.engine.krx_loader import load_krx_all_stocks
         loop.run_in_executor(None, load_krx_all_stocks)
+    except Exception:
+        pass
+
+    # 2. Recommendation Snapshot Pre-Warm (백그라운드, 비블로킹)
+    try:
+        from backend.router.recommend_router import warm_recommend_snapshot
+        loop.run_in_executor(None, warm_recommend_snapshot)
     except Exception:
         pass
 
