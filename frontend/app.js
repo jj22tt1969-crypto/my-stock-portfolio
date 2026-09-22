@@ -124,7 +124,7 @@ function registerServiceWorker() {
             navigator.serviceWorker.addEventListener('controllerchange', () => {
                 if (!refreshing) {
                     refreshing = true;
-                    window.location.reload();
+                    console.log('[PWA] ServiceWorker controller updated without forced reload.');
                 }
             });
         });
@@ -195,14 +195,98 @@ function toggleTheme() {
 
 
 
+let isServerWakeInProgress = false;
+let serverReady = false;
+
+async function checkServerHealth() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const resp = await fetch('/api/health', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) return false;
+        const contentType = resp.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return false;
+
+        const data = await resp.json();
+        return data && data.status === 'ok';
+    } catch (e) {
+        return false;
+    }
+}
+
+function showWakingOverlay(msg, isTimeout = false) {
+    const grid = document.getElementById('stockGrid');
+    if (grid) {
+        grid.innerHTML = `
+            <div class="loading-box" style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; background: rgba(15, 23, 42, 0.85); border-radius: 12px; border: 1px solid ${isTimeout ? 'rgba(239, 68, 68, 0.4)' : 'rgba(56, 189, 248, 0.4)'};">
+                <div class="spinner" style="margin: 0 auto 12px auto; width: 28px; height: 28px; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <div style="font-size: 15px; font-weight: 800; color: ${isTimeout ? '#fca5a5' : '#38bdf8'}; margin-bottom: 6px;">
+                    ${isTimeout ? '⚠️ 연결 지연' : '⚡ Render 서버 가동 중'}
+                </div>
+                <div style="font-size: 13px; color: #cbd5e1;">${escapeHtml(msg)}</div>
+            </div>
+        `;
+    }
+}
+
 async function initApp() {
-    // ⚡ 시장 지수 수집과 포트폴리오 데이터를 병렬로 동시 요청하여 로딩 속도 2배 향상
-    await Promise.all([
-        fetchMarketOverview().catch(e => console.warn(e)),
-        fetchPortfolioData().catch(e => console.warn(e))
-    ]);
-    startAutoRefresh();
-    initAddStockFormEvents();
+    if (serverReady) {
+        await Promise.all([
+            fetchMarketOverview().catch(e => console.warn(e)),
+            fetchPortfolioData().catch(e => console.warn(e))
+        ]);
+        startAutoRefresh();
+        initAddStockFormEvents();
+        return;
+    }
+
+    if (isServerWakeInProgress) return;
+    isServerWakeInProgress = true;
+
+    // 1차 즉시 Health 확인 (이미 서버가 살아있으면 0ms 직행)
+    const isHealthy = await checkServerHealth();
+    if (isHealthy) {
+        serverReady = true;
+        isServerWakeInProgress = false;
+        await Promise.all([
+            fetchMarketOverview().catch(e => console.warn(e)),
+            fetchPortfolioData().catch(e => console.warn(e))
+        ]);
+        startAutoRefresh();
+        initAddStockFormEvents();
+        return;
+    }
+
+    // 서버가 Cold Start 수면 상태 (WAKING) -> Polling 시작
+    showWakingOverlay('서버를 시작하고 있습니다. 잠시만 기다려 주세요...');
+
+    let attempts = 0;
+    const maxAttempts = 20; // 20회 * 3초 = 60초 제한
+
+    const wakeInterval = setInterval(async () => {
+        attempts += 1;
+        const healthy = await checkServerHealth();
+        if (healthy) {
+            clearInterval(wakeInterval);
+            serverReady = true;
+            isServerWakeInProgress = false;
+            await Promise.all([
+                fetchMarketOverview().catch(e => console.warn(e)),
+                fetchPortfolioData().catch(e => console.warn(e))
+            ]);
+            startAutoRefresh();
+            initAddStockFormEvents();
+            return;
+        }
+
+        if (attempts >= maxAttempts) {
+            clearInterval(wakeInterval);
+            isServerWakeInProgress = false;
+            showWakingOverlay('서버 연결이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.', true);
+        }
+    }, 3000);
 }
 
 // 1. 실시간 타이머 및 컨트롤 로직
@@ -273,6 +357,8 @@ async function fetchMarketOverview() {
     try {
         const resp = await fetch('/api/market/overview');
         if (!resp.ok) return;
+        const contentType = resp.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
         const data = await resp.json();
 
         const indices = data.indices || {};
@@ -1036,6 +1122,8 @@ async function fetchPortfolioData(isBackground = false) {
     try {
         const resp = await fetch(`/api/portfolio?asset_type=${currentAssetType}`);
         if (!resp.ok) throw new Error("포트폴리오 조회가 실패했습니다.");
+        const contentType = resp.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error("JSON 응답 형식이 아닙니다.");
         const resData = await resp.json();
 
         if (resData.status !== "success") {

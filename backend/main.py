@@ -46,6 +46,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/api/health")
+def get_server_health():
+    """
+    경량 서버 헬스체크 API (Render Cold-Start Wake 확인용)
+    외부 API 호출 및 DB/퀀트 연산 없이 0ms 즉시 {"status": "ok"} 반환
+    """
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 async def startup_warmup_cache():
     """
