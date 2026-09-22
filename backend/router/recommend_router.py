@@ -76,6 +76,13 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
             etf_all = quant_res["etf_results"]["all_quant_analyzed"]
             all_quant_analyzed = stock_all + etf_all
 
+            # 수급 데이터 가용성 통계 확인 (DATA_UNAVAILABLE / PARTIAL_DATA 판정용)
+            flow_stats = quant_res.get("flow_screener_stats", {})
+            target_stats = flow_stats.get("etf_stats", {}) if market_scope == "ETF" else flow_stats.get("stock_stats", {})
+            total_input = target_stats.get("total_input", 100)
+            succ_cnt = target_stats.get("success_count", 0)
+            fail_cnt = target_stats.get("failed_count", 0)
+
             if intent == "STOCK_SHORT_RECOMMEND":
                 results = quant_res["stock_results"]["short_top"][:req_count]
                 message = f"단기 매매 조건(수급 1순위 + TODAY ACTION + 비과열)을 충족한 주식 종목 {len(results)}개를 추천합니다."
@@ -97,10 +104,7 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
                 joint_buy_items = [c for c in all_quant_analyzed if c.get("flow_pattern") == "JOINT_BUY"]
                 joint_buy_items.sort(key=lambda x: x.get("ffcs", 50.0), reverse=True)
                 results = joint_buy_items[:req_count]
-                if not results:
-                    message = "현재 엄격한 외국인·기관 쌍끌이(1D/3D/5D 동시 순매수) 기준을 충족하는 종목이 없습니다."
-                else:
-                    message = f"외국인과 기관이 동시 순매수 중인 쌍끌이 종목 {len(results)}개를 찾았습니다."
+                message = f"외국인과 기관이 동시 순매수 중인 쌍끌이 종목 {len(results)}개를 찾았습니다."
 
             elif intent == "FLOW_IMPROVING":
                 improving_items = [c for c in stock_all if c.get("flow_pattern") == "FLOW_IMPROVING"]
@@ -124,6 +128,21 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
                 # NORMAL_RECOMMENDATION_UNKNOWN
                 results = quant_res["stock_results"]["short_top"][:req_count]
                 message = f"추천 조건에 맞는 우수 종목 {len(results)}개를 선별했습니다."
+
+            # 상태(status) 및 메시지 정밀 결정 (OK, NO_MATCH, DATA_UNAVAILABLE, PARTIAL_DATA)
+            if not results:
+                if succ_cnt == 0 or fail_cnt >= int(total_input * 0.8):
+                    res_status = "DATA_UNAVAILABLE"
+                    message = "수급 데이터 수집이 원활하지 않아 추천을 보류했습니다. 잠시 후 다시 시도해 주세요."
+                else:
+                    res_status = "NO_MATCH"
+                    message = "현재 조건을 충족하는 종목이 없습니다."
+            else:
+                if fail_cnt > 0:
+                    res_status = "PARTIAL_DATA"
+                    message = f"{message} (일부 종목의 수급 데이터가 지연되어 확인 가능한 후보만 분석했습니다.)"
+                else:
+                    res_status = "OK"
 
     except Exception as e:
         logger.error(f"[RecommendAPI] Error processing question '{req.question}': {e}", exc_info=True)
@@ -176,7 +195,7 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
     elapsed_ms = int((time.time() - t_start) * 1000)
 
     return {
-        "status": "ok",
+        "status": res_status,
         "intent": intent,
         "query": req.question,
         "requested_count": req_count,

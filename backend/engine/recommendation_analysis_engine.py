@@ -499,6 +499,10 @@ def run_quant_recommendation(
     return {
         "status": "success",
         "total_elapsed_sec": round(total_elapsed, 2),
+        "flow_screener_stats": {
+            "stock_stats": flow_res["stock_results"]["stats"],
+            "etf_stats": flow_res["etf_results"]["stats"]
+        },
         "stage_times": {
             "stage1_stage2_flow_sec": round(t_flow_elapsed, 2),
             "stock_quant_sec": round(t_stock_elapsed, 2),

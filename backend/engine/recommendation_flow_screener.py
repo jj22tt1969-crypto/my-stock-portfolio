@@ -42,9 +42,12 @@ def analyze_candidate_flow(candidate: Dict[str, Any], min_days: int = 20) -> Dic
     ticker = candidate.get("ticker", "")
     name = candidate.get("name", "")
     
-    # 1. 수급 데이터 Fetch (collector 기존 logic & cache 재사용)
+    # 1. 수급 데이터 Fetch (collector 기존 logic & cache 재사용, 실패 시 최대 1회 안전 재시도)
     try:
         flow_res = get_stock_flow_data(ticker, min_days=min_days)
+        if not flow_res or not flow_res.get("data_available", False):
+            time.sleep(0.2)
+            flow_res = get_stock_flow_data(ticker, min_days=min_days)
     except Exception as e:
         logger.warning(f"[FlowScreener] Exception fetching flow for {name}({ticker}): {e}")
         flow_res = None
