@@ -109,6 +109,11 @@ def screen_stock_universe(target_count: int = 100, force_reload: bool = False) -
                 "candidates": []
             }
 
+    num_cols = ['Close', 'Volume', 'Amount', 'Marcap']
+    for col in num_cols:
+        if col in df_krx.columns:
+            df_krx[col] = pd.to_numeric(df_krx[col], errors='coerce')
+
     # 스팩 (SPAC) 식별
     spacs = df_krx[df_krx['Name'].str.contains('스팩|SPAC', case=False, na=False)]
     
@@ -264,6 +269,11 @@ def screen_etf_universe(target_count: int = 50, force_reload: bool = False) -> D
                 "total_input_count": total_input_count,
                 "candidates": []
             }
+
+    num_cols_etf = ['Price', 'Volume', 'Amount', 'MarCap', 'ChangeRate']
+    for col in num_cols_etf:
+        if col in df_etf.columns:
+            df_etf[col] = pd.to_numeric(df_etf[col], errors='coerce')
 
     invalid_mask = (
         (df_etf['Price'].isna()) | (df_etf['Price'] <= 0) |
