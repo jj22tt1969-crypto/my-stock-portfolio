@@ -70,7 +70,7 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
 
         else:
             # 전체 시장 Quant 추천 파이프라인 (Stage 1 -> Stage 2 -> Stage 3)
-            quant_res = run_quant_recommendation(stock_stage1_count=100, etf_stage1_count=50, max_workers=5)
+            quant_res = run_quant_recommendation(stock_stage1_count=100, etf_stage1_count=50, max_workers=8)
             
             stock_all = quant_res["stock_results"]["all_quant_analyzed"]
             etf_all = quant_res["etf_results"]["all_quant_analyzed"]
