@@ -26,52 +26,52 @@ logger = logging.getLogger(__name__)
 _SNAPSHOT_TTL_SECONDS = 20 * 60  # 20분
 
 _RECOMMEND_SNAPSHOT: Dict[str, Any] = {
-    "status": "EMPTY",         # EMPTY | WARMING | READY | STALE | FAILED
-    "quant_res": None,         # run_quant_recommendation() 결과
-    "warmed_at": None,         # datetime (UTC) 마지막 완료 시각
-    "elapsed_sec": None,       # 마지막 Pre-Warm 소요 시간
-    "error": None,             # FAILED 시 오류 메시지
+    "status": "EMPTY",          # EMPTY | WARMING | READY | STALE | FAILED
+    "quant_res": None,          # 현재 유효 quant_res (READY/STALE 시 사용)
+    "last_good_quant_res": None, # 마지막 성공 quant_res (FAILED 후 STALE fallback용)
+    "warmed_at": None,          # datetime (UTC) 마지막 완료 시각
+    "elapsed_sec": None,        # 마지막 Pre-Warm 소요 시간
+    "error": None,              # FAILED 시 오류 메시지
 }
 _SNAPSHOT_LOCK = threading.Lock()
 
 
-def _snapshot_is_fresh() -> bool:
-    """스냅샷이 READY이고 TTL 내인지 확인"""
+def _get_snapshot_copy() -> Dict[str, Any]:
+    """Lock 안에서 스냅샷 현재 상태를 안전하게 복사 반환"""
     with _SNAPSHOT_LOCK:
-        if _RECOMMEND_SNAPSHOT["status"] != "READY":
-            return False
-        warmed_at = _RECOMMEND_SNAPSHOT.get("warmed_at")
-        if warmed_at is None:
-            return False
-        elapsed = (datetime.now(timezone.utc) - warmed_at).total_seconds()
-        return elapsed < _SNAPSHOT_TTL_SECONDS
+        return {
+            "status": _RECOMMEND_SNAPSHOT["status"],
+            "quant_res": _RECOMMEND_SNAPSHOT["quant_res"],
+            "last_good_quant_res": _RECOMMEND_SNAPSHOT["last_good_quant_res"],
+            "warmed_at": _RECOMMEND_SNAPSHOT["warmed_at"],
+            "elapsed_sec": _RECOMMEND_SNAPSHOT["elapsed_sec"],
+            "error": _RECOMMEND_SNAPSHOT["error"],
+        }
 
 
-def warm_recommend_snapshot(force: bool = False) -> bool:
+def _trigger_background_warm(import_executor=None) -> bool:
     """
-    전체시장 Quant 추천 스냅샷을 Pre-Warm한다.
-    - 이미 WARMING 중이면 중복 실행 방지 후 False 반환
-    - force=True 시 READY 상태도 강제 재수행
-    - 완료 시 True, 실패/스킵 시 False 반환
+    사용자 요청 흐름에서 비동기적으로 warm_recommend_snapshot을 실행한다.
+    - 이미 WARMING 중이면 중복 실행하지 않는다.
+    - ThreadPoolExecutor를 직접 사용해 블로킹 없이 백그라운드 실행.
+    - 반환값: 새 warm 작업이 시작됐으면 True, 스킵이면 False
     """
     with _SNAPSHOT_LOCK:
-        current_status = _RECOMMEND_SNAPSHOT["status"]
-        # 중복 실행 방지
-        if current_status == "WARMING":
-            logger.info("[Snapshot] 이미 WARMING 중 - 중복 Pre-Warm 스킵")
+        if _RECOMMEND_SNAPSHOT["status"] == "WARMING":
             return False
-        # 신선한 READY 상태이고 강제 아니면 스킵
-        if not force and current_status == "READY":
-            warmed_at = _RECOMMEND_SNAPSHOT.get("warmed_at")
-            if warmed_at:
-                elapsed = (datetime.now(timezone.utc) - warmed_at).total_seconds()
-                if elapsed < _SNAPSHOT_TTL_SECONDS:
-                    logger.info(f"[Snapshot] 신선한 스냅샷 존재 (경과 {elapsed:.0f}s) - Pre-Warm 스킵")
-                    return False
-        # WARMING 상태로 전환
         _RECOMMEND_SNAPSHOT["status"] = "WARMING"
         _RECOMMEND_SNAPSHOT["error"] = None
 
+    import concurrent.futures
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    executor.submit(_do_warm_job)
+    executor.shutdown(wait=False)
+    logger.info("[Snapshot] 사용자 요청으로 background warm 시작")
+    return True
+
+
+def _do_warm_job():
+    """실제 Pre-Warm 수행 (별도 스레드)"""
     logger.info("[Snapshot] Pre-Warm 시작 (Stage1 → Stage2 → Stage3)")
     t_start = time.time()
     try:
@@ -84,6 +84,7 @@ def warm_recommend_snapshot(force: bool = False) -> bool:
         with _SNAPSHOT_LOCK:
             _RECOMMEND_SNAPSHOT["status"] = "READY"
             _RECOMMEND_SNAPSHOT["quant_res"] = quant_res
+            _RECOMMEND_SNAPSHOT["last_good_quant_res"] = quant_res
             _RECOMMEND_SNAPSHOT["warmed_at"] = datetime.now(timezone.utc)
             _RECOMMEND_SNAPSHOT["elapsed_sec"] = round(elapsed, 2)
             _RECOMMEND_SNAPSHOT["error"] = None
@@ -94,10 +95,36 @@ def warm_recommend_snapshot(force: bool = False) -> bool:
         with _SNAPSHOT_LOCK:
             _RECOMMEND_SNAPSHOT["status"] = "FAILED"
             _RECOMMEND_SNAPSHOT["quant_res"] = None
+            # last_good_quant_res는 보존 (STALE fallback 용)
             _RECOMMEND_SNAPSHOT["elapsed_sec"] = round(elapsed, 2)
             _RECOMMEND_SNAPSHOT["error"] = str(e)
         logger.error(f"[Snapshot] Pre-Warm 실패 ({elapsed:.2f}초): {e}", exc_info=True)
         return False
+
+
+def warm_recommend_snapshot(force: bool = False) -> bool:
+    """
+    전체시장 Quant 추천 스냅샷을 Pre-Warm한다 (main.py startup 호출용).
+    - 이미 WARMING 중이면 중복 실행 방지 후 False 반환
+    - force=True 시 READY 상태도 강제 재수행
+    - 완료 시 True, 실패/스킵 시 False 반환 (동기 실행)
+    """
+    with _SNAPSHOT_LOCK:
+        current_status = _RECOMMEND_SNAPSHOT["status"]
+        if current_status == "WARMING":
+            logger.info("[Snapshot] 이미 WARMING 중 - 중복 Pre-Warm 스킵")
+            return False
+        if not force and current_status == "READY":
+            warmed_at = _RECOMMEND_SNAPSHOT.get("warmed_at")
+            if warmed_at:
+                elapsed = (datetime.now(timezone.utc) - warmed_at).total_seconds()
+                if elapsed < _SNAPSHOT_TTL_SECONDS:
+                    logger.info(f"[Snapshot] 신선한 스냅샷 존재 (경과 {elapsed:.0f}s) - Pre-Warm 스킵")
+                    return False
+        _RECOMMEND_SNAPSHOT["status"] = "WARMING"
+        _RECOMMEND_SNAPSHOT["error"] = None
+
+    return _do_warm_job()
 
 router = APIRouter(prefix="/api/recommend", tags=["Quant AI Recommendation"])
 
@@ -108,21 +135,26 @@ def get_recommend_status() -> Dict[str, Any]:
     Recommendation Snapshot 상태 조회 API
     상태: EMPTY | WARMING | READY | STALE | FAILED
     """
-    with _SNAPSHOT_LOCK:
-        status = _RECOMMEND_SNAPSHOT["status"]
-        warmed_at = _RECOMMEND_SNAPSHOT.get("warmed_at")
-        elapsed_sec = _RECOMMEND_SNAPSHOT.get("elapsed_sec")
-        error = _RECOMMEND_SNAPSHOT.get("error")
+    snap = _get_snapshot_copy()
+    status = snap["status"]
+    warmed_at = snap["warmed_at"]
+    elapsed_sec = snap["elapsed_sec"]
+    error = snap["error"]
+    has_last_good = snap["last_good_quant_res"] is not None
 
     age_sec = None
+    data_as_of = None
     if warmed_at is not None:
         age_sec = round((datetime.now(timezone.utc) - warmed_at).total_seconds())
+        data_as_of = warmed_at.strftime("%Y-%m-%d %H:%M:%S UTC")
 
     return {
         "status": status,
         "snapshot_age_sec": age_sec,
         "snapshot_ttl_sec": _SNAPSHOT_TTL_SECONDS,
         "last_elapsed_sec": elapsed_sec,
+        "data_as_of": data_as_of,
+        "has_last_good": has_last_good,
         "error": error,
     }
 
@@ -151,6 +183,8 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
 
     results: List[Dict[str, Any]] = []
     message = ""
+    is_stale_data = False
+    data_as_of = None
 
     try:
         if intent == "PORTFOLIO_SHORT_RANK":
@@ -179,27 +213,38 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
 
         else:
             # ─── 전체 시장 Quant 추천 파이프라인 ───
-            # 스냅샷 READY & 신선 → 즉시 재사용 (0~1초)
-            # 스냅샷 WARMING → Pre-Warm 진행 중 메시지 반환
-            # 스냅샷 EMPTY/FAILED → Cold Fetch 직접 수행 (fallback)
-            with _SNAPSHOT_LOCK:
-                snap_status = _RECOMMEND_SNAPSHOT["status"]
-                snap_quant_res = _RECOMMEND_SNAPSHOT.get("quant_res")
-                snap_warmed_at = _RECOMMEND_SNAPSHOT.get("warmed_at")
+            # READY & 신선  → 스냅샷 즉시 재사용 (0ms)
+            # WARMING        → PREPARING 즉시 반환 (polling 유도)
+            # STALE          → last_good 재사용 + stale=True + background refresh
+            # EMPTY          → background warm 시작 + PREPARING 즉시 반환
+            # FAILED + last_good → last_good STALE 재사용 + background refresh
+            # FAILED + 없음  → DATA_UNAVAILABLE 즉시 반환
+            # ★ 어떤 경우에도 HTTP 요청 안에서 Cold Fetch 동기 수행 금지 ★
+            snap = _get_snapshot_copy()
+            snap_status = snap["status"]
+            snap_quant_res = snap["quant_res"]
+            snap_warmed_at = snap["warmed_at"]
+            snap_last_good = snap["last_good_quant_res"]
 
+            # READY & 신선도 판단
+            snap_age = None
             snap_fresh = False
-            if snap_status == "READY" and snap_quant_res is not None and snap_warmed_at is not None:
-                age = (datetime.now(timezone.utc) - snap_warmed_at).total_seconds()
-                snap_fresh = age < _SNAPSHOT_TTL_SECONDS
+            if snap_quant_res is not None and snap_warmed_at is not None:
+                snap_age = (datetime.now(timezone.utc) - snap_warmed_at).total_seconds()
+                snap_fresh = (snap_status == "READY") and (snap_age < _SNAPSHOT_TTL_SECONDS)
+
+            data_as_of = snap_warmed_at.strftime("%Y-%m-%d %H:%M") if snap_warmed_at else None
+            is_stale_data = False
 
             if snap_fresh:
-                # 캐시 히트: 스냅샷 즉시 재사용
-                logger.info(f"[RecommendAPI] 스냅샷 캐시 히트 (경과 {age:.0f}s)")
+                # ① 캐시 히트: READY 스냅샷 즉시 재사용
+                logger.info(f"[RecommendAPI] 스냅샷 캐시 히트 (경과 {snap_age:.0f}s)")
                 quant_res = snap_quant_res
+
             elif snap_status == "WARMING":
-                # Pre-Warm 진행 중 → 사용자에게 안내 후 조기 반환
+                # ② Pre-Warm 진행 중 → PREPARING 즉시 반환
                 return {
-                    "status": "warming",
+                    "status": "preparing",
                     "intent": intent,
                     "query": req.question,
                     "requested_count": req_count,
@@ -208,19 +253,55 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
                     "horizon": horizon,
                     "elapsed_ms": int((time.time() - t_start) * 1000),
                     "results": [],
-                    "message": "추천 데이터를 준비하고 있습니다. 잠시 후 다시 시도해 주세요. (약 30~60초 소요)"
+                    "message": "전체시장 추천 데이터를 준비하고 있습니다. 잠시만 기다려 주세요."
                 }
+
+            elif snap_status in ("STALE",) and snap_quant_res is not None:
+                # ③ STALE: 기존 데이터 재사용 + background refresh
+                logger.info(f"[RecommendAPI] STALE 스냅샷 재사용 (data_as_of={data_as_of})")
+                quant_res = snap_quant_res
+                is_stale_data = True
+                _trigger_background_warm()
+
+            elif snap_status == "FAILED" and snap_last_good is not None:
+                # ④ FAILED + last_good 있음: STALE 재사용 + background refresh
+                logger.warning(f"[RecommendAPI] FAILED 상태이나 last_good 재사용 (STALE fallback)")
+                quant_res = snap_last_good
+                is_stale_data = True
+                _trigger_background_warm()
+
+            elif snap_status == "FAILED" and snap_last_good is None:
+                # ⑤ FAILED + last_good 없음: 즉시 DATA_UNAVAILABLE
+                _trigger_background_warm()  # 1회만 재시도 트리거
+                return {
+                    "status": "unavailable",
+                    "intent": intent,
+                    "query": req.question,
+                    "requested_count": req_count,
+                    "returned_count": 0,
+                    "market_scope": market_scope,
+                    "horizon": horizon,
+                    "elapsed_ms": int((time.time() - t_start) * 1000),
+                    "results": [],
+                    "message": "수급 데이터 수집에 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
+                }
+
             else:
-                # EMPTY / FAILED / STALE → Cold Fetch fallback (직접 실행)
-                logger.warning(f"[RecommendAPI] 스냅샷 미준비(snap_status={snap_status}) - Cold Fetch 직접 수행")
-                quant_res = run_quant_recommendation(stock_stage1_count=100, etf_stage1_count=50, max_workers=10)
-                # Cold Fetch 완료 후 스냅샷에도 저장 (다음 요청 대비)
-                with _SNAPSHOT_LOCK:
-                    _RECOMMEND_SNAPSHOT["status"] = "READY"
-                    _RECOMMEND_SNAPSHOT["quant_res"] = quant_res
-                    _RECOMMEND_SNAPSHOT["warmed_at"] = datetime.now(timezone.utc)
-                    _RECOMMEND_SNAPSHOT["elapsed_sec"] = round(time.time() - t_start, 2)
-                    _RECOMMEND_SNAPSHOT["error"] = None
+                # ⑥ EMPTY (또는 기타 미준비): background warm 시작 + PREPARING 즉시 반환
+                logger.info(f"[RecommendAPI] 스냅샷 미준비(status={snap_status}) - background warm 트리거")
+                _trigger_background_warm()
+                return {
+                    "status": "preparing",
+                    "intent": intent,
+                    "query": req.question,
+                    "requested_count": req_count,
+                    "returned_count": 0,
+                    "market_scope": market_scope,
+                    "horizon": horizon,
+                    "elapsed_ms": int((time.time() - t_start) * 1000),
+                    "results": [],
+                    "message": "전체시장 추천 데이터를 준비하고 있습니다. 잠시만 기다려 주세요."
+                }
             
             stock_all = quant_res["stock_results"]["all_quant_analyzed"]
             etf_all = quant_res["etf_results"]["all_quant_analyzed"]
@@ -353,6 +434,8 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
         "market_scope": market_scope,
         "horizon": horizon,
         "elapsed_ms": elapsed_ms,
+        "stale": is_stale_data,
+        "data_as_of": data_as_of,
         "cache": {
             "stage1": True,
             "stage2": True,
@@ -361,3 +444,4 @@ def ask_quant_recommendation(req: RecommendRequest = Body(...)) -> Dict[str, Any
         "results": formatted_results,
         "message": message
     }
+

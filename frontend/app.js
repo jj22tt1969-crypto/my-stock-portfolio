@@ -4659,6 +4659,16 @@ function renderRecommendResult(data) {
         </div>
     `;
 
+    // STALE 데이터 배너
+    if (data.stale === true) {
+        const asOf = data.data_as_of ? ` (기준: ${data.data_as_of})` : '';
+        html += `
+            <div style="font-size: 12px; color: #f59e0b; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                ⚠️ 이전 분석 데이터를 임시 표시 중입니다${escapeHtml(asOf)}. 최신 데이터로 자동 갱신 중입니다.
+            </div>
+        `;
+    }
+
     if (data.requested_count > data.returned_count && data.returned_count > 0) {
         html += `
             <div style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px;">
@@ -4725,6 +4735,153 @@ function renderRecommendResult(data) {
     cardEl.innerHTML = html;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Recommendation Snapshot Polling 상태 (중복 방지)
+// ─────────────────────────────────────────────────────────────
+let _recPollTimer = null;
+let _recPollActive = false;
+let _recPendingQuestion = null;  // polling 완료 후 재전송할 원본 질문
+
+function _stopRecommendPoll() {
+    if (_recPollTimer) {
+        clearInterval(_recPollTimer);
+        _recPollTimer = null;
+    }
+    _recPollActive = false;
+}
+
+function _renderRecommendPreparing(question) {
+    const cardEl = document.getElementById('recAnswerCard');
+    if (cardEl) {
+        cardEl.style.display = 'block';
+        cardEl.innerHTML = `
+            <div id="recPreparingBox" style="padding: 24px 16px; text-align: center; color: #38bdf8;">
+                <div class="spinner" style="margin: 0 auto 14px auto; width: 32px; height: 32px; border: 3px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <div style="font-size: 14.5px; font-weight: 800; margin-bottom: 8px;">전체시장 추천 데이터를 준비하고 있습니다.</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;">KOSPI·KOSDAQ 전체 수급·퀀트 스크리닝 중 (최대 150초)</div>
+                <div id="recPrepProgressText" style="font-size: 11px; color: #64748b;">준비 상태를 확인하고 있습니다...</div>
+            </div>
+        `;
+    }
+}
+
+async function _startRecommendPolling(question) {
+    if (_recPollActive) return;  // 중복 poll 방지
+
+    _recPollActive = true;
+    _recPendingQuestion = question;
+    const MAX_WAIT_MS = 150000;  // 150초
+    const POLL_INTERVAL_MS = 3000;
+    const startedAt = Date.now();
+    let pollCount = 0;
+
+    _recPollTimer = setInterval(async () => {
+        if (!_recPollActive) return;
+
+        pollCount++;
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        const progressEl = document.getElementById('recPrepProgressText');
+        if (progressEl) {
+            progressEl.textContent = `데이터 준비 중... (${elapsed}초 경과 / 최대 150초)`;
+        }
+
+        // 타임아웃 초과
+        if (Date.now() - startedAt > MAX_WAIT_MS) {
+            _stopRecommendPoll();
+            _releaseRecommendButton();
+            renderRecommendError('전체시장 추천 데이터 준비 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/recommend/status', { method: 'GET' });
+            if (!resp.ok) return;  // 서버 일시 오류는 무시하고 계속 polling
+            const statusData = await resp.json();
+            const snapStatus = statusData.status;
+
+            if (snapStatus === 'READY') {
+                // 준비 완료 → polling 종료 후 원본 질문 1회 자동 재전송
+                _stopRecommendPoll();
+                await _sendRecommendRequest(_recPendingQuestion);
+            } else if (snapStatus === 'FAILED') {
+                // 실패 → polling 종료 + 에러 안내
+                _stopRecommendPoll();
+                _releaseRecommendButton();
+                renderRecommendError('수급 데이터 준비에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+            }
+            // WARMING / EMPTY: 계속 polling
+        } catch (e) {
+            // 네트워크 오류는 무시하고 계속 polling
+        }
+    }, POLL_INTERVAL_MS);
+}
+
+function _releaseRecommendButton() {
+    const btnSubmit = document.getElementById('btnRecSubmit');
+    if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.style.opacity = '1';
+        btnSubmit.style.cursor = 'pointer';
+    }
+}
+
+async function _sendRecommendRequest(question) {
+    /** 실제 /api/recommend/ask POST 요청 전송 (타임아웃 10초 — 스냅샷 히트 전용) */
+    const cardEl = document.getElementById('recAnswerCard');
+    if (cardEl) {
+        cardEl.style.display = 'block';
+        cardEl.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #38bdf8;">
+                <div class="spinner" style="margin: 0 auto 10px auto; width: 24px; height: 24px; border: 3px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <div style="font-size: 13px;">추천 결과를 불러오는 중...</div>
+            </div>
+        `;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);  // 스냅샷 히트 기준 10초
+
+    try {
+        const response = await fetch('/api/recommend/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            let errorText = `서버 응답 오류 (HTTP ${response.status})`;
+            try {
+                const errData = await response.json();
+                if (errData.detail) errorText = errData.detail;
+            } catch (e) {}
+            throw new Error(errorText);
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'preparing') {
+            // 재전송 후에도 preparing: 다시 polling 시작 (중복 방지됨)
+            _renderRecommendPreparing(question);
+            _startRecommendPolling(question);
+        } else if (data.status === 'unavailable') {
+            renderRecommendError(data.message || '현재 추천 엔진을 사용할 수 없습니다.');
+        } else {
+            renderRecommendResult(data);
+        }
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            renderRecommendError('추천 결과를 불러오는 중 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+        } else {
+            renderRecommendError(`추천 분석 중 오류가 발생했습니다: ${err.message || '네트워크 연결 실패'}`);
+        }
+    } finally {
+        _releaseRecommendButton();
+    }
+}
+
 async function submitRecommendQuestion() {
     const txtArea = document.getElementById('recQuestionText');
     const btnSubmit = document.getElementById('btnRecSubmit');
@@ -4738,39 +4895,40 @@ async function submitRecommendQuestion() {
         return;
     }
 
+    // 중복 submit 방지 (버튼 이미 비활성화 || poll 진행 중)
     if (btnSubmit && btnSubmit.disabled) return;
+    if (_recPollActive) return;
 
-    // Loading UI
+    // 버튼 비활성화
     if (btnSubmit) {
         btnSubmit.disabled = true;
         btnSubmit.style.opacity = '0.6';
         btnSubmit.style.cursor = 'not-allowed';
     }
 
+    // 초기 로딩 UI
     if (cardEl) {
         cardEl.style.display = 'block';
         cardEl.innerHTML = `
             <div style="padding: 24px 16px; text-align: center; color: #38bdf8;">
                 <div class="spinner" style="margin: 0 auto 12px auto; width: 28px; height: 28px; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                 <div style="font-size: 14.5px; font-weight: 800; margin-bottom: 6px;">전체 시장을 분석 중입니다...</div>
-                <div style="font-size: 12px; color: #94a3b8;">KOSPI·KOSDAQ 수급 및 기술지표 다단계 스크리닝 진행 중 (최대 45초)</div>
+                <div style="font-size: 12px; color: #94a3b8;">추천 데이터 상태를 확인하고 있습니다...</div>
             </div>
         `;
     }
 
+    // 최초 요청 전송 (타임아웃 15초 — 스냅샷 상태 확인용)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 타임아웃
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
         const response = await fetch('/api/recommend/ask', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ question: question }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question }),
             signal: controller.signal
         });
-
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -4783,27 +4941,34 @@ async function submitRecommendQuestion() {
         }
 
         const data = await response.json();
-        if (data.status === 'unavailable') {
+
+        if (data.status === 'preparing') {
+            // 백엔드가 WARMING/EMPTY → Polling UX 시작
+            _renderRecommendPreparing(question);
+            await _startRecommendPolling(question);
+            // 버튼은 polling 종료 시 _releaseRecommendButton()에서 해제
+        } else if (data.status === 'unavailable') {
             renderRecommendError(data.message || '현재 추천 엔진을 사용할 수 없습니다.');
+            _releaseRecommendButton();
         } else {
             renderRecommendResult(data);
+            _releaseRecommendButton();
         }
     } catch (err) {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-            renderRecommendError('전체시장 분석 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+            // 최초 요청 타임아웃 → 혹시 백엔드가 Cold Fetch 시도 중일 수 있음
+            // Polling으로 전환하여 상태 재확인
+            _renderRecommendPreparing(question);
+            await _startRecommendPolling(question);
         } else {
             renderRecommendError(`추천 분석 중 오류가 발생했습니다: ${err.message || '네트워크 연결 실패'}`);
-        }
-    } finally {
-        if (btnSubmit) {
-            btnSubmit.disabled = false;
-            btnSubmit.style.opacity = '1';
-            btnSubmit.style.cursor = 'pointer';
+            _releaseRecommendButton();
         }
     }
 }
 window.submitRecommendQuestion = submitRecommendQuestion;
+
 
 // DOMContentLoaded 이벤트 연결 (Ctrl+Enter / Cmd+Enter 바인딩)
 document.addEventListener('DOMContentLoaded', function() {
