@@ -4278,6 +4278,7 @@ async function ftSelectStock(ticker, name, assetType) {
         const tech = res.data.technical_analysis || {};
         const timing = res.data.timing_analysis || {};
         const cross = res.cross_analysis || {};
+        const smart = res.data.smart_analysis || res.data.smart_score || res.smart || {};
 
         const latestPrice = tech.latest_close || 0;
         const finalDec = dec.decision || 'HOLD';
