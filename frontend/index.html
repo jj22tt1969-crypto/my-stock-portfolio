@@ -111,8 +111,8 @@
                     <div class="sidebar-quote-form" style="position: relative; display: flex; flex-direction: column; gap: 8px;">
                         <div style="position: relative; width: 100%;">
                             <input type="text" id="sidebarQuoteInput" placeholder="종목명 또는 코드 (예: 삼성전자, NAVER)" 
-                                   oninput="handleSidebarQuoteSearch(this.value, event)" 
-                                   onkeydown="if(event.key==='Enter'){event.preventDefault(); submitSidebarQuoteSearch();}"
+                                   oninput="handleSidebarQuoteSearch(this.value)" 
+                                   onkeydown="handleSidebarQuoteKeyDown(event)"
                                    style="width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 10px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; outline: none;" autocomplete="off">
                             <div id="sidebarQuoteCandidateList" class="suggestions-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; max-height: 220px; overflow-y: auto; background: var(--card-bg-solid); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin-top: 4px;"></div>
                         </div>
@@ -202,7 +202,7 @@
                                 <div style="display: flex; gap: 8px; width: 100%;">
                                     <input type="text" id="mobileQuoteInput" placeholder="종목명 또는 코드 (예: 삼성전자, 신풍제약)"
                                            oninput="handleMobileQuoteSearch(this.value)"
-                                           onkeydown="if(event.key==='Enter'){event.preventDefault(); submitMobileQuoteSearch();}"
+                                           onkeydown="handleMobileQuoteKeyDown(event)"
                                            style="flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; outline: none;" autocomplete="off">
                                     <button class="btn btn-primary" onclick="submitMobileQuoteSearch()" style="padding: 10px 16px; font-size: 13px; font-weight: 700; border-radius: 8px; white-space: nowrap;">
                                         🔍 조회

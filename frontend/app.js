@@ -3477,16 +3477,17 @@ document.addEventListener('click', (e) => {
     }
 });
 
-function handleSidebarQuoteSearch(val, event) {
+function handleSidebarQuoteKeyDown(event) {
     const listEl = document.getElementById('sidebarQuoteCandidateList');
     const items = listEl ? listEl.querySelectorAll('.candidate-item') : [];
 
-    // 키보드 방향키 탐색 처리
-    if (event && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Escape')) {
-        if (event.key === 'Escape') {
-            hideSidebarQuoteSuggestions();
-            return;
-        }
+    if (event.key === 'Escape') {
+        hideSidebarQuoteSuggestions();
+        return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
         if (items.length > 0) {
             if (event.key === 'ArrowDown') {
                 sidebarHighlightIndex = (sidebarHighlightIndex + 1) % items.length;
@@ -3501,10 +3502,26 @@ function handleSidebarQuoteSearch(val, event) {
                     item.style.background = 'transparent';
                 }
             });
-            return;
         }
+        return;
     }
 
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        if (sidebarHighlightIndex >= 0 && sidebarHighlightIndex < items.length) {
+            const activeItem = items[sidebarHighlightIndex];
+            const name = activeItem ? activeItem.getAttribute('data-name') : null;
+            const ticker = activeItem ? activeItem.getAttribute('data-ticker') : null;
+            if (name && ticker) {
+                selectSidebarQuoteSuggestion(name, ticker);
+                return;
+            }
+        }
+        submitSidebarQuoteSearch();
+    }
+}
+
+function handleSidebarQuoteSearch(val) {
     if (sidebarQuoteDebounceTimer) clearTimeout(sidebarQuoteDebounceTimer);
     selectedSidebarTicker = ""; // 입력 변경 시 이전 선택 초기화
     sidebarHighlightIndex = -1;
@@ -3562,6 +3579,8 @@ function renderSidebarQuoteCandidates(candidates) {
 
         html += `
             <div class="candidate-item" 
+                 data-name="${safeName}"
+                 data-ticker="${c.ticker}"
                  onmousedown="event.preventDefault(); selectSidebarQuoteSuggestion('${safeName}', '${c.ticker}');"
                  onmouseover="this.style.background='rgba(56, 189, 248, 0.2)';"
                  onmouseout="this.style.background='transparent';"
@@ -3593,6 +3612,7 @@ function selectSidebarQuoteSuggestion(name, ticker) {
 let mobileQuoteSearchSeq = 0;
 let mobileQuoteDebounceTimer = null;
 let selectedMobileTicker = "";
+let mobileHighlightIndex = -1;
 
 function hideMobileQuoteSuggestions() {
     if (mobileQuoteDebounceTimer) clearTimeout(mobileQuoteDebounceTimer);
@@ -3615,9 +3635,54 @@ document.addEventListener('click', (e) => {
     }
 });
 
+function handleMobileQuoteKeyDown(event) {
+    const listEl = document.getElementById('mobileQuoteCandidateList');
+    const items = listEl ? listEl.querySelectorAll('.candidate-item') : [];
+
+    if (event.key === 'Escape') {
+        hideMobileQuoteSuggestions();
+        return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (items.length > 0) {
+            if (event.key === 'ArrowDown') {
+                mobileHighlightIndex = (mobileHighlightIndex + 1) % items.length;
+            } else if (event.key === 'ArrowUp') {
+                mobileHighlightIndex = (mobileHighlightIndex - 1 + items.length) % items.length;
+            }
+            items.forEach((item, idx) => {
+                if (idx === mobileHighlightIndex) {
+                    item.style.background = 'rgba(56, 189, 248, 0.25)';
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.style.background = 'transparent';
+                }
+            });
+        }
+        return;
+    }
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        if (mobileHighlightIndex >= 0 && mobileHighlightIndex < items.length) {
+            const activeItem = items[mobileHighlightIndex];
+            const name = activeItem ? activeItem.getAttribute('data-name') : null;
+            const ticker = activeItem ? activeItem.getAttribute('data-ticker') : null;
+            if (name && ticker) {
+                selectMobileQuoteSuggestion(name, ticker);
+                return;
+            }
+        }
+        submitMobileQuoteSearch();
+    }
+}
+
 function handleMobileQuoteSearch(val) {
     if (mobileQuoteDebounceTimer) clearTimeout(mobileQuoteDebounceTimer);
     selectedMobileTicker = ""; // 입력 변경 시 이전 선택 초기화
+    mobileHighlightIndex = -1;
 
     const seq = ++mobileQuoteSearchSeq;
     const query = String(val || '').trim();
@@ -3672,7 +3737,10 @@ function renderMobileQuoteCandidates(candidates) {
 
         const escapedName = (item.name || '').replace(/'/g, "\\'");
         html += `
-            <div class="candidate-item" onclick="selectMobileQuoteSuggestion('${escapedName}', '${item.ticker}')"
+            <div class="candidate-item" 
+                 data-name="${escapedName}"
+                 data-ticker="${item.ticker}"
+                 onclick="selectMobileQuoteSuggestion('${escapedName}', '${item.ticker}')"
                  style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;">
                 <div style="display: flex; align-items: center; gap: 4px;">
                     <span style="font-size: 12px; font-weight: 700; color: var(--text-color, #e2e8f0);">${item.name}</span>
