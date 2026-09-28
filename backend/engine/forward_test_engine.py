@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import datetime
+import statistics
 from typing import List, Dict, Any, Optional
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio.db")
@@ -12,7 +13,7 @@ def get_connection():
     return conn
 
 def init_forward_test_db():
-    """Forward Test 독립 전용 DB 테이블 생성"""
+    """Forward Test 독립 전용 DB 테이블 생성 및 Additive Migration"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -53,6 +54,48 @@ def init_forward_test_db():
         )
     """)
     conn.commit()
+
+    # Forward Test 2.0 Additive Migration Columns Check & Execute
+    try:
+        cursor.execute("PRAGMA table_info(forward_test_signals)")
+        existing_cols = {row['name'] for row in cursor.fetchall()}
+    except Exception:
+        try:
+            cursor.execute("SELECT * FROM forward_test_signals LIMIT 0")
+            existing_cols = {desc[0] for desc in cursor.description}
+        except Exception:
+            existing_cols = set()
+
+    new_columns = [
+        ("source_type", "TEXT DEFAULT 'MANUAL'"),
+        ("data_as_of", "TEXT"),
+        ("formula_version", "TEXT"),
+        ("buy_score", "REAL"),
+        ("sell_score", "REAL"),
+        ("watering_score", "REAL"),
+        ("mfi", "REAL"),
+        ("trend_state", "TEXT"),
+        ("trend_score", "REAL"),
+        ("volume_state", "TEXT"),
+        ("volume_ratio", "REAL"),
+        ("flow_state", "TEXT"),
+        ("rs_state", "TEXT"),
+        ("rs_20d", "REAL"),
+        ("risk_state", "TEXT"),
+        ("atr_pct", "REAL"),
+        ("evaluated_at", "TIMESTAMP"),
+        ("max_gain", "REAL"),
+        ("max_drawdown", "REAL"),
+    ]
+
+    for col_name, col_type in new_columns:
+        if col_name not in existing_cols:
+            try:
+                cursor.execute(f"ALTER TABLE forward_test_signals ADD COLUMN {col_name} {col_type}")
+                conn.commit()
+            except Exception:
+                pass
+
     conn.close()
 
 def record_signal_snapshot(
@@ -60,25 +103,84 @@ def record_signal_snapshot(
     name: str,
     asset_type: str,
     price: float,
-    analysis_data: Dict[str, Any]
+    analysis_data: Dict[str, Any],
+    source_type: str = "MANUAL"
 ) -> bool:
     """
-    신호 발생 시 당시의 모든 분석 지표를 스냅샷으로 독립 기록
+    신호 발생 시 당시의 모든 분석 지표를 스냅샷으로 독립 기록 (D0 Snapshot 2.0)
     - 미래 데이터 사용 금지 (Look-ahead bias = 0)
     - 동일 종목 동일 날짜 중복 스냅샷 방지
     """
     init_forward_test_db()
     today_str = datetime.date.today().strftime("%Y-%m-%d")
 
-    dec = analysis_data.get("decision", {})
-    flow = analysis_data.get("flow_analysis", {})
-    tech = analysis_data.get("technical_analysis", {})
-    timing = analysis_data.get("timing_analysis", {})
-    cross = analysis_data.get("cross_analysis", {})
-    tf = dec.get("trend_filter", {})
+    def safe_float(val):
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    dec = analysis_data.get("decision", {}) if isinstance(analysis_data.get("decision"), dict) else {}
+    flow = analysis_data.get("flow_analysis", {}) if isinstance(analysis_data.get("flow_analysis"), dict) else {}
+    tech = analysis_data.get("technical_analysis", {}) if isinstance(analysis_data.get("technical_analysis"), dict) else {}
+    timing = analysis_data.get("timing_analysis", {}) if isinstance(analysis_data.get("timing_analysis"), dict) else {}
+    cross = analysis_data.get("cross_analysis", {}) if isinstance(analysis_data.get("cross_analysis"), dict) else {}
+    meta = analysis_data.get("metadata", {}) if isinstance(analysis_data.get("metadata"), dict) else {}
+    tf = dec.get("trend_filter", {}) if isinstance(dec.get("trend_filter"), dict) else {}
 
     orig_dec = dec.get("original_decision", dec.get("decision", "HOLD"))
     final_dec = dec.get("decision", "HOLD")
+
+    # Subdicts
+    trend_an = tech.get("trend_analysis", {}) if isinstance(tech.get("trend_analysis"), dict) else {}
+    vol_an = tech.get("volume_analysis", {}) if isinstance(tech.get("volume_analysis"), dict) else {}
+    rs_an = tech.get("relative_strength_analysis", {}) if isinstance(tech.get("relative_strength_analysis"), dict) else {}
+    risk_an = tech.get("risk_analysis", {}) if isinstance(tech.get("risk_analysis"), dict) else {}
+    smart_an = flow.get("smart_analysis", {}) or analysis_data.get("smart_analysis", {}) or analysis_data.get("smart_score", {})
+    if not isinstance(smart_an, dict):
+        smart_an = {}
+
+    # Safe Extraction: Missing -> None/NULL (No false 0 / 50 defaults)
+    data_as_of = analysis_data.get("data_as_of") or (meta.get("updated_at") if isinstance(meta, dict) else None) or flow.get("last_updated")
+    formula_version = None
+
+    buy_score = safe_float(dec.get("buy_score"))
+    sell_score = safe_float(dec.get("sell_score"))
+    watering_score = safe_float(dec.get("watering_score"))
+
+    mfi = safe_float(tech.get("mfi"))
+
+    trend_state = trend_an.get("trend_state") or tech.get("trend_state")
+    trend_score = safe_float(trend_an.get("trend_score") if trend_an.get("trend_score") is not None else tech.get("trend_score"))
+
+    volume_state = vol_an.get("volume_state") or tech.get("volume_state")
+    vol_ratio_val = vol_an.get("volume_ratio") if vol_an.get("volume_ratio") is not None else tech.get("volume_ratio")
+    volume_ratio = safe_float(vol_ratio_val)
+
+    flow_state = flow.get("flow_state")
+
+    rs_state = rs_an.get("rs_state") or tech.get("rs_state")
+    rs_20d = safe_float(rs_an.get("rs_20d") if rs_an.get("rs_20d") is not None else tech.get("rs_20d"))
+
+    risk_state = risk_an.get("risk_state") or tech.get("risk_state")
+    atr_pct = safe_float(risk_an.get("atr_pct") if risk_an.get("atr_pct") is not None else tech.get("atr_pct"))
+
+    s_score_val = smart_an.get("score") if smart_an.get("score") is not None else (
+        smart_an.get("smart_score") if smart_an.get("smart_score") is not None else None
+    )
+    smart_score = safe_float(s_score_val)
+    smart_grade = smart_an.get("signal_grade") or smart_an.get("grade") or smart_an.get("smart_grade")
+
+    fcs_score = safe_float(flow.get("fcs_score"))
+    ffcs_score = safe_float(flow.get("ffcs_score"))
+    rsi = safe_float(tech.get("rsi"))
+    rmi = safe_float(tech.get("rmi"))
+    ma60 = safe_float(tech.get("ma60"))
+    ma120 = safe_float(tech.get("ma120"))
+
+    concurrency_code = flow.get("concurrency", {}).get("code", "NONE") if isinstance(flow.get("concurrency"), dict) else "NONE"
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -91,25 +193,39 @@ def record_signal_snapshot(
                 fcs_score, ffcs_score, rsi, rmi,
                 smart_score, smart_grade, concurrency_code,
                 ma60, ma120, is_ma_downtrend, timing_signal, cross_status,
-                data_source, timestamp_str
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                data_source, timestamp_str,
+                source_type, data_as_of, formula_version,
+                buy_score, sell_score, watering_score,
+                mfi, trend_state, trend_score, volume_state, volume_ratio,
+                flow_state, rs_state, rs_20d, risk_state, atr_pct
+            ) VALUES (
+                ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?
+            )
         """, (
             ticker, name, asset_type or 'STOCK', today_str, float(price),
             orig_dec, final_dec,
-            float(flow.get("fcs_score", 50.0)),
-            float(flow.get("ffcs_score", 50.0)),
-            float(tech.get("rsi", 50.0)),
-            float(tech.get("rmi", 50.0)),
-            None,
-            None,
-            flow.get("concurrency", {}).get("code", "NONE"),
-            float(tech.get("ma60", 0.0)) if tech.get("ma60") else None,
-            float(tech.get("ma120", 0.0)) if tech.get("ma120") else None,
+            fcs_score, ffcs_score, rsi, rmi,
+            smart_score, smart_grade,
+            concurrency_code,
+            ma60, ma120,
             1 if tf.get("active", False) else 0,
             timing.get("timing_signal", "NEUTRAL"),
             cross.get("status_label", "정상"),
             "실시간 QUANT API",
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            source_type or 'MANUAL', data_as_of, formula_version,
+            buy_score, sell_score, watering_score,
+            mfi, trend_state, trend_score, volume_state, volume_ratio,
+            flow_state, rs_state, rs_20d, risk_state, atr_pct
         ))
         conn.commit()
         conn.close()
@@ -144,7 +260,7 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
 
     cursor.execute("""
         SELECT * FROM forward_test_signals
-        WHERE status_5d = 'PENDING' OR status_10d = 'PENDING' OR status_20d = 'PENDING'
+        WHERE status_5d = 'PENDING' OR status_10d = 'PENDING' OR status_20d = 'PENDING' OR (status_20d = 'COMPLETED' AND max_drawdown IS NULL)
     """)
     rows = cursor.fetchall()
 
@@ -158,7 +274,7 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
     for row in rows:
         ticker = row["ticker"]
         sig_date_str = row["signal_date"]
-        base_price = row["price"]
+        base_price = float(row["price"])
 
         flow_info = get_stock_flow_data(ticker, min_days=40)
         if not flow_info.get("data_available"):
@@ -192,12 +308,33 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
             up_dict["status_10d"] = 'COMPLETED'
 
         # 20거래일 경과 평가
+        is_20d_completed = row["status_20d"] == 'COMPLETED' or (row["status_20d"] == 'PENDING' and days_after >= 20)
         if row["status_20d"] == 'PENDING' and days_after >= 20:
             p20 = float(after_df.iloc[19]["close_price"])
             ret20 = ((p20 - base_price) / base_price) * 100.0
             up_dict["price_20d"] = p20
             up_dict["ret_20d"] = round(ret20, 2)
             up_dict["status_20d"] = 'COMPLETED'
+
+        # max_gain & max_drawdown (D+20까지 성숙한 CASE에만 계산)
+        if is_20d_completed and days_after >= 20 and (row.get("max_drawdown") is None or "status_20d" in up_dict):
+            p_list = [base_price] + [float(x) for x in after_df.iloc[:20]["close_price"]]
+            max_p = max(p_list)
+            max_gain_val = round(((max_p - base_price) / base_price) * 100.0, 2)
+
+            peak = p_list[0]
+            max_dd_val = 0.0
+            for p in p_list:
+                if p > peak:
+                    peak = p
+                dd = ((p - peak) / peak) * 100.0
+                if dd < max_dd_val:
+                    max_dd_val = dd
+            max_drawdown_val = round(max_dd_val, 2)
+
+            up_dict["max_gain"] = max_gain_val
+            up_dict["max_drawdown"] = max_drawdown_val
+            up_dict["evaluated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if up_dict:
             set_clause = ", ".join([f"{k} = ?" for k in up_dict.keys()])
@@ -328,6 +465,134 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
     completed_10d_cnt = len([r for r in rows if r.get("status_10d") == 'COMPLETED'])
     completed_20d_cnt = len([r for r in rows if r.get("status_20d") == 'COMPLETED'])
 
+    # 4. Forward Test Renewal F3C-1 Additive Read Model (performance_v2)
+    def calc_horizon_perf(status_key, ret_key):
+        completed = [r for r in rows if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None]
+        completed_cnt = len(completed)
+        pos_cnt = len([r for r in completed if r[ret_key] > 0])
+        neg_cnt = len([r for r in completed if r[ret_key] < 0])
+        flat_cnt = len([r for r in completed if r[ret_key] == 0])
+        denom = pos_cnt + neg_cnt
+        pos_rate = round((pos_cnt / denom) * 100.0, 2) if denom > 0 else None
+        return {
+            "completed_count": completed_cnt,
+            "positive_count": pos_cnt,
+            "negative_count": neg_cnt,
+            "flat_count": flat_cnt,
+            "positive_return_rate": pos_rate
+        }
+
+    def calc_decision_acc(status_key, ret_key):
+        completed = [r for r in rows if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None]
+        correct_cnt = 0
+        wrong_cnt = 0
+        flat_cnt = 0
+        non_dir_cnt = 0
+        for r in completed:
+            dec = r.get("final_decision")
+            ret = r.get(ret_key)
+            if dec in ["HOLD", "TAKE_PROFIT"]:
+                non_dir_cnt += 1
+            elif dec in ["BUY", "AVERAGE"]:
+                if ret > 0:
+                    correct_cnt += 1
+                elif ret < 0:
+                    wrong_cnt += 1
+                else:
+                    flat_cnt += 1
+            elif dec == "REDUCE":
+                if ret < 0:
+                    correct_cnt += 1
+                elif ret > 0:
+                    wrong_cnt += 1
+                else:
+                    flat_cnt += 1
+            else:
+                non_dir_cnt += 1
+        eligible_cnt = correct_cnt + wrong_cnt
+        acc_pct = round((correct_cnt / eligible_cnt) * 100.0, 2) if eligible_cnt > 0 else None
+        return {
+            "eligible_count": eligible_cnt,
+            "correct_count": correct_cnt,
+            "wrong_count": wrong_cnt,
+            "flat_count": flat_cnt,
+            "non_directional_count": non_dir_cnt,
+            "accuracy_pct": acc_pct
+        }
+
+    def calc_action_perf(action_name, status_key, ret_key):
+        act_rows = [r for r in rows if r.get("final_decision") == action_name and r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None]
+        sample_cnt = len(act_rows)
+        if sample_cnt == 0:
+            return {
+                "sample_count": 0,
+                "avg_return": None,
+                "median_return": None,
+                "positive_return_rate": None,
+                "direction_accuracy": None
+            }
+        rets = [r[ret_key] for r in act_rows]
+        avg_ret = round(sum(rets) / len(rets), 2)
+        med_ret = round(statistics.median(rets), 2)
+        pos_cnt = len([r for r in rets if r > 0])
+        neg_cnt = len([r for r in rets if r < 0])
+        denom = pos_cnt + neg_cnt
+        pos_rate = round((pos_cnt / denom) * 100.0, 2) if denom > 0 else None
+
+        dir_acc = None
+        if action_name in ["BUY", "AVERAGE"]:
+            dir_acc = pos_rate
+        elif action_name == "REDUCE":
+            dir_acc = round((neg_cnt / denom) * 100.0, 2) if denom > 0 else None
+
+        return {
+            "sample_count": sample_cnt,
+            "avg_return": avg_ret,
+            "median_return": med_ret,
+            "positive_return_rate": pos_rate,
+            "direction_accuracy": dir_acc
+        }
+
+    def calc_data_quality(status_key, ret_key):
+        total = len(rows)
+        pending_cnt = len([r for r in rows if r.get(status_key) == 'PENDING'])
+        completed_cnt = len([r for r in rows if r.get(status_key) == 'COMPLETED'])
+        null_cnt = len([r for r in rows if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is None])
+        flat_cnt = len([r for r in rows if r.get(status_key) == 'COMPLETED' and r.get(ret_key) == 0])
+        insufficient_cnt = pending_cnt + null_cnt
+        return {
+            "total_signals": total,
+            "pending_count": pending_cnt,
+            "completed_count": completed_cnt,
+            "null_count": null_cnt,
+            "excluded_flat_count": flat_cnt,
+            "excluded_data_insufficient_count": insufficient_cnt
+        }
+
+    actions = ["BUY", "AVERAGE", "HOLD", "TAKE_PROFIT", "REDUCE"]
+    horizons = [("5D", "status_5d", "ret_5d"), ("10D", "status_10d", "ret_10d"), ("20D", "status_20d", "ret_20d")]
+
+    horizon_perf = {}
+    decision_acc = {}
+    data_qual = {}
+    for h_label, s_key, r_key in horizons:
+        horizon_perf[h_label] = calc_horizon_perf(s_key, r_key)
+        decision_acc[h_label] = calc_decision_acc(s_key, r_key)
+        data_qual[h_label] = calc_data_quality(s_key, r_key)
+
+    action_perf = {}
+    for act in actions:
+        action_perf[act] = {}
+        for h_label, s_key, r_key in horizons:
+            action_perf[act][h_label] = calc_action_perf(act, s_key, r_key)
+
+    performance_v2 = {
+        "horizon_performance": horizon_perf,
+        "decision_accuracy": decision_acc,
+        "action_performance": action_perf,
+        "data_quality": data_qual
+    }
+
     return {
         "total_signals": total_signals,
         "completed_samples": {
@@ -338,5 +603,6 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
         "decision_stats": decision_stats,
         "core_signal_stats": core_signal_stats,
         "asset_type_stats": asset_type_stats,
-        "recent_signals": rows[:20]  # 최근 20개 신호 스냅샷
+        "recent_signals": rows[:20],  # 최근 20개 신호 스냅샷
+        "performance_v2": performance_v2
     }
