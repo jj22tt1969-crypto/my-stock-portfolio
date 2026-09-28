@@ -586,11 +586,166 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
         for h_label, s_key, r_key in horizons:
             action_perf[act][h_label] = calc_action_perf(act, s_key, r_key)
 
+    # 5. Forward Test Renewal F3C-2 Additive Read Model (Score Calibration & Feature Performance)
+    def calc_spearman_corr(x_list: List[float], y_list: List[float]) -> Optional[float]:
+        n = len(x_list)
+        if n < 3:
+            return None
+
+        def get_ranks(val_list):
+            sorted_indices = sorted(range(len(val_list)), key=lambda k: val_list[k])
+            ranks = [0.0] * len(val_list)
+            i = 0
+            while i < len(sorted_indices):
+                j = i
+                while j < len(sorted_indices) and val_list[sorted_indices[j]] == val_list[sorted_indices[i]]:
+                    j += 1
+                avg_rank = (i + 1 + j) / 2.0
+                for k in range(i, j):
+                    ranks[sorted_indices[k]] = avg_rank
+                i = j
+            return ranks
+
+        rx = get_ranks(x_list)
+        ry = get_ranks(y_list)
+
+        mean_rx = sum(rx) / n
+        mean_ry = sum(ry) / n
+
+        num = sum((rx[i] - mean_rx) * (ry[i] - mean_ry) for i in range(n))
+        den_x = sum((rx[i] - mean_rx) ** 2 for i in range(n))
+        den_y = sum((ry[i] - mean_ry) ** 2 for i in range(n))
+
+        if den_x == 0 or den_y == 0:
+            return None
+
+        r = num / ((den_x * den_y) ** 0.5)
+        return round(r, 4)
+
+    def calc_score_calibration(score_key, status_key, ret_key):
+        valid_items = []
+        for r in rows:
+            if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None and r.get(score_key) is not None:
+                try:
+                    val = float(r[score_key])
+                    ret = float(r[ret_key])
+                    valid_items.append((val, ret))
+                except (ValueError, TypeError):
+                    pass
+
+        sample_cnt = len(valid_items)
+        if sample_cnt == 0:
+            return {
+                "sample_count": 0,
+                "min": None,
+                "max": None,
+                "average": None,
+                "avg_return": None,
+                "median_return": None,
+                "positive_return_rate": None,
+                "spearman_correlation": None
+            }
+
+        scores = [item[0] for item in valid_items]
+        returns = [item[1] for item in valid_items]
+
+        score_min = round(min(scores), 2)
+        score_max = round(max(scores), 2)
+        score_avg = round(sum(scores) / len(scores), 2)
+
+        avg_ret = round(sum(returns) / len(returns), 2)
+        med_ret = round(statistics.median(returns), 2)
+
+        pos_rets = [r for r in returns if r > 0]
+        neg_rets = [r for r in returns if r < 0]
+        pos_denom = len(pos_rets) + len(neg_rets)
+        pos_rate = round((len(pos_rets) / pos_denom) * 100.0, 2) if pos_denom > 0 else None
+
+        spearman_corr = calc_spearman_corr(scores, returns)
+
+        return {
+            "sample_count": sample_cnt,
+            "min": score_min,
+            "max": score_max,
+            "average": score_avg,
+            "avg_return": avg_ret,
+            "median_return": med_ret,
+            "positive_return_rate": pos_rate,
+            "spearman_correlation": spearman_corr
+        }
+
+    def calc_feature_performance(feature_key, status_key, ret_key):
+        unique_states = sorted(list({str(r[feature_key]) for r in rows if r.get(feature_key) is not None and str(r[feature_key]).strip() != ""}))
+        result_by_state = {}
+        for state_val in unique_states:
+            state_rows = [r for r in rows if str(r.get(feature_key)) == state_val and r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None]
+            sample_cnt = len(state_rows)
+            if sample_cnt == 0:
+                result_by_state[state_val] = {
+                    "sample_count": 0,
+                    "avg_return": None,
+                    "median_return": None,
+                    "positive_return_rate": None,
+                    "directional_accuracy": None
+                }
+                continue
+
+            rets = [r[ret_key] for r in state_rows]
+            avg_ret = round(sum(rets) / len(rets), 2)
+            med_ret = round(statistics.median(rets), 2)
+
+            pos_rets = [r for r in rets if r > 0]
+            neg_rets = [r for r in rets if r < 0]
+            pos_denom = len(pos_rets) + len(neg_rets)
+            pos_rate = round((len(pos_rets) / pos_denom) * 100.0, 2) if pos_denom > 0 else None
+
+            dir_correct = 0
+            dir_wrong = 0
+            for r in state_rows:
+                dec = r.get("final_decision")
+                ret = r.get(ret_key)
+                if dec in ["BUY", "AVERAGE"]:
+                    if ret > 0: dir_correct += 1
+                    elif ret < 0: dir_wrong += 1
+                elif dec == "REDUCE":
+                    if ret < 0: dir_correct += 1
+                    elif ret > 0: dir_wrong += 1
+
+            dir_denom = dir_correct + dir_wrong
+            dir_acc = round((dir_correct / dir_denom) * 100.0, 2) if dir_denom > 0 else None
+
+            result_by_state[state_val] = {
+                "sample_count": sample_cnt,
+                "avg_return": avg_ret,
+                "median_return": med_ret,
+                "positive_return_rate": pos_rate,
+                "directional_accuracy": dir_acc
+            }
+
+        return result_by_state
+
+    score_keys = ["buy_score", "sell_score", "watering_score", "ffcs_score", "trend_score", "rs_20d", "volume_ratio", "atr_pct"]
+    feature_keys = ["trend_state", "volume_state", "flow_state", "rs_state", "risk_state"]
+
+    score_calibration = {}
+    for skey in score_keys:
+        score_calibration[skey] = {}
+        for h_label, s_key, r_key in horizons:
+            score_calibration[skey][h_label] = calc_score_calibration(skey, s_key, r_key)
+
+    feature_performance = {}
+    for fkey in feature_keys:
+        feature_performance[fkey] = {}
+        for h_label, s_key, r_key in horizons:
+            feature_performance[fkey][h_label] = calc_feature_performance(fkey, s_key, r_key)
+
     performance_v2 = {
         "horizon_performance": horizon_perf,
         "decision_accuracy": decision_acc,
         "action_performance": action_perf,
-        "data_quality": data_qual
+        "data_quality": data_qual,
+        "score_calibration": score_calibration,
+        "feature_performance": feature_performance
     }
 
     return {
