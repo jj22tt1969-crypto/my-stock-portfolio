@@ -349,7 +349,7 @@ def apply_conditional_trend_filter(
     original_desc = final_info.get("decision_desc", "")
 
     # 주가 및 이동평균선 정보 추출
-    close_prices = df["Close"] if "Close" in df.columns else df.get("종가")
+    close_prices = df["close_price"] if "close_price" in df.columns else (df["Close"] if "Close" in df.columns else df.get("종가"))
     if close_prices is None or len(close_prices) < 20:
         return {
             "original_decision": original_decision,
