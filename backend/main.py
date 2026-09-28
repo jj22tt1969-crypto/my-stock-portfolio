@@ -269,26 +269,6 @@ def analyze_decision(
         decision_analysis=res.get("decision")
     )
 
-    full_analysis_data = {
-        "decision": res.get("decision"),
-        "flow_analysis": res.get("flow_analysis"),
-        "technical_analysis": res.get("technical_analysis"),
-        "timing_analysis": res.get("timing_analysis"),
-        "cross_analysis": cross_res
-    }
-
-    try:
-        from backend.engine.forward_test_engine import record_signal_snapshot
-        latest_c = res.get("technical_analysis", {}).get("latest_close", 0.0)
-        record_signal_snapshot(
-            ticker=ticker_code,
-            name=name,
-            asset_type=asset_type,
-            price=latest_c,
-            analysis_data=full_analysis_data
-        )
-    except Exception as e:
-        pass
 
     return {
         "status": "success",
