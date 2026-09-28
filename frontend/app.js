@@ -4119,8 +4119,8 @@ async function loadForwardTestDashboard() {
             if (data.recent_signals.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="${ftDeleteMode ? 11 : 10}" style="padding: 16px; text-align: center; color: #64748b;">
-                            저장된 Forward Test 신호가 없습니다. (종목 분석 실행 시 자동 기록됩니다)
+                        <td colspan="${ftDeleteMode ? 12 : 11}" style="padding: 16px; text-align: center; color: #64748b;">
+                            저장된 Forward Test 신호가 없습니다. (+ 종목 추가 버튼으로 추적 종목을 등록해보세요)
                         </td>
                     </tr>
                 `;
@@ -4137,9 +4137,17 @@ async function loadForwardTestDashboard() {
                     return `<span style="color: ${color}; font-weight: 700;">${retVal >= 0 ? '+' : ''}${retVal.toFixed(2)}%</span>`;
                 };
 
-                const origDec = sig.original_decision || 'HOLD';
                 const finalDec = sig.final_decision || 'HOLD';
-                const diffStr = origDec !== finalDec ? `${origDec} ➔ <strong style="color:#fbbf24;">${finalDec}</strong>` : finalDec;
+                let finalDecBadge = finalDec;
+                if (finalDec === 'BUY') finalDecBadge = `<span style="color:#34d399; font-weight:700;">BUY</span>`;
+                else if (finalDec === 'AVERAGE') finalDecBadge = `<span style="color:#60a5fa; font-weight:700;">AVERAGE</span>`;
+                else if (finalDec === 'TAKE_PROFIT') finalDecBadge = `<span style="color:#f472b6; font-weight:700;">TAKE_PROFIT</span>`;
+                else if (finalDec === 'REDUCE') finalDecBadge = `<span style="color:#f87171; font-weight:700;">REDUCE</span>`;
+                else finalDecBadge = `<span style="color:#94a3b8; font-weight:700;">HOLD</span>`;
+
+                const curPriceStr = (sig.current_price !== null && sig.current_price !== undefined) ? (sig.current_price.toLocaleString() + '원') : '-';
+                const ffcsStr = (sig.ffcs_score !== null && sig.ffcs_score !== undefined) ? (sig.ffcs_score + '점') : '-';
+                const rsiStr = (sig.rsi !== null && sig.rsi !== undefined) ? sig.rsi : '-';
 
                 const displayTdSelect = ftDeleteMode ? 'table-cell' : 'none';
 
@@ -4152,9 +4160,10 @@ async function loadForwardTestDashboard() {
                         <td style="padding: 8px 10px; font-weight: 700; color: #f97316;">${sig.name} <span style="font-size: 10.5px; color: #ea580c;">(${sig.ticker})</span></td>
                         <td style="padding: 8px 10px;"><span style="padding: 2px 6px; border-radius: 4px; font-size: 10.5px; background: rgba(255,255,255,0.08);">${sig.asset_type || 'STOCK'}</span></td>
                         <td style="padding: 8px 10px; font-weight: 700; color: #38bdf8;">${sig.price ? sig.price.toLocaleString() : '-'}원</td>
-                        <td style="padding: 8px 10px;">${diffStr}</td>
-                        <td style="padding: 8px 10px; color: #94a3b8;">FCS:${sig.fcs_score || '-'} / RSI:${sig.rsi || '-'}</td>
-                        <td style="padding: 8px 10px; color: #a78bfa;">${sig.smart_score ? sig.smart_score + '점' : '-'}</td>
+                        <td style="padding: 8px 10px; font-weight: 700; color: #e2e8f0;">${curPriceStr}</td>
+                        <td style="padding: 8px 10px;">${finalDecBadge}</td>
+                        <td style="padding: 8px 10px; color: #cbd5e1;">${ffcsStr}</td>
+                        <td style="padding: 8px 10px; color: #cbd5e1;">${rsiStr}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_5d, sig.ret_5d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_10d, sig.ret_10d)}</td>
                         <td style="padding: 8px 10px;">${formatRet(sig.status_20d, sig.ret_20d)}</td>

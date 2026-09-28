@@ -748,6 +748,53 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
         "feature_performance": feature_performance
     }
 
+    recent_rows = [dict(r) for r in rows[:20]]
+    if recent_rows:
+        try:
+            from backend.data.collector import fetch_naver_realtime_price
+            import time
+            from concurrent.futures import ThreadPoolExecutor
+
+            global _REALTIME_PRICE_CACHE
+            if '_REALTIME_PRICE_CACHE' not in globals():
+                _REALTIME_PRICE_CACHE = {}
+
+            now_ts = time.time()
+            unique_tickers = list({r["ticker"] for r in recent_rows if r.get("ticker")})
+            prices_map = {}
+
+            tickers_to_fetch = []
+            for t in unique_tickers:
+                if t in _REALTIME_PRICE_CACHE:
+                    c_time, c_price = _REALTIME_PRICE_CACHE[t]
+                    if now_ts - c_time < 60:
+                        prices_map[t] = c_price
+                        continue
+                tickers_to_fetch.append(t)
+
+            if tickers_to_fetch:
+                def _get_price(t):
+                    try:
+                        res = fetch_naver_realtime_price(t)
+                        if res and res.get("current_price"):
+                            return t, int(res["current_price"])
+                    except Exception:
+                        pass
+                    return t, None
+
+                with ThreadPoolExecutor(max_workers=min(10, len(tickers_to_fetch))) as executor:
+                    results = executor.map(_get_price, tickers_to_fetch)
+                    for t, p in results:
+                        if p is not None:
+                            prices_map[t] = p
+                            _REALTIME_PRICE_CACHE[t] = (now_ts, p)
+
+            for r in recent_rows:
+                r["current_price"] = prices_map.get(r.get("ticker"))
+        except Exception:
+            for r in recent_rows:
+                r["current_price"] = None
+
     return {
         "total_signals": total_signals,
         "completed_samples": {
@@ -758,6 +805,7 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
         "decision_stats": decision_stats,
         "core_signal_stats": core_signal_stats,
         "asset_type_stats": asset_type_stats,
-        "recent_signals": rows[:20],  # 최근 20개 신호 스냅샷
+        "recent_signals": recent_rows,  # 최근 20개 신호 스냅샷 (현재가격 포함)
         "performance_v2": performance_v2
     }
+
