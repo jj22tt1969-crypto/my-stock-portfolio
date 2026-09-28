@@ -73,8 +73,35 @@ def load_krx_all_stocks(force_reload: bool = False) -> List[Dict[str, Any]]:
             return stocks_list
 
         except Exception as e:
-            logger.warn(f"[KRX Loader] KRX 종목 외부 로딩 실패 (Fallback DB 종목 활용): {e}")
+            logger.warning(f"[KRX Loader] KRX 종목 외부 로딩 실패: {e}")
             _LAST_LOADED_TS = time.time()  # 무한 404 재시도 방지
+
+            # 1차 Fallback: 로컬 번들 스냅샷 (krx_all_stocks.json) 로드
+            try:
+                import os
+                import json
+                json_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "krx_all_stocks.json")
+                if os.path.exists(json_path):
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        bundled_stocks = json.load(f)
+                    if bundled_stocks and isinstance(bundled_stocks, list):
+                        ticker_map = {}
+                        name_map = {}
+                        for item in bundled_stocks:
+                            code = str(item.get("ticker", "")).strip().zfill(6)
+                            name = str(item.get("name", "")).strip()
+                            if code and name:
+                                ticker_map[code] = item
+                                name_map[name.upper()] = item
+                        _KRX_ALL_STOCKS_CACHE = bundled_stocks
+                        _KRX_TICKER_MAP = ticker_map
+                        _KRX_NAME_MAP = name_map
+                        logger.info(f"[KRX Loader] 번들 스냅샷(krx_all_stocks.json)에서 성공적으로 {len(bundled_stocks)}개 종목 복원 완료!")
+                        return bundled_stocks
+            except Exception as bundled_err:
+                logger.warning(f"[KRX Loader] 번들 스냅샷 로딩 실패: {bundled_err}")
+
+            # 2차 Fallback: 포트폴리오 DB 종목 활용
             try:
                 from backend.db import database as db
                 db_stocks = db.get_all_stocks(asset_type="ALL")
