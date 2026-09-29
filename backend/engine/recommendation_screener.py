@@ -128,16 +128,11 @@ def screen_stock_universe(target_count: int = 100, force_reload: bool = False) -
     # ETN 식별
     etn = df_krx[df_krx['Name'].str.contains('ETN', case=False, na=False)]
 
-    # 무거래 / 거래정지 / 결손값 식별
-    invalid_mask = (
-        (df_krx['Close'].isna()) | (df_krx['Close'] <= 0) |
-        (df_krx['Volume'].isna()) | (df_krx['Volume'] <= 0) |
-        (df_krx['Amount'].isna()) | (df_krx['Amount'] <= 0) |
-        (df_krx['Marcap'].isna()) | (df_krx['Marcap'] <= 0) |
+    # 기본 필수 종목 정보 검증 (Code, Name 필수)
+    basic_invalid_mask = (
         (df_krx['Code'].isna()) | (df_krx['Code'] == '') |
         (df_krx['Name'].isna()) | (df_krx['Name'] == '')
     )
-    invalid_rows = df_krx[invalid_mask]
 
     # KOSPI 및 KOSDAQ (KOSDAQ GLOBAL 포함) 정식 상장 개별주 선별
     valid_market_mask = df_krx['Market'].isin(['KOSPI', 'KOSDAQ', 'KOSDAQ GLOBAL'])
@@ -148,39 +143,68 @@ def screen_stock_universe(target_count: int = 100, force_reload: bool = False) -
         (~df_krx.index.isin(pref.index)) &
         (~df_krx.index.isin(reits.index)) &
         (~df_krx.index.isin(etn.index)) &
-        (~df_krx.index.isin(invalid_rows.index))
+        (~df_krx.index.isin(df_krx[basic_invalid_mask].index))
     )
 
-    df_filtered = df_krx[pure_mask].copy()
-    filter_time = time.time() - t_start_filter
+    df_pure = df_krx[pure_mask].copy()
 
+    # 시세/유동성 데이터(Close, Amount 등) 유효 여부 검사
+    has_amount_data = (
+        'Amount' in df_pure.columns and 
+        not df_pure['Amount'].isna().all() and 
+        (df_pure['Amount'] > 0).any()
+    )
+
+    if has_amount_data:
+        # 시세/거래대금 데이터가 유효한 경우: Amount > 0 인 종목 필터링 후 내림차순 정렬
+        valid_amount_mask = (~df_pure['Amount'].isna()) & (df_pure['Amount'] > 0)
+        df_filtered = df_pure[valid_amount_mask].copy()
+        df_sorted = df_filtered.sort_values(by='Amount', ascending=False)
+    else:
+        # FDR KRX bulk 응답에서 시세/거래대금 데이터가 전달되지 않는 경우(NaN/'-'):
+        # 정식 상장 개별주(KOSPI/KOSDAQ) 유니버스를 기본 순서대로 선별 (Fallback)
+        df_filtered = df_pure.copy()
+        df_sorted = df_filtered
+
+    filter_time = time.time() - t_start_filter
     filtered_count = len(df_filtered)
 
-    # 4. 정열 및 상위 target_count 후보선정 (Sort Stage)
+    # 4. 정렬 및 상위 target_count 후보선정 (Sort Stage)
     t_start_sort = time.time()
-    
-    # 거래대금(Amount) 내림차순 정렬로 유동성 안전 후보군 선출 (급등주 편향 방지)
-    df_sorted = df_filtered.sort_values(by='Amount', ascending=False)
     top_df = df_sorted.head(target_count)
     sort_time = time.time() - t_start_sort
 
     candidates = []
     for _, row in top_df.iterrows():
         market_str = str(row['Market']).strip()
-        # KOSDAQ GLOBAL 은 개별주 마켓 관점에서는 KOSDAQ 카테고리로 통일
         norm_market = "KOSDAQ" if market_str == "KOSDAQ GLOBAL" else market_str
+
+        raw_close = row.get('Close')
+        close_val = int(raw_close) if not pd.isna(raw_close) and str(raw_close).replace('-', '').isdigit() and str(raw_close).strip() != '-' else 0
+
+        raw_vol = row.get('Volume')
+        volume_val = int(raw_vol) if not pd.isna(raw_vol) and str(raw_vol).isdigit() else 0
+
+        raw_amt = row.get('Amount')
+        amount_val = float(raw_amt) if not pd.isna(raw_amt) and str(raw_amt).strip() != '-' else 0.0
+
+        raw_marcap = row.get('Marcap')
+        marcap_val = float(raw_marcap) if not pd.isna(raw_marcap) and str(raw_marcap).strip() != '-' else 0.0
+
+        raw_chg = row.get('ChagesRatio')
+        chg_val = round(float(raw_chg), 2) if not pd.isna(raw_chg) and str(raw_chg).strip() != '-' else 0.0
 
         candidates.append({
             "ticker": str(row['Code']).strip().zfill(6),
             "name": str(row['Name']).strip(),
             "market": norm_market,
             "asset_type": "STOCK",
-            "close": int(row['Close']),
-            "volume": int(row['Volume']),
-            "amount": float(row['Amount']),
-            "marcap": float(row['Marcap']),
-            "change_ratio": round(float(row['ChagesRatio']), 2) if not pd.isna(row['ChagesRatio']) else 0.0,
-            "selection_reason": "high_liquidity"
+            "close": close_val,
+            "volume": volume_val,
+            "amount": amount_val,
+            "marcap": marcap_val,
+            "change_ratio": chg_val,
+            "selection_reason": "high_liquidity" if has_amount_data else "universe_fallback"
         })
 
     total_time = fetch_time + filter_time + sort_time
@@ -206,7 +230,7 @@ def screen_stock_universe(target_count: int = 100, force_reload: bool = False) -
             "preferred_count": len(pref),
             "reits_count": len(reits),
             "etn_count": len(etn),
-            "invalid_halted_count": len(invalid_rows)
+            "invalid_halted_count": len(df_krx[basic_invalid_mask])
         }
     }
 
