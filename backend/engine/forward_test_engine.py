@@ -4,67 +4,118 @@ import datetime
 import statistics
 from typing import List, Dict, Any, Optional
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio.db")
-
 def get_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    from backend.db.database import get_connection as get_db_conn
+    return get_db_conn()
+
+def get_cursor(conn, db_type):
+    from backend.db.database import get_cursor as get_db_cur
+    return get_db_cur(conn, db_type)
 
 def init_forward_test_db():
-    """Forward Test 독립 전용 DB 테이블 생성 및 Additive Migration"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS forward_test_signals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticker TEXT NOT NULL,
-            name TEXT NOT NULL,
-            asset_type TEXT DEFAULT 'STOCK',
-            signal_date TEXT NOT NULL,
-            price REAL NOT NULL,
-            original_decision TEXT NOT NULL,
-            final_decision TEXT NOT NULL,
-            fcs_score REAL,
-            ffcs_score REAL,
-            rsi REAL,
-            rmi REAL,
-            smart_score REAL,
-            smart_grade TEXT,
-            concurrency_code TEXT,
-            ma60 REAL,
-            ma120 REAL,
-            is_ma_downtrend INTEGER DEFAULT 0,
-            timing_signal TEXT,
-            cross_status TEXT,
-            data_source TEXT,
-            timestamp_str TEXT,
-            price_5d REAL,
-            ret_5d REAL,
-            status_5d TEXT DEFAULT 'PENDING',
-            price_10d REAL,
-            ret_10d REAL,
-            status_10d TEXT DEFAULT 'PENDING',
-            price_20d REAL,
-            ret_20d REAL,
-            status_20d TEXT DEFAULT 'PENDING',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(ticker, signal_date)
-        )
-    """)
+    """Forward Test 독립 전용 DB 테이블 생성 및 Additive Migration (PostgreSQL / SQLite Dual 호환)"""
+    conn, db_type = get_connection()
+    cursor = get_cursor(conn, db_type)
+    
+    if db_type == "POSTGRESQL":
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forward_test_signals (
+                id SERIAL PRIMARY KEY,
+                ticker VARCHAR(50) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                asset_type VARCHAR(50) DEFAULT 'STOCK',
+                signal_date VARCHAR(50) NOT NULL,
+                price DOUBLE PRECISION NOT NULL,
+                original_decision VARCHAR(50) NOT NULL,
+                final_decision VARCHAR(50) NOT NULL,
+                fcs_score DOUBLE PRECISION,
+                ffcs_score DOUBLE PRECISION,
+                rsi DOUBLE PRECISION,
+                rmi DOUBLE PRECISION,
+                smart_score DOUBLE PRECISION,
+                smart_grade VARCHAR(50),
+                concurrency_code VARCHAR(50),
+                ma60 DOUBLE PRECISION,
+                ma120 DOUBLE PRECISION,
+                is_ma_downtrend INTEGER DEFAULT 0,
+                timing_signal VARCHAR(50),
+                cross_status VARCHAR(50),
+                data_source VARCHAR(100),
+                timestamp_str VARCHAR(100),
+                price_5d DOUBLE PRECISION,
+                ret_5d DOUBLE PRECISION,
+                status_5d VARCHAR(50) DEFAULT 'PENDING',
+                price_10d DOUBLE PRECISION,
+                ret_10d DOUBLE PRECISION,
+                status_10d VARCHAR(50) DEFAULT 'PENDING',
+                price_20d DOUBLE PRECISION,
+                ret_20d DOUBLE PRECISION,
+                status_20d VARCHAR(50) DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ticker, signal_date)
+            )
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forward_test_signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                name TEXT NOT NULL,
+                asset_type TEXT DEFAULT 'STOCK',
+                signal_date TEXT NOT NULL,
+                price REAL NOT NULL,
+                original_decision TEXT NOT NULL,
+                final_decision TEXT NOT NULL,
+                fcs_score REAL,
+                ffcs_score REAL,
+                rsi REAL,
+                rmi REAL,
+                smart_score REAL,
+                smart_grade TEXT,
+                concurrency_code TEXT,
+                ma60 REAL,
+                ma120 REAL,
+                is_ma_downtrend INTEGER DEFAULT 0,
+                timing_signal TEXT,
+                cross_status TEXT,
+                data_source TEXT,
+                timestamp_str TEXT,
+                price_5d REAL,
+                ret_5d REAL,
+                status_5d TEXT DEFAULT 'PENDING',
+                price_10d REAL,
+                ret_10d REAL,
+                status_10d TEXT DEFAULT 'PENDING',
+                price_20d REAL,
+                ret_20d REAL,
+                status_20d TEXT DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ticker, signal_date)
+            )
+        """)
     conn.commit()
 
     # Forward Test 2.0 Additive Migration Columns Check & Execute
+    existing_cols = set()
     try:
-        cursor.execute("PRAGMA table_info(forward_test_signals)")
-        existing_cols = {row['name'] for row in cursor.fetchall()}
+        cursor.execute("SELECT * FROM forward_test_signals LIMIT 0")
+        if cursor.description:
+            existing_cols = {desc[0].lower() for desc in cursor.description}
     except Exception:
-        try:
-            cursor.execute("SELECT * FROM forward_test_signals LIMIT 0")
-            existing_cols = {desc[0] for desc in cursor.description}
-        except Exception:
-            existing_cols = set()
+        existing_cols = set()
+
+    type_map = {
+        "POSTGRESQL": {
+            "TEXT": "VARCHAR(255)",
+            "REAL": "DOUBLE PRECISION",
+            "TIMESTAMP": "TIMESTAMP"
+        },
+        "SQLITE": {
+            "TEXT": "TEXT",
+            "REAL": "REAL",
+            "TIMESTAMP": "TIMESTAMP"
+        }
+    }
 
     new_columns = [
         ("source_type", "TEXT DEFAULT 'MANUAL'"),
@@ -88,10 +139,13 @@ def init_forward_test_db():
         ("max_drawdown", "REAL"),
     ]
 
-    for col_name, col_type in new_columns:
-        if col_name not in existing_cols:
+    for col_name, col_type_def in new_columns:
+        if col_name.lower() not in existing_cols:
             try:
-                cursor.execute(f"ALTER TABLE forward_test_signals ADD COLUMN {col_name} {col_type}")
+                base_type = col_type_def.split()[0]
+                rest_def = col_type_def[len(base_type):]
+                mapped_type = type_map[db_type].get(base_type, base_type) + rest_def
+                cursor.execute(f"ALTER TABLE forward_test_signals ADD COLUMN {col_name} {mapped_type}")
                 conn.commit()
             except Exception:
                 pass
@@ -182,35 +236,64 @@ def record_signal_snapshot(
 
     concurrency_code = flow.get("concurrency", {}).get("code", "NONE") if isinstance(flow.get("concurrency"), dict) else "NONE"
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn, db_type = get_connection()
+    cursor = get_cursor(conn, db_type)
 
     try:
-        cursor.execute("""
-            INSERT OR IGNORE INTO forward_test_signals (
-                ticker, name, asset_type, signal_date, price,
-                original_decision, final_decision,
-                fcs_score, ffcs_score, rsi, rmi,
-                smart_score, smart_grade, concurrency_code,
-                ma60, ma120, is_ma_downtrend, timing_signal, cross_status,
-                data_source, timestamp_str,
-                source_type, data_as_of, formula_version,
-                buy_score, sell_score, watering_score,
-                mfi, trend_state, trend_score, volume_state, volume_ratio,
-                flow_state, rs_state, rs_20d, risk_state, atr_pct
-            ) VALUES (
-                ?, ?, ?, ?, ?,
-                ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?,
-                ?, ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?
-            )
-        """, (
+        if db_type == "POSTGRESQL":
+            sql = """
+                INSERT INTO forward_test_signals (
+                    ticker, name, asset_type, signal_date, price,
+                    original_decision, final_decision,
+                    fcs_score, ffcs_score, rsi, rmi,
+                    smart_score, smart_grade, concurrency_code,
+                    ma60, ma120, is_ma_downtrend, timing_signal, cross_status,
+                    data_source, timestamp_str,
+                    source_type, data_as_of, formula_version,
+                    buy_score, sell_score, watering_score,
+                    mfi, trend_state, trend_score, volume_state, volume_ratio,
+                    flow_state, rs_state, rs_20d, risk_state, atr_pct
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+                ON CONFLICT (ticker, signal_date) DO NOTHING
+            """
+        else:
+            sql = """
+                INSERT OR IGNORE INTO forward_test_signals (
+                    ticker, name, asset_type, signal_date, price,
+                    original_decision, final_decision,
+                    fcs_score, ffcs_score, rsi, rmi,
+                    smart_score, smart_grade, concurrency_code,
+                    ma60, ma120, is_ma_downtrend, timing_signal, cross_status,
+                    data_source, timestamp_str,
+                    source_type, data_as_of, formula_version,
+                    buy_score, sell_score, watering_score,
+                    mfi, trend_state, trend_score, volume_state, volume_ratio,
+                    flow_state, rs_state, rs_20d, risk_state, atr_pct
+                ) VALUES (
+                    ?, ?, ?, ?, ?,
+                    ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?
+                )
+            """
+        cursor.execute(sql, (
             ticker, name, asset_type or 'STOCK', today_str, float(price),
             orig_dec, final_dec,
             fcs_score, ffcs_score, rsi, rmi,
@@ -237,10 +320,11 @@ def record_signal_snapshot(
 def delete_signal_snapshot(signal_id: int) -> bool:
     """Forward Test 신호 스냅샷 삭제 (ID 기반)"""
     init_forward_test_db()
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn, db_type = get_connection()
+    cursor = get_cursor(conn, db_type)
+    ph = "%s" if db_type == "POSTGRESQL" else "?"
     try:
-        cursor.execute("DELETE FROM forward_test_signals WHERE id = ?", (signal_id,))
+        cursor.execute(f"DELETE FROM forward_test_signals WHERE id = {ph}", (signal_id,))
         deleted = cursor.rowcount > 0
         conn.commit()
         conn.close()
@@ -255,8 +339,9 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
     - 데이터 부족 시 추정 금지, PENDING 상태 유지
     """
     init_forward_test_db()
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn, db_type = get_connection()
+    cursor = get_cursor(conn, db_type)
+    ph = "%s" if db_type == "POSTGRESQL" else "?"
 
     cursor.execute("""
         SELECT * FROM forward_test_signals
@@ -337,9 +422,9 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
             up_dict["evaluated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if up_dict:
-            set_clause = ", ".join([f"{k} = ?" for k in up_dict.keys()])
+            set_clause = ", ".join([f"{k} = {ph}" for k in up_dict.keys()])
             values = list(up_dict.values()) + [row["id"]]
-            cursor.execute(f"UPDATE forward_test_signals SET {set_clause} WHERE id = ?", values)
+            cursor.execute(f"UPDATE forward_test_signals SET {set_clause} WHERE id = {ph}", values)
             updated_count += 1
 
     conn.commit()
@@ -356,8 +441,8 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
     - STOCK vs ETF 성과 비교
     """
     init_forward_test_db()
-    conn = get_connection()
-    cursor = conn.cursor()
+    conn, db_type = get_connection()
+    cursor = get_cursor(conn, db_type)
 
     cursor.execute("SELECT * FROM forward_test_signals ORDER BY created_at DESC")
     rows = [dict(r) for r in cursor.fetchall()]
