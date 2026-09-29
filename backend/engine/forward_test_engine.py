@@ -445,8 +445,17 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
     cursor = get_cursor(conn, db_type)
 
     cursor.execute("SELECT * FROM forward_test_signals ORDER BY created_at DESC")
-    rows = [dict(r) for r in cursor.fetchall()]
+    raw_rows = cursor.fetchall()
     conn.close()
+
+    def clean_row(r):
+        d = dict(r)
+        for k, v in d.items():
+            if isinstance(v, (datetime.datetime, datetime.date)):
+                d[k] = v.strftime("%Y-%m-%d %H:%M:%S") if isinstance(v, datetime.datetime) else v.strftime("%Y-%m-%d")
+        return d
+
+    rows = [clean_row(r) for r in raw_rows]
 
     total_signals = len(rows)
 

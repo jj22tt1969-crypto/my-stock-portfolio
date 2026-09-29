@@ -2,6 +2,11 @@ import sqlite3
 import os
 import logging
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+# 프로젝트 루트의 .env 파일 명시적 절대경로 로드
+ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+load_dotenv(ENV_PATH)
 
 # 로거 설정
 logger = logging.getLogger(__name__)
