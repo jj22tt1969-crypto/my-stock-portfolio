@@ -1,5 +1,9 @@
 import os
 import sys
+from dotenv import load_dotenv
+
+# dotenv 환경 변수 로드 (.env의 DATABASE_URL 등 로컬 자동 바인딩)
+load_dotenv()
 
 # 프로젝트 루트 경로를 파이썬 모듈 검색 경로(sys.path)에 최우선 추가
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
