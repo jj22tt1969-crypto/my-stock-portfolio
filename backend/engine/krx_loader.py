@@ -3,6 +3,7 @@ import os
 import json
 import time
 import threading
+import pandas as pd
 import FinanceDataReader as fdr
 from typing import List, Dict, Any, Optional
 
@@ -15,6 +16,64 @@ _KRX_NAME_MAP: Dict[str, Dict[str, Any]] = {}
 _LAST_LOADED_TS: float = 0
 _CACHE_TTL: float = 86400  # 24시간 캐시 유지
 _LOAD_LOCK = threading.Lock()  # 스레드 경합 방지용 락
+
+# FDR Category 코드 매핑 사전 (단일 위치에서 관리)
+_FDR_CATEGORY_MAP = {
+    1: 'KOR_EQUITY',     # 국내 시장지수
+    2: 'KOR_EQUITY',     # 국내 업종/테마
+    4: 'GLOBAL_EQUITY',  # 해외 주식
+    5: 'COMMODITY',      # 원자재/상품
+    6: 'BOND_RATE',      # 채권/금리
+}
+
+def _determine_etf_metadata(name: str, category_code: int) -> tuple[str, List[str]]:
+    """
+    ETF 종목명 및 FDR Category 코드를 기반으로 etf_base_type과 strategy_flags를 도출합니다.
+    """
+    name_u = name.upper()
+    
+    # 1. strategy_flags 식별
+    flags = []
+    if any(k in name_u for k in ['인버스', 'INVERSE', '곱버스']):
+        flags.append('INVERSE')
+    if any(k in name_u for k in ['레버리지', 'LEVERAGE']) and 'INVERSE' not in flags:
+        flags.append('LEVERAGED')
+    if '액티브' in name_u or 'ACTIVE' in name_u:
+        flags.append('ACTIVE')
+    if '(H)' in name_u or 'HEDGED' in name_u:
+        flags.append('HEDGED')
+    if any(k in name_u for k in ['커버드콜', 'COVERED CALL', '타겟커버드콜', '프리미엄액티브', 'CALL']):
+        flags.append('COVERED_CALL')
+
+    # 2. etf_base_type 식별 (Category 1차 매핑 -> 파생/기타 보조 파싱)
+    base_type = _FDR_CATEGORY_MAP.get(category_code)
+    if not base_type:
+        if category_code == 3:  # 파생 (레버리지/인버스 등)
+            if any(k in name_u for k in ['미국', 'NASDAQ', '나스닥', 'S&P', '차이나', '중국', '일본', '인도', '베트남', '유로', '글로벌']):
+                base_type = 'GLOBAL_EQUITY'
+            elif any(k in name_u for k in ['달러', '엔선물', 'FX']):
+                base_type = 'CURRENCY'
+            elif any(k in name_u for k in ['채권', '국채']):
+                base_type = 'BOND_RATE'
+            elif any(k in name_u for k in ['WTI', '원유', '골드', '금선물', '은선물', '원자재']):
+                base_type = 'COMMODITY'
+            else:
+                base_type = 'KOR_EQUITY'
+        elif category_code == 7:  # 기타/MMF/혼합
+            if any(k in name_u for k in ['채권', '국채', 'KOFR', 'SOFR', 'CD금리', '파킹', '단기채', 'MONEY', 'MMF']):
+                base_type = 'BOND_RATE'
+            elif any(k in name_u for k in ['달러', '엔', '유로선물', 'FX']) and '채권' not in name_u:
+                base_type = 'CURRENCY'
+            elif any(k in name_u for k in ['혼합', 'MULTI', '자산배분']):
+                base_type = 'MULTI_ASSET'
+            elif any(k in name_u for k in ['미국', 'NASDAQ', 'S&P', '글로벌', '차이나', '인도']):
+                base_type = 'GLOBAL_EQUITY'
+            else:
+                base_type = 'MULTI_ASSET'
+        else:
+            base_type = 'OTHER'
+
+    return base_type, flags
 
 def _ensure_ssl_env():
     """
@@ -65,8 +124,11 @@ def load_krx_all_stocks(force_reload: bool = False) -> List[Dict[str, Any]]:
                     for idx, row in df_etf.iterrows():
                         code = str(row.get(code_col, '')).strip().zfill(6)
                         name = str(row.get('Name', '')).strip()
+                        cat_code = int(row.get('Category', 0)) if pd.notna(row.get('Category')) else 0
                         if not code or not name:
                             continue
+
+                        etf_base_type, strategy_flags = _determine_etf_metadata(name, cat_code)
 
                         item = {
                             "name": name,
@@ -74,7 +136,9 @@ def load_krx_all_stocks(force_reload: bool = False) -> List[Dict[str, Any]]:
                             "market": "ETF",
                             "asset_type": "ETF",
                             "manager": "자산운용",
-                            "score": 90
+                            "score": 90,
+                            "etf_base_type": etf_base_type,
+                            "strategy_flags": strategy_flags
                         }
                         stocks_list.append(item)
                         ticker_map[code] = item
