@@ -190,23 +190,33 @@ def get_search_universe() -> List[Dict[str, Any]]:
     master_tickers = set()
     universe = []
 
-    # 1. STOCK_ETF_MASTER 항목 추가 (우선순위 1위)
-    for item in STOCK_ETF_MASTER:
-        t = str(item.get("ticker", "")).strip()
-        if t and t not in master_tickers:
-            master_tickers.add(t)
-            universe.append({
-                "name": item.get("name", ""),
-                "ticker": t,
-                "market": item.get("market", "KOSPI"),
-                "asset_type": item.get("asset_type", "STOCK"),
-                "manager": item.get("manager", "")
-            })
-
-    # 2. KRX 전체 상장종목 로딩 및 병합 (장애 Fallback 적용)
+    # 2. KRX 전체 상장종목 로딩 및 병합
     try:
         from backend.engine.krx_loader import load_krx_all_stocks
         krx_stocks = load_krx_all_stocks()
+        krx_map = {}
+        for item in krx_stocks:
+            code = str(item.get("ticker", "")).strip()
+            if code:
+                krx_map[code] = item
+
+        # 1. STOCK_ETF_MASTER 항목 추가 (우선순위 1위)
+        for item in STOCK_ETF_MASTER:
+            t = str(item.get("ticker", "")).strip()
+            if t and t not in master_tickers:
+                master_tickers.add(t)
+                krx_item = krx_map.get(t, {})
+                universe.append({
+                    "name": item.get("name", ""),
+                    "ticker": t,
+                    "market": item.get("market", "KOSPI"),
+                    "asset_type": item.get("asset_type", "STOCK"),
+                    "manager": item.get("manager", ""),
+                    "etf_base_type": krx_item.get("etf_base_type") if item.get("asset_type") == "ETF" else None,
+                    "strategy_flags": krx_item.get("strategy_flags", []) if item.get("asset_type") == "ETF" else []
+                })
+
+        # 2. KRX 전체 상장종목 병합
         for item in krx_stocks:
             t = str(item.get("ticker", "")).strip()
             if t and t not in master_tickers:
@@ -219,7 +229,9 @@ def get_search_universe() -> List[Dict[str, Any]]:
                     "ticker": t,
                     "market": item.get("market", "KOSPI"),
                     "asset_type": asset_type,
-                    "manager": item.get("manager", "")
+                    "manager": item.get("manager", ""),
+                    "etf_base_type": item.get("etf_base_type"),
+                    "strategy_flags": item.get("strategy_flags", [])
                 })
     except Exception as e:
         logger.warning(f"[StockIdentifier] KRX universe merge fallback (using STOCK_ETF_MASTER only): {e}")
