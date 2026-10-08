@@ -319,12 +319,20 @@ def screen_etf_universe(target_count: int = 50, force_reload: bool = False) -> D
     sort_time = time.time() - t_start_sort
 
     candidates = []
+    from backend.engine.krx_loader import _determine_etf_metadata
     for _, row in top_df.iterrows():
+        ticker_code = str(row['Symbol']).strip().zfill(6)
+        stock_name = str(row['Name']).strip()
+        cat_code = int(row.get('Category', 0)) if pd.notna(row.get('Category')) else 0
+        etf_base_type, strategy_flags = _determine_etf_metadata(stock_name, cat_code)
+
         candidates.append({
-            "ticker": str(row['Symbol']).strip().zfill(6),
-            "name": str(row['Name']).strip(),
+            "ticker": ticker_code,
+            "name": stock_name,
             "market": "ETF",
             "asset_type": "ETF",
+            "etf_base_type": etf_base_type,
+            "strategy_flags": strategy_flags,
             "close": int(row['Price']),
             "volume": int(row['Volume']),
             "amount": float(row['Amount']),

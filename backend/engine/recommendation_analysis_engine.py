@@ -98,6 +98,19 @@ def analyze_quant_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
     asset_type = cand.get("asset_type", "STOCK")
     
     etf_type = classify_etf_type(name) if asset_type == "ETF" else None
+    etf_base_type = cand.get("etf_base_type")
+    strategy_flags = cand.get("strategy_flags")
+    
+    if asset_type == "ETF" and (etf_base_type is None or strategy_flags is None):
+        try:
+            from backend.engine.krx_loader import _determine_etf_metadata
+            cat_code = int(cand.get("category", 0)) if cand.get("category") and str(cand.get("category")).isdigit() else 0
+            etf_base_type, strategy_flags = _determine_etf_metadata(name, cat_code)
+            cand["etf_base_type"] = etf_base_type
+            cand["strategy_flags"] = strategy_flags
+        except Exception:
+            cand["etf_base_type"] = None
+            cand["strategy_flags"] = []
 
     # 데이터 미비 종목 예외 처리
     if not cand.get("data_available", False) or cand.get("flow_pattern") == "DATA_INSUFFICIENT":
