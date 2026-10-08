@@ -4771,14 +4771,47 @@ function renderRecommendResult(data) {
             const confBadge = getRecConfidenceBadge(item.confidence);
             const reasons = item.reasons || [];
 
+            // ETF 메타데이터 배지 (Base Type & Strategy Flags)
+            let etfBadgesHtml = '';
+            if (item.asset_type === 'ETF') {
+                const baseTypeMap = {
+                    'KOR_EQUITY': '국내주식형',
+                    'GLOBAL_EQUITY': '해외주식형',
+                    'BOND_RATE': '채권/금리형',
+                    'COMMODITY': '원자재형',
+                    'CURRENCY': '통화형',
+                    'MULTI_ASSET': '혼합자산형',
+                    'OTHER': '기타 ETF'
+                };
+                if (item.etf_base_type && baseTypeMap[item.etf_base_type]) {
+                    etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); font-weight: 700;">${baseTypeMap[item.etf_base_type]}</span>`;
+                }
+
+                const flags = item.strategy_flags || [];
+                flags.forEach(flag => {
+                    if (flag === 'LEVERAGED') {
+                        etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: 800;">레버리지 · 고위험</span>`;
+                    } else if (flag === 'INVERSE') {
+                        etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: 800;">인버스 · 고위험</span>`;
+                    } else if (flag === 'ACTIVE') {
+                        etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(168, 85, 247, 0.18); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-weight: 700;">액티브</span>`;
+                    } else if (flag === 'HEDGED') {
+                        etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); font-weight: 700;">환헤지</span>`;
+                    } else if (flag === 'COVERED_CALL') {
+                        etfBadgesHtml += `<span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(251, 191, 36, 0.18); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); font-weight: 700;">커버드콜</span>`;
+                    }
+                });
+            }
+
             html += `
                 <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #0f172a; font-size: 11.5px; font-weight: 900; padding: 2px 7px; border-radius: 6px;">#${rank}</span>
                             <span style="font-size: 14.5px; font-weight: 800; color: #f8fafc;">${escapeHtml(item.name)}</span>
                             <span style="font-size: 12px; color: #94a3b8; font-family: monospace;">(${escapeHtml(item.ticker)})</span>
                             <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: #cbd5e1;">${escapeHtml(item.market || 'KOSPI')}</span>
+                            ${etfBadgesHtml}
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <span style="font-size: 13.5px; font-weight: 700; color: #38bdf8;">${priceStr}</span>
