@@ -275,6 +275,53 @@ def analyze_decision(
     )
 
 
+    # 6. Fundamental State (Additive field, ETF는 Snapshot 로딩 방지)
+    if asset_type == "ETF":
+        fundamental_state = {
+            "ticker": ticker_code,
+            "name": name,
+            "market": "ETF",
+            "asset_type": "ETF",
+            "data_state": "NOT_APPLICABLE",
+            "data_quality": {
+                "available_metric_count": 0,
+                "missing_metric_count": 13,
+                "coverage_ratio": 0.0
+            },
+            "earnings_state": {
+                "status": "UNKNOWN",
+                "operating_profit": None,
+                "net_profit": None
+            },
+            "profitability": {
+                "roe": {"value": None, "sign": "UNKNOWN"},
+                "operating_margin": {"value": None, "sign": "UNKNOWN"},
+                "net_margin": {"value": None, "sign": "UNKNOWN"}
+            },
+            "growth": {
+                "revenue": {"raw_growth_rate": None, "status": "NOT_COMPARABLE", "direction": "UNKNOWN"},
+                "operating_profit": {"raw_growth_rate": None, "status": "NOT_COMPARABLE", "direction": "UNKNOWN"},
+                "net_profit": {"raw_growth_rate": None, "status": "NOT_COMPARABLE", "direction": "UNKNOWN"}
+            },
+            "valuation": {
+                "per": None,
+                "per_status": "UNKNOWN",
+                "pbr": None,
+                "pbr_status": "UNKNOWN",
+                "eps": None,
+                "bps": None
+            },
+            "balance_sheet": {
+                "debt_ratio": None,
+                "quick_ratio": None,
+                "sector_adjustment_available": False
+            },
+            "summary_flags": []
+        }
+    else:
+        from backend.engine.fundamental_state_engine import get_fundamental_state
+        fundamental_state = get_fundamental_state(ticker_code)
+
     return {
         "status": "success",
         "ticker": ticker_code,
@@ -286,17 +333,53 @@ def analyze_decision(
         },
         "data": res,
         "investor_breakdown": flow_data.get("investor_breakdown"),
-        "cross_analysis": cross_res
+        "cross_analysis": cross_res,
+        "fundamental_state": fundamental_state
     }
 
 # 6. 포트폴리오 조회 API (asset_type: 'STOCK' 또는 'ETF')
 @app.get("/api/portfolio")
 def get_portfolio(asset_type: str = Query("STOCK", description="자산분류 ('STOCK': 개별주식, 'ETF': ETF)")):
     try:
-        data = pe.analyze_portfolio(asset_type=asset_type)
+        target_asset_type = asset_type.upper() if asset_type else "STOCK"
+        data = pe.analyze_portfolio(asset_type=target_asset_type)
+
+        if target_asset_type == "ETF":
+            data["fundamental_assessment"] = {
+                "status": "NOT_APPLICABLE",
+                "asset_type": "ETF",
+                "message": "ETF is not applicable for corporate fundamental metrics"
+            }
+            for it in data.get("items", []):
+                it["fundamental_state"] = {
+                    "ticker": it.get("ticker", ""),
+                    "name": it.get("name", ""),
+                    "market": it.get("market", "ETF"),
+                    "asset_type": "ETF",
+                    "data_state": "NOT_APPLICABLE",
+                    "summary_flags": []
+                }
+        else:
+            from backend.engine.portfolio_assessment_engine import assess_portfolio_fundamentals
+            assessment = assess_portfolio_fundamentals(portfolio_data=data, asset_type="STOCK")
+            data["fundamental_assessment"] = {
+                "coverage": assessment.get("coverage"),
+                "raw_assessment": assessment.get("raw_assessment"),
+                "state_summary": assessment.get("state_summary")
+            }
+            # 종목별 fundamental_state 연결
+            assessment_items_map = {
+                it.get("ticker"): it.get("fundamental_state") or it.get("state")
+                for it in assessment.get("items", [])
+            }
+            for it in data.get("items", []):
+                t = it.get("ticker")
+                if t in assessment_items_map:
+                    it["fundamental_state"] = assessment_items_map[t]
+
         return {
             "status": "success",
-            "asset_type": asset_type.upper(),
+            "asset_type": target_asset_type,
             "data": data
         }
     except Exception as e:

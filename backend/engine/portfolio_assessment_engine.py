@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 from backend.engine.fundamental_engine import get_fundamental_context
+from backend.engine.fundamental_state_engine import get_fundamental_state
 from backend.engine.portfolio_engine import analyze_portfolio
 
 logger = logging.getLogger(__name__)
@@ -221,8 +222,12 @@ def assess_portfolio_fundamentals(
                 "coverage_by_count": 0.0,
                 "stock_market_value": 0.0,
                 "fundamental_covered_market_value": 0.0,
-                "coverage_by_value": 0.0
+                "coverage_by_value": 0.0,
+                "no_finance_data_count_ratio": 0.0,
+                "no_finance_data_market_value": 0.0,
+                "no_finance_data_value_ratio": 0.0
             },
+            "state_summary": None,
             "raw_assessment": None,
             "items": []
         }
@@ -267,13 +272,18 @@ def assess_portfolio_fundamentals(
             )
             annual_data["growth"] = growth_info
 
+        # fundamental_state_engine을 통한 객관적 상태 산출 (중복 판단식 금지)
+        f_state = get_fundamental_state(f_ctx)
+
         enriched_item = {
             **item,
             "asset_type": item_asset_type,
             "market_value": eval_amt,
             "portfolio_weight": item.get("weight", 0.0),
             "profit_rate": item.get("return_rate", 0.0),
-            "fundamental": f_ctx
+            "fundamental": f_ctx,
+            "fundamental_state": f_state,
+            "state": f_state
         }
 
         # 자산군별 분류 (Fundamental 상태가 NOT_APPLICABLE이거나 asset_type이 ETF인 경우)
@@ -405,9 +415,107 @@ def assess_portfolio_fundamentals(
         "net_profit_growth": _calc_growth_status_distribution("net_profit_growth")
     }
 
-    # 7. 금융주/업종 식별 여부
+    # 7. Portfolio State Summary (STOCK만 대상, count 및 market_value 비중 산출)
+    # State 판단은 fundamental_state_engine의 결과를 100% 재사용 (중복 판단식 금지)
+
+    # 7-1. Earnings State Summary
+    earnings_state_summary = {
+        st: _calc_dist([
+            it for it in stock_items 
+            if it.get("state", {}).get("earnings_state", {}).get("status") == st
+        ])
+        for st in ["PROFITABLE", "OPERATING_LOSS", "NET_LOSS", "UNKNOWN"]
+    }
+
+    # 7-2. Profitability Summary (Negative signs)
+    profitability_summary = {
+        "negative_roe": _calc_dist([
+            it for it in stock_items 
+            if it.get("state", {}).get("profitability", {}).get("roe", {}).get("sign") == "NEGATIVE"
+        ]),
+        "negative_operating_margin": _calc_dist([
+            it for it in stock_items 
+            if it.get("state", {}).get("profitability", {}).get("operating_margin", {}).get("sign") == "NEGATIVE"
+        ]),
+        "negative_net_margin": _calc_dist([
+            it for it in stock_items 
+            if it.get("state", {}).get("profitability", {}).get("net_margin", {}).get("sign") == "NEGATIVE"
+        ])
+    }
+
+    # 7-3. Growth State Summary (revenue / operating_profit / net_profit)
+    def _calc_growth_summary(metric_name):
+        m_states = {
+            "comparable_increase": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "COMPARABLE" 
+                and it.get("state", {}).get("growth", {}).get(metric_name, {}).get("direction") == "INCREASE"
+            ],
+            "comparable_decrease": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "COMPARABLE" 
+                and it.get("state", {}).get("growth", {}).get(metric_name, {}).get("direction") == "DECREASE"
+            ],
+            "turnaround": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "TURNAROUND"
+            ],
+            "deficit_continuation": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "DEFICIT_CONTINUATION"
+            ],
+            "loss_widening": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "LOSS_WIDENING"
+            ],
+            "not_comparable": [
+                it for it in stock_items 
+                if it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") not in (
+                    "COMPARABLE", "TURNAROUND", "DEFICIT_CONTINUATION", "LOSS_WIDENING"
+                ) or (
+                    it.get("state", {}).get("growth", {}).get(metric_name, {}).get("status") == "COMPARABLE"
+                    and it.get("state", {}).get("growth", {}).get(metric_name, {}).get("direction") == "FLAT"
+                )
+            ]
+        }
+        return {k: _calc_dist(sub) for k, sub in m_states.items()}
+
+    growth_state_summary = {
+        "revenue": _calc_growth_summary("revenue"),
+        "operating_profit": _calc_growth_summary("operating_profit"),
+        "net_profit": _calc_growth_summary("net_profit")
+    }
+
+    # 7-4. Summary Flags Summary
+    SUMMARY_FLAGS = [
+        "HAS_OPERATING_LOSS",
+        "HAS_NET_LOSS",
+        "TURNAROUND_OPERATING_PROFIT",
+        "TURNAROUND_NET_PROFIT",
+        "DECLINING_REVENUE",
+        "NEGATIVE_ROE",
+        "PARTIAL_DATA"
+    ]
+    flags_summary = {
+        flag: _calc_dist([
+            it for it in stock_items 
+            if flag in it.get("state", {}).get("summary_flags", [])
+        ])
+        for flag in SUMMARY_FLAGS
+    }
+
+    state_summary = {
+        "earnings": earnings_state_summary,
+        "profitability": profitability_summary,
+        "growth": growth_state_summary,
+        "flags": flags_summary
+    }
+
+    # 8. 금융주/업종 식별 여부
     # 프로젝트 내에 전종목 표준 WICS/KSIC 금융업 식별 근거가 없으므로 추측하지 않고 False 반환 (규칙 준수)
     sector_adjustment_available = False
+
+    no_fin_market_val = sum(s.get("market_value", 0.0) for s in no_finance_stocks)
 
     return {
         "status": "SUCCESS",
@@ -428,14 +536,19 @@ def assess_portfolio_fundamentals(
             "coverage_by_count": coverage_by_count,
             "stock_market_value": round(stock_market_val, 2),
             "fundamental_covered_market_value": round(covered_market_val, 2),
-            "coverage_by_value": coverage_by_value
+            "coverage_by_value": coverage_by_value,
+            "no_finance_data_count_ratio": round((no_finance_count / stock_count * 100.0), 2) if stock_count > 0 else 0.0,
+            "no_finance_data_market_value": round(no_fin_market_val, 2),
+            "no_finance_data_value_ratio": round((no_fin_market_val / stock_market_val * 100.0), 2) if stock_market_val > 0 else 0.0
         },
+        "state_summary": state_summary,
         "raw_assessment": {
             "sector_adjustment_available": sector_adjustment_available,
             "metrics": metrics_assessment,
             "earnings_distribution": earnings_distribution,
             "growth_distribution": growth_distribution,
-            "growth_status_distribution": growth_status_distribution
+            "growth_status_distribution": growth_status_distribution,
+            "state_summary": state_summary
         },
         "items": enriched_items
     }
