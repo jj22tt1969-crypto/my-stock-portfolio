@@ -10,3 +10,4 @@ portfolio.db
 backend/data/portfolio.db
 *.zip
 GEMINI.md
+backend/data/fundamental_snapshot.json
