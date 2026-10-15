@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from backend.data.fundamental_collector import (
     load_fundamental_snapshot,
     DEFAULT_SNAPSHOT_PATH,
+    DEFAULT_BASE_SNAPSHOT_PATH,
     DEFAULT_SEED_SNAPSHOT_PATH
 )
 from backend.engine.stock_identifier import get_stock_by_ticker_or_name
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # 전역 메모리 캐시 및 스레드 동기화 락
 _SNAPSHOT_CACHE: Optional[Dict[str, Any]] = None
+_SNAPSHOT_SIGNATURE: Optional[Tuple[Tuple[str, float], ...]] = None
 _SNAPSHOT_MTIME: float = 0.0
 _SNAPSHOT_PATH_USED: Optional[str] = None
 _CACHE_LOCK = threading.Lock()
@@ -28,62 +30,89 @@ FUNDAMENTAL_METRIC_KEYS = [
 ]
 
 
+def _get_snapshot_signature() -> Tuple[Tuple[str, float], ...]:
+    """
+    Runtime, Base, Seed 3개 파일의 존재 여부 및 mtime signature를 반환합니다.
+    파일 미존재 시 mtime은 -1.0으로 표현됩니다.
+    """
+    candidates = (
+        DEFAULT_SNAPSHOT_PATH,
+        DEFAULT_BASE_SNAPSHOT_PATH,
+        DEFAULT_SEED_SNAPSHOT_PATH,
+    )
+    sig = []
+    for cand in candidates:
+        try:
+            mtime = os.path.getmtime(cand) if os.path.exists(cand) else -1.0
+        except OSError:
+            mtime = -1.0
+        sig.append((cand, mtime))
+    return tuple(sig)
+
+
 def get_fundamental_snapshot_cache(force_reload: bool = False) -> Optional[Dict[str, Any]]:
     """
     Fundamental Snapshot을 메모리에 1회 로딩하여 캐싱합니다.
-    - Runtime snapshot (fundamental_snapshot.json) 우선 사용
-    - 부재 시 Seed snapshot (fundamental_seed_snapshot.json) fallback
+    - Loader 우선순위:
+      1. Runtime snapshot JSON (fundamental_snapshot.json)
+      2. Base snapshot Gzip (fundamental_base_snapshot.json.gz)
+      3. Seed snapshot JSON (fundamental_seed_snapshot.json)
     - 외부 API 호출 절대 금지
-    - 매 요청마다 29MB JSON을 재로드하지 않고, 파일의 mtime이 변경되었을 때만 reload
+    - Engine 내부 json/gzip 직접 파싱 금지 -> load_fundamental_snapshot 단일 위임
+    - Cache Invalidation: Runtime/Base/Seed 3개 파일의 existence + mtime signature 기반
     """
-    global _SNAPSHOT_CACHE, _SNAPSHOT_MTIME, _SNAPSHOT_PATH_USED
+    global _SNAPSHOT_CACHE, _SNAPSHOT_SIGNATURE, _SNAPSHOT_MTIME, _SNAPSHOT_PATH_USED
 
-    # 대상 파일 경로 결정 (Runtime 우선, 없으면 Seed)
-    target_path = DEFAULT_SNAPSHOT_PATH if os.path.exists(DEFAULT_SNAPSHOT_PATH) else DEFAULT_SEED_SNAPSHOT_PATH
-    if not os.path.exists(target_path):
+    current_sig = _get_snapshot_signature()
+
+    # 후보 파일이 디스크에 아예 하나도 존재하지 않는 경우
+    if all(mtime == -1.0 for _, mtime in current_sig):
         return None
 
-    try:
-        current_mtime = os.path.getmtime(target_path)
-    except OSError:
-        current_mtime = 0.0
-
-    # 캐시가 유효하고 mtime 변경이 없으면 0ms 즉시 반환
+    # 캐시가 유효하고 3개 파일의 시그니처 변경이 없으면 0ms 즉시 반환 (Warm Cache)
     if (
         not force_reload
         and _SNAPSHOT_CACHE is not None
-        and _SNAPSHOT_MTIME == current_mtime
-        and _SNAPSHOT_PATH_USED == target_path
+        and _SNAPSHOT_SIGNATURE == current_sig
     ):
         return _SNAPSHOT_CACHE
 
     with _CACHE_LOCK:
-        # Double-checked locking
         if (
             not force_reload
             and _SNAPSHOT_CACHE is not None
-            and _SNAPSHOT_MTIME == current_mtime
-            and _SNAPSHOT_PATH_USED == target_path
+            and _SNAPSHOT_SIGNATURE == current_sig
         ):
             return _SNAPSHOT_CACHE
 
         t0 = time.perf_counter()
-        loaded = load_fundamental_snapshot(snapshot_path=target_path, fallback_to_seed=True)
+        loaded, source_path = load_fundamental_snapshot(return_source_path=True)
         t1 = time.perf_counter()
 
-        if loaded:
+        if loaded and source_path:
+            try:
+                real_mtime = os.path.getmtime(source_path)
+            except OSError:
+                real_mtime = 0.0
+
             _SNAPSHOT_CACHE = loaded
-            _SNAPSHOT_MTIME = current_mtime
-            _SNAPSHOT_PATH_USED = target_path
+            _SNAPSHOT_SIGNATURE = current_sig
+            _SNAPSHOT_MTIME = real_mtime
+            _SNAPSHOT_PATH_USED = source_path
             load_ms = round((t1 - t0) * 1000, 2)
             total_stocks = len(loaded.get("stocks", {}))
+            source_name = os.path.basename(source_path)
             logger.info(
-                f"[FundamentalEngine] Snapshot cache loaded from {os.path.basename(target_path)} "
+                f"[FundamentalEngine] Snapshot cache loaded from {source_name} "
                 f"({total_stocks} stocks, {load_ms} ms)"
             )
             return _SNAPSHOT_CACHE
         else:
-            logger.warning(f"[FundamentalEngine] Failed to load snapshot from {target_path}")
+            logger.warning("[FundamentalEngine] Failed to load snapshot from any candidate")
+            _SNAPSHOT_CACHE = None
+            _SNAPSHOT_SIGNATURE = current_sig
+            _SNAPSHOT_MTIME = 0.0
+            _SNAPSHOT_PATH_USED = None
             return None
 
 
@@ -134,7 +163,33 @@ def get_fundamental_context(ticker: str) -> Dict[str, Any]:
     """
     clean_ticker = str(ticker).strip().zfill(6)
 
-    # 1. 메모리 캐시 확보
+    # 0. ETF 종목 사전 식별 (ETF 요청만으로 2MB Gzip/29MB 대용량 캐시가 로드되는 것을 방지)
+    import backend.engine.krx_loader as kl
+    stock_info = kl._KRX_TICKER_MAP.get(clean_ticker)
+    if not stock_info and not kl._KRX_TICKER_MAP:
+        from backend.engine.stock_identifier import STOCK_ETF_MASTER
+        for it in STOCK_ETF_MASTER:
+            if it.get("ticker") == clean_ticker:
+                stock_info = it
+                break
+    if not stock_info:
+        stock_info = get_stock_by_ticker_or_name(clean_ticker)
+
+    if stock_info and (stock_info.get("asset_type") == "ETF" or stock_info.get("market") == "ETF"):
+        return {
+            "ticker": clean_ticker,
+            "name": stock_info.get("name", clean_ticker),
+            "market": "ETF",
+            "asset_type": "ETF",
+            "status": "NOT_APPLICABLE",
+            "status_reason": "ETF is not applicable for corporate fundamental metrics",
+            "collected_at": None,
+            "annual": None,
+            "quarter": None,
+            "summary": None
+        }
+
+    # 1. STOCK 종목인 경우에만 비로소 스냅샷 메모리 캐시 확보 (Lazy Load)
     cache = get_fundamental_snapshot_cache()
     stock_record = cache.get("stocks", {}).get(clean_ticker) if cache else None
 
@@ -144,13 +199,12 @@ def get_fundamental_context(ticker: str) -> Dict[str, Any]:
         market = stock_record.get("market", "KOSPI")
         asset_type = "STOCK"
     else:
-        # 스냅샷에 없는 경우: ETF 또는 미제공 종목인지 O(1) 맵 우선 식별
-        import backend.engine.krx_loader as kl
+        # 스냅샷에 없는 경우: ETF 또는 미제공 종목인지 재확인
         if not kl._KRX_TICKER_MAP:
             kl.load_krx_all_stocks()
-        stock_info = kl._KRX_TICKER_MAP.get(clean_ticker)
-        if not stock_info:
-            stock_info = get_stock_by_ticker_or_name(clean_ticker)
+            stock_info = kl._KRX_TICKER_MAP.get(clean_ticker)
+            if not stock_info:
+                stock_info = get_stock_by_ticker_or_name(clean_ticker)
 
         name = stock_info.get("name", clean_ticker) if stock_info else clean_ticker
         market = stock_info.get("market", "UNKNOWN") if stock_info else "UNKNOWN"

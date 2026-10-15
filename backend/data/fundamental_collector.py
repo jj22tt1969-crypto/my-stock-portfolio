@@ -1,9 +1,10 @@
 import os
 import json
+import gzip
 import logging
 import tempfile
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Tuple
 import requests
 
 from backend.data.collector import get_ssl_ca_bundle_path
@@ -42,6 +43,9 @@ METRIC_KEY_MAP = {
 
 DEFAULT_SNAPSHOT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "fundamental_snapshot.json"
+)
+DEFAULT_BASE_SNAPSHOT_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "fundamental_base_snapshot.json.gz"
 )
 DEFAULT_SEED_SNAPSHOT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "fundamental_seed_snapshot.json"
@@ -284,37 +288,62 @@ def atomic_save_snapshot(snapshot: Dict[str, Any], output_path: str = DEFAULT_SN
 
 def load_fundamental_snapshot(
     snapshot_path: Optional[str] = None,
+    base_path: Optional[str] = None,
     seed_path: Optional[str] = None,
-    fallback_to_seed: bool = True
-) -> Optional[Dict[str, Any]]:
+    fallback_to_seed: bool = True,
+    return_source_path: bool = False
+) -> Union[Optional[Dict[str, Any]], Tuple[Optional[Dict[str, Any]], Optional[str]]]:
     """
     기존 스냅샷 파일을 안전하게 읽어옵니다.
-    1. Runtime snapshot (기본: DEFAULT_SNAPSHOT_PATH) 존재 및 유효 시 우선 사용.
-    2. Runtime snapshot 부재 시 fallback_to_seed가 True이면 Seed snapshot (기본: DEFAULT_SEED_SNAPSHOT_PATH) 로드.
-    3. 둘 다 없거나 유효하지 않으면 None을 반환합니다.
+    Loader 우선순위:
+    1. Runtime snapshot JSON (기본: DEFAULT_SNAPSHOT_PATH)
+    2. Base snapshot Gzip (기본: DEFAULT_BASE_SNAPSHOT_PATH)
+    3. Seed snapshot JSON (기본: DEFAULT_SEED_SNAPSHOT_PATH)
+
+    return_source_path: True일 경우 (data, source_path) 튜플 반환, False일 경우 data만 반환 (기존 호환)
     """
     primary_path = snapshot_path or DEFAULT_SNAPSHOT_PATH
+    base_snapshot_path = base_path or DEFAULT_BASE_SNAPSHOT_PATH
     fallback_path = seed_path or DEFAULT_SEED_SNAPSHOT_PATH
 
-    # 1. 런타임 스냅샷 우선 로드
+    loaded_data = None
+    loaded_source = None
+
+    # 1. 런타임 스냅샷 우선 로드 (JSON)
     if os.path.exists(primary_path):
         try:
             with open(primary_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 validate_fundamental_snapshot(data)
-                return data
+                loaded_data = data
+                loaded_source = primary_path
         except Exception as e:
             logger.warning(f"Failed to load or validate runtime snapshot at {primary_path}: {e}")
 
-    # 2. Seed 스냅샷 Fallback 로드
-    if fallback_to_seed and os.path.exists(fallback_path):
+    # 2. Base 스냅샷 로드 (Gzip JSON)
+    if loaded_data is None and os.path.exists(base_snapshot_path):
+        try:
+            with gzip.open(base_snapshot_path, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+                validate_fundamental_snapshot(data)
+                logger.info(f"Loaded base fundamental snapshot from {base_snapshot_path} (fallback).")
+                loaded_data = data
+                loaded_source = base_snapshot_path
+        except Exception as e:
+            logger.warning(f"Failed to load or validate base snapshot at {base_snapshot_path}: {e}")
+
+    # 3. Seed 스냅샷 Fallback 로드 (최후의 수단)
+    if loaded_data is None and fallback_to_seed and os.path.exists(fallback_path):
         try:
             with open(fallback_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 validate_fundamental_snapshot(data)
                 logger.info(f"Loaded seed fundamental snapshot from {fallback_path} (fallback).")
-                return data
+                loaded_data = data
+                loaded_source = fallback_path
         except Exception as e:
             logger.warning(f"Failed to load or validate seed snapshot at {fallback_path}: {e}")
 
-    return None
+    if return_source_path:
+        return loaded_data, loaded_source
+    return loaded_data
