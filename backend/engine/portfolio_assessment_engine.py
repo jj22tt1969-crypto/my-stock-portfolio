@@ -131,7 +131,7 @@ def _aggregate_growth_metric(
             excluded_status_counts["NOT_COMPARABLE"] += 1
             continue
 
-        growth_info = ann.get("growth", {})
+        growth_info = ann.get("growth") or {}
         val = growth_info.get(growth_key)
         status = growth_info.get(status_key, "NOT_COMPARABLE")
         eval_amt = float(item.get("eval_amount", 0.0))
@@ -326,7 +326,7 @@ def assess_portfolio_fundamentals(
         ann = item.get("fundamental", {}).get("annual", {})
         if not ann:
             return None
-        return ann.get("growth", {}).get(key)
+        return (ann.get("growth") or {}).get(key)
 
     metrics_assessment = {
         "per": _aggregate_metric(stock_items, lambda it: _get_metric_val(it, "per"), stock_count, exclude_le_zero=True),
@@ -404,7 +404,7 @@ def assess_portfolio_fundamentals(
         for st in ["NORMAL_GROWTH", "TURNAROUND", "DEFICIT_CONTINUATION", "LOSS_WIDENING", "NOT_COMPARABLE"]:
             sub = [
                 it for it in stock_items 
-                if it.get("fundamental", {}).get("annual", {}).get("growth", {}).get(status_key) == st
+                if ((it.get("fundamental", {}).get("annual") or {}).get("growth") or {}).get(status_key) == st
             ]
             res_dist[st] = _calc_dist(sub)
         return res_dist
