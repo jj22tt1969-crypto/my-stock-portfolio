@@ -128,7 +128,9 @@ def get_fundamental_state(
             "earnings_state": {
                 "status": "UNKNOWN",
                 "operating_profit": None,
-                "net_profit": None
+                "net_profit": None,
+                "revenue": None,
+                "fiscal_period": None
             },
             "profitability": {
                 "roe": {"value": None, "sign": "UNKNOWN"},
@@ -191,7 +193,9 @@ def get_fundamental_state(
     earnings_state = {
         "status": earnings_status,
         "operating_profit": op,
-        "net_profit": np_val
+        "net_profit": np_val,
+        "revenue": latest_metrics.get("revenue"),
+        "fiscal_period": latest_actual.get("fiscal_period")
     }
 
     # 6. Profitability Context (부호만 객관적으로 표현)

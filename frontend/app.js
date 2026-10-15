@@ -1224,6 +1224,279 @@ async function updatePortfolioLivePricesOnly() {
     }
 }
 
+// =========================================================
+// 📊 Fundamental UI Integration (F7)
+// =========================================================
+function formatGrowthStatus(item) {
+    if (!item) return '<span style="color:#64748b;">-</span>';
+    const st = item.status;
+    const dir = item.direction;
+    const rate = item.raw_growth_rate != null ? `${item.raw_growth_rate > 0 ? '+' : ''}${item.raw_growth_rate}%` : '';
+
+    let text = '-';
+    let cls = '';
+    if (st === 'TURNAROUND') {
+        text = '흑자전환';
+        cls = 'text-cyan';
+    } else if (st === 'DEFICIT_CONTINUATION') {
+        text = '적자 지속/축소';
+        cls = 'text-warning';
+    } else if (st === 'LOSS_WIDENING') {
+        text = '적자 확대';
+        cls = 'text-danger';
+    } else if (st === 'DEFICIT_TURNAROUND') {
+        text = '적자전환';
+        cls = 'text-danger';
+    } else if (st === 'COMPARABLE') {
+        if (dir === 'INCREASE') {
+            text = '증가';
+            cls = 'text-success';
+        } else if (dir === 'DECREASE') {
+            text = '감소';
+            cls = 'text-danger';
+        } else {
+            text = '보합';
+            cls = 'text-muted';
+        }
+    } else {
+        text = '비교불가';
+        cls = 'text-muted';
+    }
+
+    return rate ? `<span class="${cls}">${text} (${rate})</span>` : `<span class="${cls}">${text}</span>`;
+}
+
+function formatFundWon(val) {
+    if (val == null || isNaN(val)) return '미제공';
+    const num = Math.round(val);
+    if (Math.abs(num) >= 10000) {
+        const jo = Math.floor(Math.abs(num) / 10000);
+        const eok = Math.abs(num) % 10000;
+        const sign = num < 0 ? '-' : '';
+        return `${sign}${jo}조 ${eok > 0 ? eok.toLocaleString() + '억' : ''}원`;
+    }
+    return `${num.toLocaleString()}억원`;
+}
+
+function renderFundamentalStateCardHTML(fs) {
+    if (!fs) return '';
+
+    if (fs.data_state === 'NOT_APPLICABLE' || fs.asset_type === 'ETF') {
+        return `
+            <div class="single-quote-fund-section" style="background: rgba(15, 23, 42, 0.4); border-color: rgba(255, 255, 255, 0.06);">
+                <div style="font-size: 12.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                    <span>ℹ️</span> <span>ETF는 기업 재무평가 대상이 아닙니다.</span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (fs.data_state === 'NO_FINANCE_DATA') {
+        return `
+            <div class="single-quote-fund-section" style="background: rgba(15, 23, 42, 0.4); border-color: rgba(255, 255, 255, 0.06);">
+                <div style="font-size: 12.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                    <span>ℹ️</span> <span>재무 데이터 미제공</span>
+                </div>
+            </div>
+        `;
+    }
+
+    const earnings = fs.earnings_state || {};
+    const profit = fs.profitability || {};
+    const growth = fs.growth || {};
+    const val = fs.valuation || {};
+    const bs = fs.balance_sheet || {};
+    const flags = fs.summary_flags || [];
+    const period = earnings.fiscal_period ? `${earnings.fiscal_period} 결산` : '최근 확정 결산';
+
+    let earningsBadge = '';
+    if (earnings.status === 'PROFITABLE') {
+        earningsBadge = '<span class="fund-badge fund-badge-green">흑자</span>';
+    } else if (earnings.status === 'OPERATING_LOSS') {
+        earningsBadge = '<span class="fund-badge fund-badge-red">영업적자</span>';
+    } else if (earnings.status === 'NET_LOSS') {
+        earningsBadge = '<span class="fund-badge fund-badge-red">순손실</span>';
+    }
+
+    const extraBadges = [];
+    if (flags.includes('TURNAROUND_OPERATING_PROFIT')) {
+        extraBadges.push('<span class="fund-badge fund-badge-cyan">흑자전환</span>');
+    }
+    if (flags.includes('NEGATIVE_ROE')) {
+        extraBadges.push('<span class="fund-badge fund-badge-amber">음수 ROE</span>');
+    }
+    if (flags.includes('DECLINING_REVENUE')) {
+        extraBadges.push('<span class="fund-badge fund-badge-rose">매출감소</span>');
+    }
+    if (flags.includes('PARTIAL_DATA')) {
+        extraBadges.push('<span class="fund-badge fund-badge-gray">일부 재무지표 미제공</span>');
+    }
+
+    const roeVal = profit.roe && profit.roe.value != null ? `${profit.roe.value}%` : '미제공';
+    const roeSign = profit.roe ? (profit.roe.sign === 'POSITIVE' ? '양수' : (profit.roe.sign === 'NEGATIVE' ? '음수' : (profit.roe.sign === 'ZERO' ? '0' : ''))) : '';
+    const roeText = roeSign ? `${roeVal} (${roeSign})` : roeVal;
+
+    const opmVal = profit.operating_margin && profit.operating_margin.value != null ? `${profit.operating_margin.value}%` : '미제공';
+    const npmVal = profit.net_margin && profit.net_margin.value != null ? `${profit.net_margin.value}%` : '미제공';
+
+    const perVal = val.per != null ? `${val.per}배` : '미제공';
+    const pbrVal = val.pbr != null ? `${val.pbr}배` : '미제공';
+    const debtVal = bs.debt_ratio != null ? `${bs.debt_ratio}%` : '미제공';
+
+    return `
+        <!-- 📌 기업 재무 상태 섹션 -->
+        <div class="single-quote-fund-section">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <h4 style="font-size: 13.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 6px;">
+                        📊 재무 상태
+                    </h4>
+                    <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">(${period})</span>
+                    ${earningsBadge}
+                    ${extraBadges.join(' ')}
+                </div>
+            </div>
+
+            <div class="sq-fund-grid">
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">매출액 (성장)</div>
+                    <div class="sq-fund-val">${formatFundWon(earnings.revenue)}</div>
+                    <div style="font-size: 11px; margin-top: 2px;">${formatGrowthStatus(growth.revenue)}</div>
+                </div>
+
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">영업이익 (성장/상태)</div>
+                    <div class="sq-fund-val">${formatFundWon(earnings.operating_profit)}</div>
+                    <div style="font-size: 11px; margin-top: 2px;">${formatGrowthStatus(growth.operating_profit)}</div>
+                </div>
+
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">당기순이익 (성장/상태)</div>
+                    <div class="sq-fund-val">${formatFundWon(earnings.net_profit)}</div>
+                    <div style="font-size: 11px; margin-top: 2px;">${formatGrowthStatus(growth.net_profit)}</div>
+                </div>
+
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">ROE (자기자본이익률)</div>
+                    <div class="sq-fund-val">${roeText}</div>
+                </div>
+
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">이익률 (영업익 / 순익)</div>
+                    <div class="sq-fund-val" style="font-size: 12.5px;">${opmVal} / ${npmVal}</div>
+                </div>
+
+                <div class="sq-fund-item">
+                    <div class="sq-fund-lbl">PER / PBR / 부채비율</div>
+                    <div class="sq-fund-val" style="font-size: 12px;">${perVal} / ${pbrVal} / ${debtVal}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getStockFundamentalBadges(item) {
+    const fs = item.fundamental_state;
+    if (!fs || fs.data_state !== 'SUCCESS') return '';
+
+    const badges = [];
+    const flags = fs.summary_flags || [];
+    const earningsStatus = fs.earnings_state ? fs.earnings_state.status : '';
+
+    if (flags.includes('TURNAROUND_OPERATING_PROFIT')) {
+        badges.push('<span class="fund-badge fund-badge-cyan">흑자전환</span>');
+    } else if (flags.includes('HAS_OPERATING_LOSS') || earningsStatus === 'OPERATING_LOSS') {
+        badges.push('<span class="fund-badge fund-badge-red">영업적자</span>');
+    } else if (earningsStatus === 'PROFITABLE') {
+        badges.push('<span class="fund-badge fund-badge-green">흑자</span>');
+    }
+
+    if (badges.length < 2 && flags.includes('NEGATIVE_ROE')) {
+        badges.push('<span class="fund-badge fund-badge-amber">음수 ROE</span>');
+    } else if (badges.length < 2 && flags.includes('DECLINING_REVENUE')) {
+        badges.push('<span class="fund-badge fund-badge-rose">매출감소</span>');
+    } else if (badges.length < 2 && flags.includes('PARTIAL_DATA')) {
+        badges.push('<span class="fund-badge fund-badge-gray">일부지표 미제공</span>');
+    }
+
+    return badges.join(' ');
+}
+
+function renderPortfolioFundamentalSummary(assessment, assetType) {
+    const container = document.getElementById('portfolioFundamentalContainer');
+    if (!container) return;
+
+    if (!assessment || assetType === 'ETF' || assessment.status === 'NOT_APPLICABLE') {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    const cov = assessment.coverage || {};
+    const ss = assessment.state_summary || {};
+    const earn = ss.earnings || {};
+    const prof = ss.profitability || {};
+    const flags = ss.flags || {};
+
+    const profStock = earn.PROFITABLE || { count: 0, value_ratio: 0 };
+    const lossStock = earn.OPERATING_LOSS || { count: 0, value_ratio: 0 };
+    const negRoe = prof.negative_roe || { count: 0, value_ratio: 0 };
+    const decRev = flags.DECLINING_REVENUE || { count: 0, value_ratio: 0 };
+    const opTurn = flags.TURNAROUND_OPERATING_PROFIT || { count: 0, value_ratio: 0 };
+
+    container.innerHTML = `
+        <div class="portfolio-fundamental-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3 style="font-size: 14.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 6px;">
+                        📊 포트폴리오 재무 현황
+                    </h3>
+                    <span style="font-size: 11.5px; color: #94a3b8; font-weight: 600;">(STOCK ${cov.stock_count || 0}종목 분석)</span>
+                </div>
+                <div style="font-size: 11.5px; color: #64748b;">
+                    재무 커버리지: <strong style="color: #38bdf8;">${cov.coverage_by_count || 0}%</strong> (${cov.fundamental_success_count || 0}/${cov.stock_count || 0}종목)
+                </div>
+            </div>
+
+            <!-- 6대 핵심 지표 (평가금액 비중 우선) -->
+            <div class="pf-grid">
+                <div class="pf-item">
+                    <span class="pf-label">흑자기업 비중</span>
+                    <span class="pf-val text-success">${profStock.value_ratio}%</span>
+                    <span class="pf-sub">${profStock.count}개 종목</span>
+                </div>
+                <div class="pf-item">
+                    <span class="pf-label">영업적자 비중</span>
+                    <span class="pf-val text-danger">${lossStock.value_ratio}%</span>
+                    <span class="pf-sub">${lossStock.count}개 종목</span>
+                </div>
+                <div class="pf-item">
+                    <span class="pf-label">음수 ROE 비중</span>
+                    <span class="pf-val text-warning">${negRoe.value_ratio}%</span>
+                    <span class="pf-sub">${negRoe.count}개 종목</span>
+                </div>
+                <div class="pf-item">
+                    <span class="pf-label">매출 감소 비중</span>
+                    <span class="pf-val text-danger">${decRev.value_ratio}%</span>
+                    <span class="pf-sub">${decRev.count}개 종목</span>
+                </div>
+                <div class="pf-item">
+                    <span class="pf-label">영업익 흑자전환 비중</span>
+                    <span class="pf-val text-cyan">${opTurn.value_ratio}%</span>
+                    <span class="pf-sub">${opTurn.count}개 종목</span>
+                </div>
+                <div class="pf-item">
+                    <span class="pf-label">재무 데이터 커버리지</span>
+                    <span class="pf-val text-cyan">${cov.coverage_by_value || 0}%</span>
+                    <span class="pf-sub">평가금액 기준</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 // 포트폴리오 UI 전체 렌더링 함수
 function renderPortfolioUI(data) {
     const grid = document.getElementById('stockGrid');
@@ -1282,6 +1555,9 @@ function renderPortfolioUI(data) {
 
     const lastUpdateElem = document.getElementById('lastUpdatedInfo');
     if (lastUpdateElem) lastUpdateElem.innerText = `최신 업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
+
+    // 포트폴리오 재무 현황 렌더링
+    renderPortfolioFundamentalSummary(data.fundamental_assessment, data.asset_type);
 
     // 포트폴리오 비어있음 처리
     if (data.portfolio_empty || !data.items || data.items.length === 0) {
@@ -1403,11 +1679,12 @@ function renderStockCards(items) {
                             <span class="m-return-badge ${plClass}" style="font-size: 12.5px; font-weight: 800; padding: 3px 10px; border-radius: 12px;">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</span>
                         </div>
 
-                        <!-- 2번째 줄: KOSPI/ETF 배지 + 업종 배지 + 포트폴리오 비중 배지 -->
+                        <!-- 2번째 줄: KOSPI/ETF 배지 + 업종 배지 + 포트폴리오 비중 배지 + 재무 상태 배지 -->
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span class="market-tag ${marketClass}">${marketVal}</span>
                             <span class="sector-tag">${item.sector || '기타'}</span>
                             <span style="font-size: 11.5px; font-weight: 700; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 12px;">비중 ${item.weight}%</span>
+                            ${getStockFundamentalBadges(item)}
                         </div>
                     </div>
 
@@ -1571,7 +1848,7 @@ async function openDetailModal(ticker, name, focusSection = null) {
             const safeTicker = String(targetTicker).replace(/'/g, "\\'");
             const mainCardEl = document.getElementById(`stock-card-quote-${safeTicker}`);
             if (mainCardEl) {
-                renderSingleQuoteCard(data, targetTicker, targetName);
+                renderSingleQuoteCard(data, targetTicker, targetName, resData.fundamental_state);
             }
         } catch (syncErr) {
             console.warn("[LiveSync] Main card sync warning:", syncErr);
@@ -3815,7 +4092,7 @@ async function submitSidebarQuoteSearch() {
         const ticker = resData.ticker || targetQuery;
 
         if (titleElem) titleElem.innerText = `${name} (${ticker}) 주식현재가 & TODAY ACTION 분석`;
-        renderSingleQuoteCard(data, ticker, name);
+        renderSingleQuoteCard(data, ticker, name, resData.fundamental_state);
 
         if (resultArea) {
             resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3928,7 +4205,7 @@ function render5ActionStepBar(currentDecisionKey) {
     return `<div class="action-5step-bar" style="display: inline-flex; align-items: center; gap: 4px; background: rgba(226, 232, 240, 0.16) !important; border: 1px solid rgba(226, 232, 240, 0.3) !important; padding: 4px 10px; border-radius: 20px;">( ${itemsHtml} )</div>`;
 }
 
-function renderSingleQuoteCard(data, ticker, name) {
+function renderSingleQuoteCard(data, ticker, name, fundamentalState) {
     const container = document.getElementById('singleQuoteCardContainer');
     if (!container) return;
 
@@ -4057,6 +4334,9 @@ function renderSingleQuoteCard(data, ticker, name) {
                     </div>
                 </div>
             </div>
+
+            <!-- 📌 3.5번 줄: 기업 재무 상태 섹션 (F7) -->
+            ${renderFundamentalStateCardHTML(fundamentalState)}
 
             <!-- 📌 4번 줄: 2가지 분석 모달 버튼 (밀착) -->
             <div class="card-footer" style="display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap; margin-top: 6px;">

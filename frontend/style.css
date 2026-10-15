@@ -4834,3 +4834,143 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         animation: none !important;
     }
 }
+
+/* =========================================================
+   📊 Fundamental UI Integration (F7)
+   ========================================================= */
+.fund-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+.fund-badge-green {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.fund-badge-red {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+.fund-badge-cyan {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.fund-badge-amber {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.fund-badge-rose {
+    background: rgba(244, 63, 94, 0.15);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+.fund-badge-gray {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.portfolio-fundamental-card {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+.pf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+}
+.pf-item {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.pf-label {
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+.pf-val {
+    font-size: 17px;
+    font-weight: 800;
+    color: #f8fafc;
+}
+.pf-sub {
+    font-size: 11px;
+    color: #64748b;
+}
+
+.single-quote-fund-section {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.sq-fund-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+}
+.sq-fund-item {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+.sq-fund-lbl {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-bottom: 2px;
+}
+.sq-fund-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+@media (max-width: 600px) {
+    .pf-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .pf-val {
+        font-size: 15px;
+    }
+    .sq-fund-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+}
+@media (max-width: 380px) {
+    .pf-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    .pf-item {
+        padding: 8px 10px;
+    }
+    .pf-label {
+        font-size: 10.5px;
+    }
+    .pf-val {
+        font-size: 14px;
+    }
+}
+

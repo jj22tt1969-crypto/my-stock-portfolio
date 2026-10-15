@@ -291,7 +291,9 @@ def analyze_decision(
             "earnings_state": {
                 "status": "UNKNOWN",
                 "operating_profit": None,
-                "net_profit": None
+                "net_profit": None,
+                "revenue": None,
+                "fiscal_period": None
             },
             "profitability": {
                 "roe": {"value": None, "sign": "UNKNOWN"},
