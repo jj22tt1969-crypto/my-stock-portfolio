@@ -1278,13 +1278,16 @@ function formatFundWon(val) {
     return `${num.toLocaleString()}억원`;
 }
 
-function renderFundamentalStateCardHTML(fs) {
+function renderFundamentalStateCardHTML(fs, titleText = '📊 재무 상태') {
     if (!fs) return '';
 
     if (fs.data_state === 'NOT_APPLICABLE' || fs.asset_type === 'ETF') {
         return `
-            <div class="single-quote-fund-section" style="background: rgba(15, 23, 42, 0.4); border-color: rgba(255, 255, 255, 0.06);">
-                <div style="font-size: 12.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+            <div class="single-quote-fund-section" style="background: rgba(30, 41, 59, 0.4); border-color: rgba(255, 255, 255, 0.08); height: 100%; display: flex; flex-direction: column;">
+                <div style="font-size: 12.5px; font-weight: 800; color: #38bdf8; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                    ${titleText}
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 6px; flex: 1; padding: 12px 0;">
                     <span>ℹ️</span> <span>ETF는 기업 재무평가 대상이 아닙니다.</span>
                 </div>
             </div>
@@ -1293,8 +1296,11 @@ function renderFundamentalStateCardHTML(fs) {
 
     if (fs.data_state === 'NO_FINANCE_DATA') {
         return `
-            <div class="single-quote-fund-section" style="background: rgba(15, 23, 42, 0.4); border-color: rgba(255, 255, 255, 0.06);">
-                <div style="font-size: 12.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+            <div class="single-quote-fund-section" style="background: rgba(30, 41, 59, 0.4); border-color: rgba(255, 255, 255, 0.08); height: 100%; display: flex; flex-direction: column;">
+                <div style="font-size: 12.5px; font-weight: 800; color: #38bdf8; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                    ${titleText}
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 6px; flex: 1; padding: 12px 0;">
                     <span>ℹ️</span> <span>재무 데이터 미제공</span>
                 </div>
             </div>
@@ -1348,8 +1354,8 @@ function renderFundamentalStateCardHTML(fs) {
         <div class="single-quote-fund-section">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <h4 style="font-size: 13.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 6px;">
-                        📊 재무 상태
+                    <h4 style="font-size: 12.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 6px;">
+                        ${titleText}
                     </h4>
                     <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">(${period})</span>
                     ${earningsBadge}
@@ -1396,7 +1402,8 @@ function renderFundamentalStateCardHTML(fs) {
 }
 
 function getStockFundamentalBadges(item) {
-    const fs = item.fundamental_state;
+  try {
+    const fs = item ? item.fundamental_state : null;
     if (!fs || fs.data_state !== 'SUCCESS') return '';
 
     const badges = [];
@@ -1420,6 +1427,10 @@ function getStockFundamentalBadges(item) {
     }
 
     return badges.join(' ');
+  } catch (e) {
+    console.warn('[F7] getStockFundamentalBadges skipped:', e);
+    return '';
+  }
 }
 
 function renderPortfolioFundamentalSummary(assessment, assetType) {
@@ -1556,8 +1567,14 @@ function renderPortfolioUI(data) {
     const lastUpdateElem = document.getElementById('lastUpdatedInfo');
     if (lastUpdateElem) lastUpdateElem.innerText = `최신 업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
 
-    // 포트폴리오 재무 현황 렌더링
-    renderPortfolioFundamentalSummary(data.fundamental_assessment, data.asset_type);
+    // 포트폴리오 재무 현황 렌더링 (fail-safe: 재무 UI 오류가 기존 Portfolio 렌더를 중단시키지 않음)
+    try {
+        renderPortfolioFundamentalSummary(data.fundamental_assessment, data.asset_type);
+    } catch (e) {
+        console.warn('[F7] renderPortfolioFundamentalSummary skipped:', e);
+        const fc = document.getElementById('portfolioFundamentalContainer');
+        if (fc) { fc.style.display = 'none'; fc.innerHTML = ''; }
+    }
 
     // 포트폴리오 비어있음 처리
     if (data.portfolio_empty || !data.items || data.items.length === 0) {
@@ -1630,7 +1647,7 @@ function renderStockCards(items) {
         const tfInfo = formatTrendFilterInfo(item.trend_filter, item.original_decision, item.final_decision);
 
         const reasons = item.ai_reasons || ["수급 및 지지선 모니터링 필요"];
-        const reasonsHtml = reasons.map(r => `<li style="list-style: none; position: relative; padding-left: 18px; margin-bottom: 6px; font-size: 12.5px; line-height: 1.65;"><span style="position: absolute; left: 0;">📌</span> ${r}</li>`).join('');
+        const reasonsHtml = reasons.map(r => `<li style="list-style: none; position: relative; padding-left: 18px; margin-bottom: 5px; font-size: 12px; line-height: 1.5; word-break: keep-all; white-space: normal;"><span style="position: absolute; left: 0;">📌</span> ${r}</li>`).join('');
 
         if (!fullReRender) {
             const cardElem = document.getElementById(`stock-card-${item.ticker}`);
@@ -1782,6 +1799,8 @@ async function openDetailModal(ticker, name, focusSection = null) {
     // ⚡ 1. 사전 State 초기화: 이전 수급 객체가 재사용되지 않도록 초기화
     currentDetailFlowData = null;
     currentInvestorBreakdownData = null;
+    const modalFundEl = document.getElementById('modalFundamentalSection');
+    if (modalFundEl) modalFundEl.innerHTML = '';
 
     // ⚡ 2. 사전 Chart Destroy: 모달 오픈 즉시 이전 종목 차트 제거
     if (detailChartInstance) {
@@ -1812,6 +1831,7 @@ async function openDetailModal(ticker, name, focusSection = null) {
 
         if (!resp.ok) {
             if (activeDetailTicker !== targetTickerStr) return;
+            if (modalFundEl) modalFundEl.innerHTML = '';
             document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
             renderDetailChart(null, null);
             return;
@@ -1821,6 +1841,7 @@ async function openDetailModal(ticker, name, focusSection = null) {
 
         if (resData.status !== "success") {
             if (activeDetailTicker !== targetTickerStr) return;
+            if (modalFundEl) modalFundEl.innerHTML = '';
             document.getElementById('modalStockSub').innerText = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
             const compFlowTextEl = document.getElementById('compFlowText');
             if (compFlowTextEl) compFlowTextEl.innerHTML = "⚠️ 외국인·기관 수급 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -1903,6 +1924,16 @@ async function openDetailModal(ticker, name, focusSection = null) {
 
         // 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) 렌더링
         renderCrossAnalysis(resData.cross_analysis);
+
+        // 📊 기업 재무 상태 섹션 렌더링 (F7R3: ① 재무 현황)
+        if (modalFundEl) {
+            try {
+                modalFundEl.innerHTML = renderFundamentalStateCardHTML(resData.fundamental_state, '📊 ① 재무 현황');
+            } catch (fe) {
+                console.warn("[F7R-3] modalFundamentalSection render error:", fe);
+                modalFundEl.innerHTML = '';
+            }
+        }
 
         renderDetailChart(flow, tech);
 
@@ -2184,17 +2215,58 @@ function renderComprehensiveReport(resData) {
     }
 
     if (summaryTextEl) {
-        const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
-        const actionStr = dec.decision || "HOLD";
-        const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
+        try {
+            const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
+            const actionStr = dec.decision || "HOLD";
+            const tfInfo = formatTrendFilterInfo(dec.trend_filter, dec.original_decision, dec.decision);
 
-        summaryTextEl.innerHTML = `
-            <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:3px;">• <strong>추세 진단:</strong> ${tfInfo.badgeHtml} ${tfInfo.reasonText}</div>
-            <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
-            <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
-            ${renderStepAnalysisSummaryHTML(tech, flow)}
-        `;
+            // 1. 상단 핵심요약 (기본 노출 최대 3개: 📌 상태 / 🎯 행동 / 📝 종합)
+            const topSummaryHtml = `
+                <div style="font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:4px;">
+                    📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span>
+                </div>
+                <div style="font-size:12px; color:#f8fafc; font-weight:700; margin-bottom:4px;">
+                    🎯 <strong>행동:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장
+                </div>
+                <div style="font-size:11.5px; color:#cbd5e1; line-height:1.45; margin-bottom:6px;">
+                    📝 <strong>종합:</strong> ${integratedOp}
+                </div>
+            `;
+
+            // 2. 5대 보조지표 Compact Summary (세로 1행씩 key-value)
+            const compactMetricsHtml = renderCompactMetricsHTML(tech, flow);
+
+            // 3. 상세 토글 (기존 상세카드 100% 보존, Default 접힘)
+            const originalStepCardsHtml = renderStepAnalysisSummaryHTML(tech, flow);
+            const tfReasonHtml = tfInfo.reasonText ? `
+                <div class="step-summary-block trend-block" style="margin-top:6px; padding:6px 10px; background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; font-size:0.8rem; color:#cbd5e1;">
+                    <span style="color:#a78bfa; font-weight:600;">[추세 진단]</span> ${tfInfo.badgeHtml} <span style="margin-left:4px;">${tfInfo.reasonText}</span>
+                </div>
+            ` : '';
+
+            const toggleSectionHtml = `
+                <button type="button" id="btnToggleSubMetrics" class="f7r4-toggle-btn" onclick="toggleSubMetricsDetail()">
+                    <span>📊 세부 지표 및 근거 보기 ▾</span>
+                </button>
+                <div id="subMetricsDetailBox" style="display: none; margin-top: 6px;">
+                    ${tfReasonHtml}
+                    ${originalStepCardsHtml}
+                </div>
+            `;
+
+            summaryTextEl.innerHTML = topSummaryHtml + compactMetricsHtml + toggleSectionHtml;
+
+        } catch (e) {
+            console.warn('[F7R4] renderComprehensiveReport compact fail-safe:', e);
+            const statusLabel = cross.status_label || "🟢 지표 종합 분석 완료";
+            const actionStr = dec.decision || "HOLD";
+            summaryTextEl.innerHTML = `
+                <div style="font-weight:700; color:#e2e8f0; margin-bottom:3px;">📌 <strong>상태:</strong> <span style="color:${cross.status_color || '#38bdf8'}">${statusLabel}</span></div>
+                <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">• <strong>통합 검토의견:</strong> ${integratedOp}</div>
+                <div style="font-size:11.5px; color:#f8fafc; font-weight:700;">• <strong>행동 방향:</strong> TODAY ACTION <strong>[${actionStr}]</strong> 유지 권장</div>
+                ${renderStepAnalysisSummaryHTML(tech, flow)}
+            `;
+        }
     }
 
     // 하단 주요 기술지표 뱃지 바 업데이트
@@ -2394,6 +2466,170 @@ function renderStepAnalysisSummaryHTML(tech, flow) {
     }
 
     return html;
+}
+
+// ==================================================
+// F7R4: 세부 지표 및 근거 토글 핸들러
+// ==================================================
+window.toggleSubMetricsDetail = function() {
+    const el = document.getElementById('subMetricsDetailBox');
+    const btn = document.getElementById('btnToggleSubMetrics');
+    if (!el || !btn) return;
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    btn.innerHTML = isHidden 
+        ? '<span>📊 세부 지표 및 근거 접기 ▴</span>' 
+        : '<span>📊 세부 지표 및 근거 보기 ▾</span>';
+};
+
+// ==================================================
+// F7R4: 5대 보조지표 Compact Summary (세로 1행씩 key-value)
+// ==================================================
+function renderCompactMetricsHTML(tech, flow) {
+    try {
+        // 1. [추세]
+        const trend = tech?.trend_analysis;
+        let trendKo = '중립';
+        let trendColor = '#cbd5e1';
+        if (trend && trend.available !== false) {
+            const stateMap = {
+                'STRONG_UP': '강한 상승',
+                'UP': '상승',
+                'NEUTRAL': '중립/전환',
+                'DOWN': '하락',
+                'STRONG_DOWN': '강한 하락'
+            };
+            trendKo = stateMap[trend.trend_state] || trend.trend_state || '중립';
+            if (trend.trend_state === 'STRONG_UP' || trend.trend_state === 'UP') trendColor = '#f87171';
+            else if (trend.trend_state === 'STRONG_DOWN' || trend.trend_state === 'DOWN') trendColor = '#60a5fa';
+        } else if (trend && trend.available === false) {
+            trendKo = '데이터 부족';
+            trendColor = '#94a3b8';
+        }
+
+        // 2. [거래 강도]
+        const vol = tech?.volume_analysis;
+        let volKo = '보통';
+        let volColor = '#cbd5e1';
+        if (vol && vol.available !== false) {
+            const stateMap = {
+                'VERY_HIGH': '매우 높음',
+                'HIGH': '높음',
+                'NORMAL': '보통',
+                'LOW': '낮음'
+            };
+            volKo = stateMap[vol.volume_state] || vol.volume_state || '보통';
+            if (vol.volume_state === 'VERY_HIGH' || vol.volume_state === 'HIGH') volColor = '#34d399';
+            else if (vol.volume_state === 'LOW') volColor = '#94a3b8';
+        } else if (vol && vol.available === false) {
+            volKo = '데이터 부족';
+            volColor = '#94a3b8';
+        }
+
+        // 3. [수급]
+        let flowKo = '수급 중립';
+        let flowColor = '#cbd5e1';
+        if (flow && flow.flow_state) {
+            const stateMap = {
+                'STRONG_IMPROVING': '강한 수급 개선',
+                'IMPROVING': '수급 개선',
+                'NEUTRAL': '수급 중립',
+                'WEAKENING': '수급 약화',
+                'STRONG_WEAKENING': '강한 수급 약화'
+            };
+            flowKo = stateMap[flow.flow_state] || flow.flow_state || '수급 중립';
+            if (flow.flow_state === 'STRONG_IMPROVING' || flow.flow_state === 'IMPROVING') flowColor = '#c4b5fd';
+            else if (flow.flow_state === 'STRONG_WEAKENING' || flow.flow_state === 'WEAKENING') flowColor = '#f87171';
+        } else {
+            flowKo = '데이터 부족';
+            flowColor = '#94a3b8';
+        }
+
+        // 4. [시장 대비]
+        const rsData = tech?.relative_strength_analysis;
+        let rsKo = '중립';
+        let rsColor = '#cbd5e1';
+        if (rsData) {
+            if (rsData.available === false) {
+                const isEtfReason = (rsData.reason && rsData.reason.includes("ETF"));
+                rsKo = isEtfReason ? "ETF 미설정" : "데이터 부족";
+                rsColor = '#94a3b8';
+            } else if (rsData.available === true) {
+                const rsStateMap = {
+                    'STRONG': '매우 강함',
+                    'OUTPERFORM': '강함',
+                    'NEUTRAL': '중립',
+                    'UNDERPERFORM': '약함',
+                    'WEAK': '매우 약함'
+                };
+                rsKo = rsStateMap[rsData.rs_state] || rsData.rs_state || '중립';
+                if (rsData.rs_state === 'STRONG' || rsData.rs_state === 'OUTPERFORM') rsColor = '#f87171';
+                else if (rsData.rs_state === 'WEAK' || rsData.rs_state === 'UNDERPERFORM') rsColor = '#60a5fa';
+            }
+        } else {
+            rsKo = '데이터 부족';
+            rsColor = '#94a3b8';
+        }
+
+        // 5. [가격 리스크]
+        const rData = tech?.risk_analysis;
+        let riskKo = '변동성 보통';
+        let riskColor = '#cbd5e1';
+        if (rData) {
+            if (rData.available === false) {
+                riskKo = '데이터 부족';
+                riskColor = '#94a3b8';
+            } else if (rData.available === true) {
+                const riskStateMap = {
+                    'LOW': '낮음',
+                    'NORMAL': '보통',
+                    'HIGH': '높음',
+                    'VERY_HIGH': '매우 높음'
+                };
+                const hasAtr = (rData.atr_pct !== null && rData.atr_pct !== undefined && rData.risk_state !== null);
+                if (hasAtr) {
+                    const rState = riskStateMap[rData.risk_state] || '보통';
+                    riskKo = `변동성 ${rState}`;
+                    if (rData.risk_state === 'HIGH' || rData.risk_state === 'VERY_HIGH') riskColor = '#fbbf24';
+                    else if (rData.risk_state === 'LOW') riskColor = '#34d399';
+                } else {
+                    riskKo = '변동성 데이터 부족';
+                    riskColor = '#94a3b8';
+                }
+            }
+        } else {
+            riskKo = '데이터 부족';
+            riskColor = '#94a3b8';
+        }
+
+        return `
+            <div class="f7r4-compact-metrics">
+                <div class="f7r4-metric-row">
+                    <span class="f7r4-metric-lbl">추세</span>
+                    <strong style="color: ${trendColor};">${trendKo}</strong>
+                </div>
+                <div class="f7r4-metric-row">
+                    <span class="f7r4-metric-lbl">거래강도</span>
+                    <strong style="color: ${volColor};">${volKo}</strong>
+                </div>
+                <div class="f7r4-metric-row">
+                    <span class="f7r4-metric-lbl">수급</span>
+                    <strong style="color: ${flowColor};">${flowKo}</strong>
+                </div>
+                <div class="f7r4-metric-row">
+                    <span class="f7r4-metric-lbl">시장대비</span>
+                    <strong style="color: ${rsColor};">${rsKo}</strong>
+                </div>
+                <div class="f7r4-metric-row" style="border-bottom: none;">
+                    <span class="f7r4-metric-lbl">가격리스크</span>
+                    <strong style="color: ${riskColor};">${riskKo}</strong>
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        console.warn('[F7R4] renderCompactMetricsHTML error:', e);
+        return '';
+    }
 }
 
 // 🔮 종합 수급·기술 지표 비교 분석 (Cross Analysis) UI 렌더링 함수
