@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -11,6 +12,49 @@ from backend.engine.citation_engine import generate_citations
 from backend.engine.fundamental_valuation_engine import get_fundamental_shadow_context
 from backend.engine.stock_identifier import STOCK_ETF_MASTER
 from backend.db import database as db
+
+# F9C: 5분 메모리 TTL 캐시 (종목별 News / DART 수집)
+_QNA_NEWS_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_QNA_OFFICIAL_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_CACHE_TTL_SECONDS = 300.0  # 5분
+
+def _get_cached_news(ticker: str, name: str, query: str = "") -> Dict[str, Any]:
+    key = f"{ticker or name}".strip().upper()
+    now = time.time()
+    try:
+        if key in _QNA_NEWS_CACHE:
+            expire_at, data = _QNA_NEWS_CACHE[key]
+            if now < expire_at:
+                return data
+    except Exception:
+        pass
+
+    res = fetch_qna_stock_news(ticker=ticker, name=name, query=query)
+    try:
+        if res.get("status") == "success" and res.get("items"):
+            _QNA_NEWS_CACHE[key] = (now + _CACHE_TTL_SECONDS, res)
+    except Exception:
+        pass
+    return res
+
+def _get_cached_official(ticker: str, name: str, query: str = "", asset_type: str = "STOCK", manager: str = "") -> Dict[str, Any]:
+    key = f"{ticker or name}_{asset_type}".strip().upper()
+    now = time.time()
+    try:
+        if key in _QNA_OFFICIAL_CACHE:
+            expire_at, data = _QNA_OFFICIAL_CACHE[key]
+            if now < expire_at:
+                return data
+    except Exception:
+        pass
+
+    res = fetch_official_documents(ticker=ticker, name=name, query=query, asset_type=asset_type, manager=manager)
+    try:
+        if res.get("status") == "success" and res.get("items"):
+            _QNA_OFFICIAL_CACHE[key] = (now + _CACHE_TTL_SECONDS, res)
+    except Exception:
+        pass
+    return res
 
 # 금융 질문 의사결정 보조 키워드 매핑
 DECISION_QUERY_KEYWORDS = {
@@ -384,7 +428,9 @@ def generate_grounded_qna_answer(
             "uncertainties": "데이터 부족으로 확인할 수 없습니다.",
             "action_opinion": "확인 불가 / 관망",
             "app_user_data": {"has_user_stock": False, "message": "현재 해당 데이터를 사용할 수 없습니다."},
-            "citations": []
+            "citations": [],
+            "news_items": [],
+            "official_items": []
         }
 
     # 2. 사용자 보유 데이터 연동 (DB)
@@ -454,9 +500,9 @@ def generate_grounded_qna_answer(
             "message": "현재 해당 보유 포트폴리오 데이터를 사용할 수 없습니다. (미보유 종목)"
         }
 
-    # 4. 실시간 뉴스 및 공식자료 수집
-    news_res = fetch_qna_stock_news(ticker=ticker, name=name, query=query)
-    official_res = fetch_official_documents(ticker=ticker, name=name, query=query, asset_type=asset_type, manager=manager)
+    # 4. 실시간 뉴스 및 공식자료 수집 (F9C: 5분 TTL 메모리 캐시 연동)
+    news_res = _get_cached_news(ticker=ticker, name=name, query=query)
+    official_res = _get_cached_official(ticker=ticker, name=name, query=query, asset_type=asset_type, manager=manager)
 
     news_items = news_res.get("items", []) if news_res.get("status") == "success" else []
     official_items = official_res.get("items", []) if official_res.get("status") == "success" else []
@@ -481,7 +527,9 @@ def generate_grounded_qna_answer(
             "action_opinion": "관망 (자료 미존재)",
             "app_user_data": user_stock_info,
             "cross_validation": cross_val,
-            "citations": citations
+            "citations": citations,
+            "news_items": news_items,
+            "official_items": official_items
         }
 
     query_intent = classify_decision_query(query)
@@ -668,5 +716,7 @@ def generate_grounded_qna_answer(
         "cross_validation": cross_val,
         "citations": citations,
         "count_facts": len(verified_facts),
-        "count_citations": len(citations)
+        "count_citations": len(citations),
+        "news_items": news_items,
+        "official_items": official_items
     }
