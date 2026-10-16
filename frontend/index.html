@@ -408,6 +408,92 @@
                                         </table>
                                     </div>
                                 </div>
+
+                                <!-- 5. 🔬 재무 Shadow 검증 섹션 (F8E-B) -->
+                                <div id="ftFundamentalShadowSection" class="ft-fundamental-shadow-section" style="margin-top: 28px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 18px; box-sizing: border-box; max-width: 100%; overflow: hidden;">
+                                    <!-- 헤더 -->
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+                                        <div>
+                                            <h4 style="font-size: 15px; font-weight: 800; color: #38bdf8; margin: 0 0 4px 0; display: flex; align-items: center; gap: 6px;">
+                                                🔬 재무 Shadow 검증 <span style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">참고용 분석</span>
+                                            </h4>
+                                            <p style="font-size: 11.5px; color: #94a3b8; margin: 0;">
+                                                D0 당시 저장된 재무 스냅샷과 실전 Forward Test 성과(D+5/10/20)의 독립 유효성 관찰
+                                            </p>
+                                        </div>
+                                        <div style="font-size: 10.5px; color: #cbd5e1; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 4px 8px;">
+                                            🛡️ 기존 Decision 승률/결정 공식 보호 (Shadow 전용)
+                                        </div>
+                                    </div>
+
+                                    <!-- 상단 요약 KPI 카드 그리드 -->
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px;" id="ftFShadowSummaryGrid">
+                                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">재무 Snapshot 보유</div>
+                                            <div id="ftFValidCount" style="font-size: 16px; font-weight: 800; color: #38bdf8;">0건</div>
+                                        </div>
+                                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">D+5 완료 표본</div>
+                                            <div id="ftFCompleted5D" style="font-size: 16px; font-weight: 800; color: #f8fafc;">0건</div>
+                                        </div>
+                                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">D+10 완료 표본</div>
+                                            <div id="ftFCompleted10D" style="font-size: 16px; font-weight: 800; color: #f8fafc;">0건</div>
+                                        </div>
+                                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">D+20 완료 표본</div>
+                                            <div id="ftFCompleted20D" style="font-size: 16px; font-weight: 800; color: #f8fafc;">0건</div>
+                                        </div>
+                                        <div style="background: rgba(30, 41, 59, 0.6); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                                            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">현재 상태</div>
+                                            <div id="ftFOverallStatusBadge" style="font-size: 12.5px; font-weight: 800; color: #93c5fd; padding-top: 2px;">축적 중</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 품질/예외 안내 칩 (malformed / unsupported > 0 일 때 노출) -->
+                                    <div id="ftFQualityNotice" style="display: none; margin-bottom: 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 7px 12px; font-size: 11px; color: #fbbf24;"></div>
+
+                                    <!-- valid_snapshot_count < 5 일 때의 대형 안내 배너 -->
+                                    <div id="ftFAccumulatingBanner" style="display: none; background: rgba(30, 58, 138, 0.18); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 22px 16px; text-align: center; margin-bottom: 18px;">
+                                        <div style="font-size: 17px; font-weight: 800; color: #38bdf8; margin-bottom: 6px;">
+                                            📊 재무 검증 데이터 축적 중
+                                        </div>
+                                        <div id="ftFCurrentSampleText" style="font-size: 13.5px; color: #e2e8f0; font-weight: 600; margin-bottom: 8px;">
+                                            현재 유효 표본 0건 — 아직 성과 판단 불가
+                                        </div>
+                                        <p style="font-size: 11.5px; color: #94a3b8; max-width: 580px; margin: 0 auto; line-height: 1.5;">
+                                            신규 D0 신호 발생 시 저장된 재무 스냅샷이 누적되고, D+5 / D+10 / D+20 평가 주기가 경과하면 독립 기술통계가 산출됩니다.
+                                            (표본 5건 미만 시에는 단정적 결론을 생성하지 않고 안전하게 데이터를 축적합니다.)
+                                        </p>
+                                    </div>
+
+                                    <!-- Horizon 선택 탭 (D+5 / D+10 / D+20) -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+                                        <div style="font-size: 13px; font-weight: 700; color: #e2e8f0;">
+                                            ⏳ 관찰 Horizon 선택:
+                                        </div>
+                                        <div style="display: flex; gap: 6px;" id="ftFHorizonTabGroup">
+                                            <button id="ftFTab5D" onclick="ftSelectFHorizon('5D')" class="btn btn-sm" style="padding: 4px 12px; font-size: 11.5px; font-weight: 700; border-radius: 6px; cursor: pointer; background: #0284c7; color: #ffffff; border: 1px solid #38bdf8;">D+5 (5거래일)</button>
+                                            <button id="ftFTab10D" onclick="ftSelectFHorizon('10D')" class="btn btn-sm" style="padding: 4px 12px; font-size: 11.5px; font-weight: 700; border-radius: 6px; cursor: pointer; background: rgba(30, 41, 59, 0.8); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1);">D+10 (10거래일)</button>
+                                            <button id="ftFTab20D" onclick="ftSelectFHorizon('20D')" class="btn btn-sm" style="padding: 4px 12px; font-size: 11.5px; font-weight: 700; border-radius: 6px; cursor: pointer; background: rgba(30, 41, 59, 0.8); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1);">D+20 (20거래일)</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- 재무 Shadow 6대 기본 그룹 카드 컨테이너 -->
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; margin-bottom: 18px;" id="ftFGroupCardContainer">
+                                        <!-- Dynamic 6 Cards Generated via JS -->
+                                    </div>
+
+                                    <!-- Action 교차분석 접기 (Accordion / details) -->
+                                    <details style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px;">
+                                        <summary style="font-size: 12.5px; font-weight: 700; color: #cbd5e1; cursor: pointer; user-select: none;">
+                                            📂 기존 TODAY ACTION별 재무 성과 교차분석 (펼치기/접기)
+                                        </summary>
+                                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);" id="ftFCrossAnalysisContainer">
+                                            <!-- Dynamic Cross Analysis -->
+                                        </div>
+                                    </details>
+                                </div>
                             </div>
                         </div>
                     </main>
@@ -530,7 +616,7 @@
                             <!-- 기존 앱 보유 데이터 & 퀀트 지표 카드 (STEP 8) -->
                             <div id="qaAppDataContainer" class="app-data-card" style="margin-bottom: 12px;">
                                 <div class="app-data-row" id="appDataRow">
-                                    <span class="app-data-badge">📱 [앱 포트폴리오] 조회 중...</span>
+                                    <span class="app-data-badge">📱 [앱 포트폴리오] 조회 대기</span>
                                 </div>
                             </div>
 

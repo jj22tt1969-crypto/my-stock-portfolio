@@ -5050,3 +5050,54 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     transform: scale(0.99);
 }
 
+/* ==================================================
+   F8E-B: Forward Test Fundamental Shadow UI Responsive
+   ================================================== */
+.ft-fundamental-shadow-section {
+    width: 100%;
+    box-sizing: border-box;
+    word-break: keep-all;
+}
+
+@media (max-width: 600px) {
+    .ft-fundamental-shadow-section {
+        padding: 14px 12px !important;
+        margin-top: 20px !important;
+    }
+    #ftFShadowSummaryGrid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    #ftFGroupCardContainer {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    #ftFHorizonTabGroup {
+        width: 100%;
+        justify-content: space-between;
+    }
+    #ftFHorizonTabGroup button {
+        flex: 1;
+        padding: 6px 4px !important;
+        font-size: 11px !important;
+        text-align: center;
+    }
+}
+
+@media (max-width: 380px) {
+    .ft-fundamental-shadow-section {
+        padding: 10px 8px !important;
+    }
+    #ftFShadowSummaryGrid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+    }
+    #ftFShadowSummaryGrid > div {
+        padding: 8px 6px !important;
+    }
+    #ftFValidCount, #ftFCompleted5D, #ftFCompleted10D, #ftFCompleted20D {
+        font-size: 14px !important;
+    }
+}
+
+

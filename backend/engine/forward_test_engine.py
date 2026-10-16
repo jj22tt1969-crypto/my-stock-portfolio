@@ -52,6 +52,7 @@ def init_forward_test_db():
                 ret_20d DOUBLE PRECISION,
                 status_20d VARCHAR(50) DEFAULT 'PENDING',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                f_snapshot_json TEXT,
                 UNIQUE(ticker, signal_date)
             )
         """)
@@ -90,6 +91,7 @@ def init_forward_test_db():
                 ret_20d REAL,
                 status_20d TEXT DEFAULT 'PENDING',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                f_snapshot_json TEXT,
                 UNIQUE(ticker, signal_date)
             )
         """)
@@ -107,11 +109,13 @@ def init_forward_test_db():
     type_map = {
         "POSTGRESQL": {
             "TEXT": "VARCHAR(255)",
+            "JSON_TEXT": "TEXT",
             "REAL": "DOUBLE PRECISION",
             "TIMESTAMP": "TIMESTAMP"
         },
         "SQLITE": {
             "TEXT": "TEXT",
+            "JSON_TEXT": "TEXT",
             "REAL": "REAL",
             "TIMESTAMP": "TIMESTAMP"
         }
@@ -137,6 +141,7 @@ def init_forward_test_db():
         ("evaluated_at", "TIMESTAMP"),
         ("max_gain", "REAL"),
         ("max_drawdown", "REAL"),
+        ("f_snapshot_json", "JSON_TEXT"),
     ]
 
     for col_name, col_type_def in new_columns:
@@ -236,6 +241,24 @@ def record_signal_snapshot(
 
     concurrency_code = flow.get("concurrency", {}).get("code", "NONE") if isinstance(flow.get("concurrency"), dict) else "NONE"
 
+    # 펀더멘털 및 기업가치 Shadow Context 캡처 (F8D-B, Fail-safe)
+    f_snapshot_json = None
+    try:
+        from backend.engine.fundamental_valuation_engine import get_fundamental_shadow_context
+        import json
+        fund_ctx = get_fundamental_shadow_context(ticker)
+        fund_payload = {
+            "schema_version": "fundamental_shadow_v1",
+            "captured_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "pit_eligible": False,
+            "context": fund_ctx
+        }
+        f_snapshot_json = json.dumps(fund_payload, ensure_ascii=False)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[ForwardTest] Fundamental Shadow capture failed for {ticker}: {e}. Storing NULL.")
+        f_snapshot_json = None
+
     conn, db_type = get_connection()
     cursor = get_cursor(conn, db_type)
 
@@ -252,7 +275,8 @@ def record_signal_snapshot(
                     source_type, data_as_of, formula_version,
                     buy_score, sell_score, watering_score,
                     mfi, trend_state, trend_score, volume_state, volume_ratio,
-                    flow_state, rs_state, rs_20d, risk_state, atr_pct
+                    flow_state, rs_state, rs_20d, risk_state, atr_pct,
+                    f_snapshot_json
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s,
@@ -263,7 +287,8 @@ def record_signal_snapshot(
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s,
+                    %s
                 )
                 ON CONFLICT (ticker, signal_date) DO NOTHING
             """
@@ -279,7 +304,8 @@ def record_signal_snapshot(
                     source_type, data_as_of, formula_version,
                     buy_score, sell_score, watering_score,
                     mfi, trend_state, trend_score, volume_state, volume_ratio,
-                    flow_state, rs_state, rs_20d, risk_state, atr_pct
+                    flow_state, rs_state, rs_20d, risk_state, atr_pct,
+                    f_snapshot_json
                 ) VALUES (
                     ?, ?, ?, ?, ?,
                     ?, ?,
@@ -290,7 +316,8 @@ def record_signal_snapshot(
                     ?, ?, ?,
                     ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?,
+                    ?
                 )
             """
         cursor.execute(sql, (
@@ -308,7 +335,8 @@ def record_signal_snapshot(
             source_type or 'MANUAL', data_as_of, formula_version,
             buy_score, sell_score, watering_score,
             mfi, trend_state, trend_score, volume_state, volume_ratio,
-            flow_state, rs_state, rs_20d, risk_state, atr_pct
+            flow_state, rs_state, rs_20d, risk_state, atr_pct,
+            f_snapshot_json
         ))
         conn.commit()
         conn.close()
@@ -430,6 +458,339 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
     conn.commit()
     conn.close()
     return {"updated_count": updated_count}
+
+def _calc_spearman_corr(x_list: List[float], y_list: List[float]) -> Optional[float]:
+    n = len(x_list)
+    if n < 3:
+        return None
+
+    def get_ranks(val_list):
+        sorted_indices = sorted(range(len(val_list)), key=lambda k: val_list[k])
+        ranks = [0.0] * len(val_list)
+        i = 0
+        while i < len(sorted_indices):
+            j = i
+            while j < len(sorted_indices) and val_list[sorted_indices[j]] == val_list[sorted_indices[i]]:
+                j += 1
+            avg_rank = (i + 1 + j) / 2.0
+            for k in range(i, j):
+                ranks[sorted_indices[k]] = avg_rank
+            i = j
+        return ranks
+
+    rx = get_ranks(x_list)
+    ry = get_ranks(y_list)
+
+    mean_rx = sum(rx) / n
+    mean_ry = sum(ry) / n
+
+    num = sum((rx[i] - mean_rx) * (ry[i] - mean_ry) for i in range(n))
+    den_x = sum((rx[i] - mean_rx) ** 2 for i in range(n))
+    den_y = sum((ry[i] - mean_ry) ** 2 for i in range(n))
+
+    if den_x == 0 or den_y == 0:
+        return None
+
+    r = num / ((den_x * den_y) ** 0.5)
+    return round(r, 4)
+
+def extract_fundamental_features(ctx: Dict[str, Any]) -> Dict[str, str]:
+    """f_snapshot_json.context에서 Fundamental Shadow 5대 그룹 상태 추출"""
+    # A. Earnings
+    earnings_status = ctx.get("earnings_context", {}).get("status", "NOT_COMPARABLE")
+    if earnings_status not in ["PROFITABLE", "OPERATING_LOSS", "NET_LOSS"]:
+        earnings_status = "NOT_COMPARABLE"
+
+    # B. ROE Direction
+    roe_dir = ctx.get("valuation_context", {}).get("own_history", {}).get("roe_history", {}).get("direction", "NOT_COMPARABLE")
+    if roe_dir not in ["IMPROVING", "DECLINING", "FLAT"]:
+        roe_dir = "NOT_COMPARABLE"
+
+    # C. PER Own-History
+    per_pos = ctx.get("valuation_context", {}).get("own_history", {}).get("per_history", {}).get("position", "NOT_EVALUABLE")
+    if per_pos not in ["BELOW_PRIOR_MEDIAN", "NEAR_PRIOR_MEDIAN", "ABOVE_PRIOR_MEDIAN"]:
+        per_pos = "NOT_EVALUABLE"
+
+    # D. PBR Own-History
+    pbr_pos = ctx.get("valuation_context", {}).get("own_history", {}).get("pbr_history", {}).get("position", "NOT_EVALUABLE")
+    if pbr_pos not in ["BELOW_PRIOR_MEDIAN", "NEAR_PRIOR_MEDIAN", "ABOVE_PRIOR_MEDIAN"]:
+        pbr_pos = "NOT_EVALUABLE"
+
+    # E. Operating Profit Growth
+    op_growth_data = ctx.get("growth_context", {}).get("operating_profit", {})
+    op_status = op_growth_data.get("status")
+    op_dir = op_growth_data.get("direction")
+    if op_status == "COMPARABLE":
+        if op_dir == "INCREASE":
+            op_growth = "COMPARABLE + INCREASE"
+        elif op_dir == "DECREASE":
+            op_growth = "COMPARABLE + DECREASE"
+        else:
+            op_growth = "NOT_COMPARABLE"
+    elif op_status in ["TURNAROUND", "DEFICIT_CONTINUATION", "LOSS_WIDENING"]:
+        op_growth = op_status
+    else:
+        op_growth = "NOT_COMPARABLE"
+
+    return {
+        "earnings": earnings_status,
+        "roe_direction": roe_dir,
+        "per_history": per_pos,
+        "pbr_history": pbr_pos,
+        "operating_profit_growth": op_growth
+    }
+
+def calc_fundamental_group_metric(items: List[Dict[str, Any]], status_key: str, ret_key: str) -> Dict[str, Any]:
+    """Horizon별 범주 그룹 독립 기술통계 산출 (Sample Guard 적용)"""
+    completed = [r for r in items if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None]
+    sample_cnt = len(completed)
+
+    if sample_cnt < 5:
+        if sample_cnt == 0:
+            return {
+                "status": "INSUFFICIENT_SAMPLE",
+                "sample_count": 0,
+                "average_return": None,
+                "median_return": None,
+                "positive_return_count": 0,
+                "positive_return_ratio": None,
+                "average_max_gain": None,
+                "average_max_drawdown": None,
+                "note": "표본 부족 (N=0 < 5)"
+            }
+        rets = [r[ret_key] for r in completed]
+        pos_cnt = len([r for r in rets if r > 0])
+        pos_ratio = round((pos_cnt / sample_cnt) * 100.0, 2)
+        avg_ret = round(sum(rets) / sample_cnt, 2)
+        med_ret = round(statistics.median(rets), 2)
+        mg_list = [r["max_gain"] for r in completed if r.get("max_gain") is not None]
+        md_list = [r["max_drawdown"] for r in completed if r.get("max_drawdown") is not None]
+
+        return {
+            "status": "INSUFFICIENT_SAMPLE",
+            "sample_count": sample_cnt,
+            "average_return": avg_ret,
+            "median_return": med_ret,
+            "positive_return_count": pos_cnt,
+            "positive_return_ratio": pos_ratio,
+            "average_max_gain": round(sum(mg_list) / len(mg_list), 2) if mg_list else None,
+            "average_max_drawdown": round(sum(md_list) / len(md_list), 2) if md_list else None,
+            "note": f"표본 부족 (N={sample_cnt} < 5, 기술통계만 표시)"
+        }
+
+    rets = [r[ret_key] for r in completed]
+    pos_cnt = len([r for r in rets if r > 0])
+    pos_ratio = round((pos_cnt / sample_cnt) * 100.0, 2)
+    avg_ret = round(sum(rets) / sample_cnt, 2)
+    med_ret = round(statistics.median(rets), 2)
+    mg_list = [r["max_gain"] for r in completed if r.get("max_gain") is not None]
+    md_list = [r["max_drawdown"] for r in completed if r.get("max_drawdown") is not None]
+
+    return {
+        "status": "AVAILABLE",
+        "sample_count": sample_cnt,
+        "average_return": avg_ret,
+        "median_return": med_ret,
+        "positive_return_count": pos_cnt,
+        "positive_return_ratio": pos_ratio,
+        "average_max_gain": round(sum(mg_list) / len(mg_list), 2) if mg_list else None,
+        "average_max_drawdown": round(sum(md_list) / len(md_list), 2) if md_list else None,
+        "note": "기술통계 제공 (단순 기술통계, 예측적 결론 미포함)"
+    }
+
+def calc_fundamental_quality_metric(items: List[Dict[str, Any]], status_key: str, ret_key: str) -> Dict[str, Any]:
+    """Horizon별 Quality Shadow Score 연속형 지표 산출 (원값 보존, Sample Guard 적용)"""
+    valid_items = []
+    for r in items:
+        if r.get(status_key) == 'COMPLETED' and r.get(ret_key) is not None:
+            score = r.get("_quality_shadow_score")
+            if score is not None:
+                try:
+                    val = float(score)
+                    ret = float(r[ret_key])
+                    valid_items.append((val, ret, r))
+                except (ValueError, TypeError):
+                    pass
+
+    sample_cnt = len(valid_items)
+    if sample_cnt < 5:
+        if sample_cnt == 0:
+            return {
+                "status": "INSUFFICIENT_SAMPLE",
+                "sample_count": 0,
+                "min": None,
+                "max": None,
+                "average": None,
+                "average_return": None,
+                "median_return": None,
+                "positive_return_count": 0,
+                "positive_return_ratio": None,
+                "average_max_gain": None,
+                "average_max_drawdown": None,
+                "spearman_correlation": None,
+                "note": "표본 부족 (N=0 < 5)"
+            }
+        scores = [it[0] for it in valid_items]
+        returns = [it[1] for it in valid_items]
+        pos_cnt = len([r for r in returns if r > 0])
+        pos_ratio = round((pos_cnt / sample_cnt) * 100.0, 2)
+        mg_list = [it[2]["max_gain"] for it in valid_items if it[2].get("max_gain") is not None]
+        md_list = [it[2]["max_drawdown"] for it in valid_items if it[2].get("max_drawdown") is not None]
+        return {
+            "status": "INSUFFICIENT_SAMPLE",
+            "sample_count": sample_cnt,
+            "min": round(min(scores), 2),
+            "max": round(max(scores), 2),
+            "average": round(sum(scores) / sample_cnt, 2),
+            "average_return": round(sum(returns) / sample_cnt, 2),
+            "median_return": round(statistics.median(returns), 2),
+            "positive_return_count": pos_cnt,
+            "positive_return_ratio": pos_ratio,
+            "average_max_gain": round(sum(mg_list) / len(mg_list), 2) if mg_list else None,
+            "average_max_drawdown": round(sum(md_list) / len(md_list), 2) if md_list else None,
+            "spearman_correlation": _calc_spearman_corr(scores, returns) if sample_cnt >= 3 else None,
+            "note": f"표본 부족 (N={sample_cnt} < 5, 기술통계만 표시)"
+        }
+
+    scores = [it[0] for it in valid_items]
+    returns = [it[1] for it in valid_items]
+    pos_cnt = len([r for r in returns if r > 0])
+    pos_ratio = round((pos_cnt / sample_cnt) * 100.0, 2)
+    mg_list = [it[2]["max_gain"] for it in valid_items if it[2].get("max_gain") is not None]
+    md_list = [it[2]["max_drawdown"] for it in valid_items if it[2].get("max_drawdown") is not None]
+
+    return {
+        "status": "AVAILABLE",
+        "sample_count": sample_cnt,
+        "min": round(min(scores), 2),
+        "max": round(max(scores), 2),
+        "average": round(sum(scores) / sample_cnt, 2),
+        "average_return": round(sum(returns) / sample_cnt, 2),
+        "median_return": round(statistics.median(returns), 2),
+        "positive_return_count": pos_cnt,
+        "positive_return_ratio": pos_ratio,
+        "average_max_gain": round(sum(mg_list) / len(mg_list), 2) if mg_list else None,
+        "average_max_drawdown": round(sum(md_list) / len(md_list), 2) if md_list else None,
+        "spearman_correlation": _calc_spearman_corr(scores, returns),
+        "note": "기술통계 제공 (단순 기술통계, 예측적 결론 미포함)"
+    }
+
+def calc_fundamental_shadow_stats(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Forward Test 저장된 f_snapshot_json 기반 Fundamental Shadow 유효성 분석 (F8E-A)"""
+    total_signals = len(rows)
+    valid_rows = []
+    excluded_no_snapshot = 0
+    malformed_snapshot = 0
+    unsupported_schema = 0
+    schema_counts = {}
+
+    import json
+    for r in rows:
+        f_snap = r.get("f_snapshot_json")
+        if not f_snap or not str(f_snap).strip():
+            excluded_no_snapshot += 1
+            continue
+
+        try:
+            payload = json.loads(f_snap) if isinstance(f_snap, str) else f_snap
+            if not isinstance(payload, dict):
+                malformed_snapshot += 1
+                continue
+        except Exception:
+            malformed_snapshot += 1
+            continue
+
+        schema_ver = payload.get("schema_version")
+        if schema_ver:
+            schema_counts[str(schema_ver)] = schema_counts.get(str(schema_ver), 0) + 1
+
+        if schema_ver != "fundamental_shadow_v1":
+            unsupported_schema += 1
+            continue
+
+        ctx = payload.get("context")
+        if not isinstance(ctx, dict):
+            malformed_snapshot += 1
+            continue
+
+        features = extract_fundamental_features(ctx)
+        q_card = ctx.get("quality_shadow_score_card", {})
+        q_score = q_card.get("quality_shadow_score") if q_card.get("quality_shadow_score_available") else None
+
+        row_item = dict(r)
+        row_item["_f_features"] = features
+        row_item["_quality_shadow_score"] = q_score
+        valid_rows.append(row_item)
+
+    horizons = [("5D", "status_5d", "ret_5d"), ("10D", "status_10d", "ret_10d"), ("20D", "status_20d", "ret_20d")]
+
+    completed_5d = len([r for r in valid_rows if r.get("status_5d") == 'COMPLETED'])
+    completed_10d = len([r for r in valid_rows if r.get("status_10d") == 'COMPLETED'])
+    completed_20d = len([r for r in valid_rows if r.get("status_20d") == 'COMPLETED'])
+
+    category_defs = {
+        "earnings": ["PROFITABLE", "OPERATING_LOSS", "NET_LOSS", "NOT_COMPARABLE"],
+        "roe_direction": ["IMPROVING", "DECLINING", "FLAT", "NOT_COMPARABLE"],
+        "per_history": ["BELOW_PRIOR_MEDIAN", "NEAR_PRIOR_MEDIAN", "ABOVE_PRIOR_MEDIAN", "NOT_EVALUABLE"],
+        "pbr_history": ["BELOW_PRIOR_MEDIAN", "NEAR_PRIOR_MEDIAN", "ABOVE_PRIOR_MEDIAN", "NOT_EVALUABLE"],
+        "operating_profit_growth": [
+            "COMPARABLE + INCREASE",
+            "COMPARABLE + DECREASE",
+            "TURNAROUND",
+            "DEFICIT_CONTINUATION",
+            "LOSS_WIDENING",
+            "NOT_COMPARABLE"
+        ]
+    }
+
+    by_group = {}
+    for cat_name, val_list in category_defs.items():
+        by_group[cat_name] = {}
+        for val in val_list:
+            by_group[cat_name][val] = {}
+            filtered = [r for r in valid_rows if r["_f_features"].get(cat_name) == val]
+            for h_label, s_key, r_key in horizons:
+                by_group[cat_name][val][h_label] = calc_fundamental_group_metric(filtered, s_key, r_key)
+
+    by_group["quality_shadow"] = {}
+    for h_label, s_key, r_key in horizons:
+        by_group["quality_shadow"][h_label] = calc_fundamental_quality_metric(valid_rows, s_key, r_key)
+
+    actions = ["BUY", "AVERAGE", "HOLD", "TAKE_PROFIT", "REDUCE"]
+    cross_analysis = {}
+    for act in actions:
+        cross_analysis[act] = {}
+        act_rows = [r for r in valid_rows if r.get("final_decision") == act]
+        for cat_name, val_list in category_defs.items():
+            cross_analysis[act][cat_name] = {}
+            for val in val_list:
+                cross_analysis[act][cat_name][val] = {}
+                cat_filtered = [r for r in act_rows if r["_f_features"].get(cat_name) == val]
+                for h_label, s_key, r_key in horizons:
+                    cross_analysis[act][cat_name][val][h_label] = calc_fundamental_group_metric(cat_filtered, s_key, r_key)
+
+    overall_status = "AVAILABLE" if len(valid_rows) >= 5 else "INSUFFICIENT_SAMPLE"
+    summary_note = "검증 표본 정상 확보 (기술통계 제공)" if overall_status == "AVAILABLE" else f"아직 검증 표본 부족 (유효 표본 N={len(valid_rows)} < 5)"
+
+    return {
+        "status": overall_status,
+        "summary_note": summary_note,
+        "metadata": {
+            "total_signals": total_signals,
+            "valid_snapshot_count": len(valid_rows),
+            "excluded_no_snapshot_count": excluded_no_snapshot,
+            "malformed_snapshot_count": malformed_snapshot,
+            "unsupported_schema_count": unsupported_schema,
+            "schema_version_counts": schema_counts,
+            "completed_samples": {
+                "5D": completed_5d,
+                "10D": completed_10d,
+                "20D": completed_20d
+            }
+        },
+        "by_group": by_group,
+        "cross_analysis": cross_analysis
+    }
 
 def get_forward_test_dashboard_stats() -> Dict[str, Any]:
     """
@@ -682,39 +1043,7 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
 
     # 5. Forward Test Renewal F3C-2 Additive Read Model (Score Calibration & Feature Performance)
     def calc_spearman_corr(x_list: List[float], y_list: List[float]) -> Optional[float]:
-        n = len(x_list)
-        if n < 3:
-            return None
-
-        def get_ranks(val_list):
-            sorted_indices = sorted(range(len(val_list)), key=lambda k: val_list[k])
-            ranks = [0.0] * len(val_list)
-            i = 0
-            while i < len(sorted_indices):
-                j = i
-                while j < len(sorted_indices) and val_list[sorted_indices[j]] == val_list[sorted_indices[i]]:
-                    j += 1
-                avg_rank = (i + 1 + j) / 2.0
-                for k in range(i, j):
-                    ranks[sorted_indices[k]] = avg_rank
-                i = j
-            return ranks
-
-        rx = get_ranks(x_list)
-        ry = get_ranks(y_list)
-
-        mean_rx = sum(rx) / n
-        mean_ry = sum(ry) / n
-
-        num = sum((rx[i] - mean_rx) * (ry[i] - mean_ry) for i in range(n))
-        den_x = sum((rx[i] - mean_rx) ** 2 for i in range(n))
-        den_y = sum((ry[i] - mean_ry) ** 2 for i in range(n))
-
-        if den_x == 0 or den_y == 0:
-            return None
-
-        r = num / ((den_x * den_y) ** 0.5)
-        return round(r, 4)
+        return _calc_spearman_corr(x_list, y_list)
 
     def calc_score_calibration(score_key, status_key, ret_key):
         valid_items = []
@@ -889,6 +1218,8 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
             for r in recent_rows:
                 r["current_price"] = None
 
+    fundamental_shadow_stats = calc_fundamental_shadow_stats(rows)
+
     return {
         "total_signals": total_signals,
         "completed_samples": {
@@ -900,6 +1231,7 @@ def get_forward_test_dashboard_stats() -> Dict[str, Any]:
         "core_signal_stats": core_signal_stats,
         "asset_type_stats": asset_type_stats,
         "recent_signals": recent_rows,  # 최근 20개 신호 스냅샷 (현재가격 포함)
-        "performance_v2": performance_v2
+        "performance_v2": performance_v2,
+        "fundamental_shadow_stats": fundamental_shadow_stats
     }
 

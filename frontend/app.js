@@ -755,6 +755,11 @@ async function submitQaQuestion() {
     document.getElementById('ansTargetTitle').innerText = `${detailLabel} Q&A 근거 기반 종합 리포트`;
     document.getElementById('ansText').innerText = `'${question}' 질문에 대한 근거 수집 및 분석을 진행 중입니다...`;
 
+    const appDataRowEl = document.getElementById('appDataRow');
+    if (appDataRowEl) {
+        appDataRowEl.innerHTML = `<span class="app-data-badge">📱 [앱 포트폴리오] 조회 중...</span>`;
+    }
+
     // STEP 3 뉴스, STEP 4 공식자료, STEP 6 종합 답변 병렬 처리
     await Promise.all([
         fetchAndRenderQaNews(currentQaTarget.code, currentQaTarget.name, question),
@@ -1111,6 +1116,9 @@ async function fetchAndRenderGroundedAnswer(ticker, name, query, assetType = 'ST
     } catch (e) {
         console.error("Grounded Answer Fetch Error:", e);
         if (ansTextEl) ansTextEl.innerText = "현재 확인 가능한 신뢰할 수 있는 자료만으로는 판단하기 어렵습니다.";
+        if (appDataRowEl) {
+            appDataRowEl.innerHTML = `<span class="app-data-item unowned">📱 [앱 데이터] 일시적 조회 지연 (미보유 또는 통신 지연)</span>`;
+        }
     }
 }
 
@@ -4757,8 +4765,286 @@ async function loadForwardTestDashboard() {
             tbody.innerHTML = rowsHtml;
         }
 
+        // 5. 🔬 재무 Shadow 검증 렌더링 (F8E-B)
+        if (data.fundamental_shadow_stats) {
+            renderFundamentalShadowSection(data.fundamental_shadow_stats, ftFCurrentHorizon);
+        }
+
     } catch (e) {
         console.error("Forward Test Dashboard Load Error:", e);
+    }
+}
+
+let ftFCurrentHorizon = '5D';
+let ftFShadowDataCache = null;
+
+function ftSelectFHorizon(horizon) {
+    ftFCurrentHorizon = horizon;
+    const tabs = ['5D', '10D', '20D'];
+    tabs.forEach(h => {
+        const btn = document.getElementById(`ftFTab${h}`);
+        if (!btn) return;
+        if (h === horizon) {
+            btn.style.background = '#0284c7';
+            btn.style.color = '#ffffff';
+            btn.style.borderColor = '#38bdf8';
+        } else {
+            btn.style.background = 'rgba(30, 41, 59, 0.8)';
+            btn.style.color = '#94a3b8';
+            btn.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        }
+    });
+    if (ftFShadowDataCache) {
+        renderFundamentalShadowSection(ftFShadowDataCache, ftFCurrentHorizon);
+    }
+}
+
+function renderFundamentalShadowSection(fStats, horizon) {
+    if (!fStats) return;
+    ftFShadowDataCache = fStats;
+    const meta = fStats.metadata || {};
+
+    // 1. 상단 요약 KPI 카드
+    const validCountEl = document.getElementById('ftFValidCount');
+    const comp5DEl = document.getElementById('ftFCompleted5D');
+    const comp10DEl = document.getElementById('ftFCompleted10D');
+    const comp20DEl = document.getElementById('ftFCompleted20D');
+    const statusBadgeEl = document.getElementById('ftFOverallStatusBadge');
+
+    const validCnt = meta.valid_snapshot_count || 0;
+    if (validCountEl) validCountEl.innerText = `${validCnt}건`;
+
+    const comp = meta.completed_samples || {};
+    if (comp5DEl) comp5DEl.innerText = `${comp['5D'] || 0}건`;
+    if (comp10DEl) comp10DEl.innerText = `${comp['10D'] || 0}건`;
+    if (comp20DEl) comp20DEl.innerText = `${comp['20D'] || 0}건`;
+
+    if (statusBadgeEl) {
+        if (fStats.status === 'AVAILABLE') {
+            statusBadgeEl.innerHTML = `<span style="color:#34d399;">축적 완료</span>`;
+        } else {
+            statusBadgeEl.innerHTML = `<span style="color:#93c5fd;">축적 중</span>`;
+        }
+    }
+
+    // 2. 품질/예외 안내 칩
+    const noticeEl = document.getElementById('ftFQualityNotice');
+    if (noticeEl) {
+        const malformed = meta.malformed_snapshot_count || 0;
+        const unsupported = meta.unsupported_schema_count || 0;
+        if (malformed > 0 || unsupported > 0) {
+            noticeEl.style.display = 'block';
+            noticeEl.innerHTML = `ℹ️ 품질 안내: 비정상 스냅샷 ${malformed}건 / 미지원 스키마 ${unsupported}건이 분석에서 안전하게 제외되었습니다.`;
+        } else {
+            noticeEl.style.display = 'none';
+        }
+    }
+
+    // 3. valid_snapshot_count < 5 대형 배너
+    const bannerEl = document.getElementById('ftFAccumulatingBanner');
+    const sampleTextEl = document.getElementById('ftFCurrentSampleText');
+    if (bannerEl) {
+        if (validCnt < 5) {
+            bannerEl.style.display = 'block';
+            if (sampleTextEl) {
+                sampleTextEl.innerText = `현재 유효 표본 ${validCnt}건 — 아직 성과 판단 불가`;
+            }
+        } else {
+            bannerEl.style.display = 'none';
+        }
+    }
+
+    // 4. 재무 Shadow 6대 기본 그룹 카드
+    const groupContainer = document.getElementById('ftFGroupCardContainer');
+    if (groupContainer && fStats.by_group) {
+        const bg = fStats.by_group;
+
+        const formatMetricRow = (label, st) => {
+            const sc = (st && st.sample_count) || 0;
+            if (!st || sc === 0) {
+                return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.05); font-size: 11.5px;">
+                        <span style="color:#cbd5e1; font-weight:600;">${label}</span>
+                        <span style="color:#64748b; font-size:11px;">표본 부족 (0건)</span>
+                    </div>
+                `;
+            }
+
+            const ret = st.average_return !== null && st.average_return !== undefined ? st.average_return : 0;
+            const retColor = ret > 0 ? '#34d399' : (ret < 0 ? '#f87171' : '#cbd5e1');
+            const posRatio = st.positive_return_ratio !== null && st.positive_return_ratio !== undefined ? `${st.positive_return_ratio.toFixed(1)}%` : '-';
+            const med = st.median_return !== null && st.median_return !== undefined ? `${st.median_return >= 0 ? '+' : ''}${st.median_return.toFixed(2)}%` : '-';
+            const gain = st.average_max_gain !== null && st.average_max_gain !== undefined ? `+${st.average_max_gain.toFixed(2)}%` : '-';
+            const dd = st.average_max_drawdown !== null && st.average_max_drawdown !== undefined ? `${st.average_max_drawdown.toFixed(2)}%` : '-';
+
+            return `
+                <div style="padding: 5px 0; border-bottom: 1px dashed rgba(255,255,255,0.06); font-size: 11.5px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px;">
+                        <span style="color:#e2e8f0; font-weight:700;">${label}</span>
+                        <span style="color:${retColor}; font-weight:700;">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; color:#94a3b8; font-size:10.5px;">
+                        <span>표본 ${sc}건 (양수 ${posRatio})</span>
+                        <span>중앙값: ${med}</span>
+                    </div>
+                    ${(st.average_max_gain !== null || st.average_max_drawdown !== null) ? `
+                    <div style="display:flex; justify-content:space-between; color:#64748b; font-size:10px; margin-top:2px;">
+                        <span>최대상승: ${gain}</span>
+                        <span>최대낙폭: ${dd}</span>
+                    </div>` : ''}
+                </div>
+            `;
+        };
+
+        // 1) 흑자 / 영업적자 (Earnings)
+        const earnProf = (bg.earnings && bg.earnings['PROFITABLE'] && bg.earnings['PROFITABLE'][horizon]) || {};
+        const earnLoss = (bg.earnings && bg.earnings['OPERATING_LOSS'] && bg.earnings['OPERATING_LOSS'][horizon]) || {};
+        const earnNetLoss = (bg.earnings && bg.earnings['NET_LOSS'] && bg.earnings['NET_LOSS'][horizon]) || {};
+
+        // 2) ROE 개선 / 악화 (ROE Direction)
+        const roeImp = (bg.roe_direction && bg.roe_direction['IMPROVING'] && bg.roe_direction['IMPROVING'][horizon]) || {};
+        const roeDec = (bg.roe_direction && bg.roe_direction['DECLINING'] && bg.roe_direction['DECLINING'][horizon]) || {};
+        const roeFlat = (bg.roe_direction && bg.roe_direction['FLAT'] && bg.roe_direction['FLAT'][horizon]) || {};
+
+        // 3) PER 자사과거 중앙값 아래 / 위
+        const perBelow = (bg.per_history && bg.per_history['BELOW_PRIOR_MEDIAN'] && bg.per_history['BELOW_PRIOR_MEDIAN'][horizon]) || {};
+        const perAbove = (bg.per_history && bg.per_history['ABOVE_PRIOR_MEDIAN'] && bg.per_history['ABOVE_PRIOR_MEDIAN'][horizon]) || {};
+
+        // 4) PBR 자사과거 중앙값 아래 / 위
+        const pbrBelow = (bg.pbr_history && bg.pbr_history['BELOW_PRIOR_MEDIAN'] && bg.pbr_history['BELOW_PRIOR_MEDIAN'][horizon]) || {};
+        const pbrAbove = (bg.pbr_history && bg.pbr_history['ABOVE_PRIOR_MEDIAN'] && bg.pbr_history['ABOVE_PRIOR_MEDIAN'][horizon]) || {};
+
+        // 5) 영업이익 성장
+        const opInc = (bg.operating_profit_growth && bg.operating_profit_growth['COMPARABLE + INCREASE'] && bg.operating_profit_growth['COMPARABLE + INCREASE'][horizon]) || {};
+        const opDec = (bg.operating_profit_growth && bg.operating_profit_growth['COMPARABLE + DECREASE'] && bg.operating_profit_growth['COMPARABLE + DECREASE'][horizon]) || {};
+        const opTurn = (bg.operating_profit_growth && bg.operating_profit_growth['TURNAROUND'] && bg.operating_profit_growth['TURNAROUND'][horizon]) || {};
+
+        // 6) Quality Shadow Score 상관계수
+        const qStat = (bg.quality_shadow && bg.quality_shadow[horizon]) || {};
+        const qSc = qStat.sample_count || 0;
+        let qHtml = '';
+        if (qSc === 0) {
+            qHtml = `<div style="color:#64748b; font-size:11.5px; padding: 6px 0;">표본 부족 (0건)</div>`;
+        } else {
+            const corr = qStat.spearman_correlation !== null && qStat.spearman_correlation !== undefined ? qStat.spearman_correlation.toFixed(4) : '-';
+            const avgRet = qStat.average_return !== null && qStat.average_return !== undefined ? `${qStat.average_return >= 0 ? '+' : ''}${qStat.average_return.toFixed(2)}%` : '-';
+            const avgScore = qStat.average !== null && qStat.average !== undefined ? qStat.average.toFixed(1) : '-';
+            qHtml = `
+                <div style="font-size: 11.5px; line-height: 1.6; color: #cbd5e1;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>표본 수:</span> <strong>${qSc}건</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>평균 재무품질 점수:</span> <strong style="color:#38bdf8;">${avgScore}점</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>수익률 순위 상관계수(ρ):</span> <strong style="color:#fbbf24;">${corr}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>평균 수익률:</span> <strong>${avgRet}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        groupContainer.innerHTML = `
+            <!-- 1. 흑자 / 영업적자 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #38bdf8; margin-bottom: 8px;">
+                    ① 실적 상태 (흑자 vs 적자) [${horizon}]
+                </div>
+                ${formatMetricRow("흑자 기업 (PROFITABLE)", earnProf)}
+                ${formatMetricRow("영업손실 기업 (OPERATING_LOSS)", earnLoss)}
+                ${formatMetricRow("당기순손실 기업 (NET_LOSS)", earnNetLoss)}
+            </div>
+
+            <!-- 2. ROE 추세 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #34d399; margin-bottom: 8px;">
+                    ② ROE 방향성 (개선 vs 악화) [${horizon}]
+                </div>
+                ${formatMetricRow("ROE 전년대비 개선 (IMPROVING)", roeImp)}
+                ${formatMetricRow("ROE 전년대비 악화 (DECLINING)", roeDec)}
+                ${formatMetricRow("ROE 전년대비 유지 (FLAT)", roeFlat)}
+            </div>
+
+            <!-- 3. PER 자사과거 중앙값 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #fbbf24; margin-bottom: 8px;">
+                    ③ PER 과거 위치 (자사 중앙값 대비) [${horizon}]
+                </div>
+                ${formatMetricRow("과거 중앙값 아래 (BELOW)", perBelow)}
+                ${formatMetricRow("과거 중앙값 위 (ABOVE)", perAbove)}
+            </div>
+
+            <!-- 4. PBR 자사과거 중앙값 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #a78bfa; margin-bottom: 8px;">
+                    ④ PBR 과거 위치 (자사 중앙값 대비) [${horizon}]
+                </div>
+                ${formatMetricRow("과거 중앙값 아래 (BELOW)", pbrBelow)}
+                ${formatMetricRow("과거 중앙값 위 (ABOVE)", pbrAbove)}
+            </div>
+
+            <!-- 5. 영업이익 성장 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #f472b6; margin-bottom: 8px;">
+                    ⑤ 영업이익 성장률 추세 [${horizon}]
+                </div>
+                ${formatMetricRow("영업이익 증가 (INCREASE)", opInc)}
+                ${formatMetricRow("영업이익 감소 (DECREASE)", opDec)}
+                ${formatMetricRow("영업이익 흑자전환 (TURNAROUND)", opTurn)}
+            </div>
+
+            <!-- 6. Quality Shadow Score 상관계수 -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 12.5px; font-weight: 800; color: #60a5fa; margin-bottom: 8px;">
+                    ⑥ 재무품질 점수 &amp; 성과 상관계수 [${horizon}]
+                </div>
+                ${qHtml}
+            </div>
+        `;
+    }
+
+    // 5. Action 교차분석 접기 (Accordion / details 내부 렌더링)
+    const crossContainer = document.getElementById('ftFCrossAnalysisContainer');
+    if (crossContainer && fStats.cross_analysis) {
+        const ca = fStats.cross_analysis;
+        const actions = ["BUY", "AVERAGE", "HOLD", "TAKE_PROFIT", "REDUCE"];
+        let crossHtml = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+
+        actions.forEach(act => {
+            const actData = ca[act] || {};
+            const earnProf = (actData.earnings && actData.earnings['PROFITABLE'] && actData.earnings['PROFITABLE'][horizon]) || {};
+            const earnLoss = (actData.earnings && actData.earnings['OPERATING_LOSS'] && actData.earnings['OPERATING_LOSS'][horizon]) || {};
+            const roeImp = (actData.roe_direction && actData.roe_direction['IMPROVING'] && actData.roe_direction['IMPROVING'][horizon]) || {};
+            const roeDec = (actData.roe_direction && actData.roe_direction['DECLINING'] && actData.roe_direction['DECLINING'][horizon]) || {};
+            const perBel = (actData.per_history && actData.per_history['BELOW_PRIOR_MEDIAN'] && actData.per_history['BELOW_PRIOR_MEDIAN'][horizon]) || {};
+            const perAbv = (actData.per_history && actData.per_history['ABOVE_PRIOR_MEDIAN'] && actData.per_history['ABOVE_PRIOR_MEDIAN'][horizon]) || {};
+
+            const fmtMini = (st) => {
+                const sc = (st && st.sample_count) || 0;
+                if (sc === 0) return '<span style="color:#64748b;">0건</span>';
+                const r = st.average_return !== null ? `${st.average_return >= 0 ? '+' : ''}${st.average_return.toFixed(2)}%` : '-';
+                return `<strong style="color:${st.average_return > 0 ? '#34d399' : '#f87171'};">${r}</strong> (표본 ${sc}건)`;
+            };
+
+            crossHtml += `
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); font-size: 11.5px;">
+                    <div style="font-weight: 800; color: #f8fafc; margin-bottom: 6px;">
+                        📌 [TODAY ACTION: <span style="color:#38bdf8;">${act}</span>] 성과 관찰 (${horizon})
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; color: #cbd5e1;">
+                        <div>• 흑자기업: ${fmtMini(earnProf)} vs 적자: ${fmtMini(earnLoss)}</div>
+                        <div>• ROE 개선: ${fmtMini(roeImp)} vs 악화: ${fmtMini(roeDec)}</div>
+                        <div>• PER 중앙값 이하: ${fmtMini(perBel)} vs 이상: ${fmtMini(perAbv)}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        crossHtml += '</div>';
+        crossContainer.innerHTML = crossHtml;
     }
 }
 
