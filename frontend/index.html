@@ -101,6 +101,13 @@
                             <span class="nav-sub">전진검증 대시보드</span>
                         </div>
                     </button>
+                    <button class="nav-item" id="navEventLink" onclick="switchAssetType('EVENT_LINK')">
+                        <span class="nav-icon">📅</span>
+                        <div class="nav-text">
+                            <span class="nav-label">Event &amp; Link</span>
+                            <span class="nav-sub">주요 일정 &amp; 플랫폼</span>
+                        </div>
+                    </button>
                 </nav>
 
                 <!-- 좌측 포트폴리오 박스 아래: 주식현재가 검색 박스 -->
@@ -506,7 +513,7 @@
                         <div class="qna-header-card">
                             <div class="qna-header-title">
                                 <h2>🤖 AI Q&A 투자 의사결정 어시스턴트</h2>
-                                <p class="qna-subtitle">개별종목 및 ETF에 대해 수급, 기술적 분석, 공시, 시장 영향에 관한 질문을 입력해보세요.</p>
+                                <p class="qna-subtitle">수급 · 기술 · 재무 · 뉴스 근거 기반 종합 분석</p>
                             </div>
 
                             <!-- Target Context Selector Search -->
@@ -528,53 +535,6 @@
                                 <button class="tag-btn" onclick="setQaContext('TIGER 미국S&P500', '360750')">TIGER 미국S&P500</button>
                                 <button class="tag-btn" onclick="setQaContext('KODEX 반도체', '091160')">KODEX 반도체</button>
                             </div>
-
-                            <!-- Government & Financial Platform Main Shortcuts for Login -->
-                            <div class="quick-tags-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1);">
-                                <span class="tags-label">🏛️ 주요 기관 &amp; 금융 플랫폼 바로가기:</span>
-                                <a href="https://www.fsc.go.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
-                                    🏛️ 금융위원회 🔗
-                                </a>
-                                <a href="https://www.fss.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
-                                    🏛️ 금융감독원 🔗
-                                </a>
-                                <a href="https://www.bok.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
-                                    🏛️ 한국은행 🔗
-                                </a>
-                                <a href="https://saveticker.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(168, 85, 247, 0.12); border-color: #a855f7; color: #c084fc; font-weight: 500;">
-                                    💡 SAVE (세이브) 🔗
-                                </a>
-                                <a href="https://seibro.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(56, 189, 248, 0.12); border-color: #38bdf8; color: #38bdf8; font-weight: 500;">
-                                    📊 SEIBro (세이브로) 🔗
-                                </a>
-                                <a href="https://kr.investing.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.12); border-color: #f59e0b; color: #fbbf24; font-weight: 500;">
-                                    📈 Investing (인베스팅) 🔗
-                                </a>
-                                <a href="https://www.yna.co.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #f87171; font-weight: 500;">
-                                    📰 연합뉴스 🔗
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- 📅 주요 경제 이벤트 캘린더 카드 (향후 7일) -->
-                        <div class="calendar-event-card" id="calendarEventCard">
-                            <div class="calendar-card-header">
-                                <div class="calendar-title-row">
-                                    <span class="calendar-icon">📅</span>
-                                    <h3 class="calendar-title" style="color: #f97316 !important;">이번 주 주요 경제 이벤트</h3>
-                                    <span class="calendar-period" id="calendarPeriodLabel">로딩 중...</span>
-                                </div>
-                                <div class="calendar-category-tabs" id="calendarCategoryTabs">
-                                    <button class="cal-tab active" onclick="filterCalendarEvents('ALL')">전체</button>
-                                    <button class="cal-tab" onclick="filterCalendarEvents('미국 경제지표')">🇺🇸 미국 지표</button>
-                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 경제지표')">🇰🇷 국내 지표</button>
-                                    <button class="cal-tab" onclick="filterCalendarEvents('빅테크 실적')">🏢 빅테크 실적</button>
-                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 주요 실적')">🇰🇷 국내 실적</button>
-                                </div>
-                            </div>
-                            <div class="calendar-events-list" id="calendarEventsList">
-                                <div class="calendar-loading">📡 경제 이벤트 일정을 불러오는 중...</div>
-                            </div>
                         </div>
 
                         <!-- Question Input Box & Quick Prompts -->
@@ -593,14 +553,14 @@
 
                             <div class="qna-input-form">
                                 <textarea id="qaQuestionText" placeholder="질문을 입력하세요... (예: 최근 외국인 수급이 개선되는 이유와 지지선 위치는?)" rows="3"></textarea>
-                                <button class="btn btn-primary btn-qna-submit" onclick="submitQaQuestion()">
+                                <button id="btnQaSubmit" class="btn btn-primary btn-qna-submit" onclick="submitQaQuestion()">
                                     ⚡ AI 질문하기
                                 </button>
                             </div>
                         </div>
 
                         <!-- Structured AI Answer UI Component (6 Sections) -->
-                        <div class="qna-answer-card" id="qaAnswerCard">
+                        <div class="qna-answer-card" id="qaAnswerCard" style="display: none;">
                             <div class="answer-header">
                                 <div class="answer-target-info">
                                     <span class="ai-badge">🤖 AI ANSWER REPORT</span>
@@ -670,13 +630,24 @@
                                         <div class="loading-box" style="padding: 12px; font-size: 13px;">근거자료 및 출처 인용 목록을 생성하고 있습니다...</div>
                                     </div>
                                 </div>
+
+                                <!-- 6. 해당 종목 최신 뉴스 (F9B Placeholder / F9C 연동) -->
+                                <div class="ans-section-box full-width" id="qaNewsSection" style="margin-top: 15px; display: none;">
+                                    <div class="citation-header">
+                                        <h4>📰 해당 종목 최신 뉴스</h4>
+                                        <span class="citation-sub">질문 시점 기준 수집된 최신 뉴스 목록입니다.</span>
+                                    </div>
+                                    <div id="qaNewsContainer" class="qna-news-container">
+                                        <!-- F9C에서 /api/qna/answer 응답의 news_items로 렌더링 -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- ───────────────────────────────────────────────────────────── -->
                         <!-- 🎯 AI 전체시장 종목/ETF 추천 영역 (독립 2단계 신규 추가) -->
                         <!-- ───────────────────────────────────────────────────────────── -->
-                        <div class="qna-recommend-card" id="recDashboardCard" style="margin-top: 24px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 16px; padding: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
+                        <div class="qna-recommend-card" id="recDashboardCard" style="display: none; margin-top: 24px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 16px; padding: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
                             <div class="rec-header-row" style="margin-bottom: 16px; border-bottom: 1px dashed rgba(255, 255, 255, 0.1); padding-bottom: 12px;">
                                 <h3 style="font-size: 16.5px; font-weight: 800; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 8px;">
                                     🎯 AI 전체시장 종목/ETF 추천
@@ -713,6 +684,69 @@
                             </div>
                         </div>
 
+                    </div>
+                </div>
+
+                <!-- 3. Event & Link Dashboard View (F9B 신규 분리) -->
+                <div id="eventLinkDashboardView" style="display: none; width: 100%;">
+                    <div class="event-link-dashboard-container" style="max-width: 1200px; margin: 0 auto; padding: 16px 20px;">
+                        <div class="qna-header-card" style="margin-bottom: 20px;">
+                            <div class="qna-header-title">
+                                <h2 style="font-size: 20px; font-weight: 800; color: #f8fafc; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                                    📅 주요 일정 &amp; 플랫폼 (Event &amp; Link)
+                                </h2>
+                                <p class="qna-subtitle" style="font-size: 13px; color: #94a3b8; margin: 0;">
+                                    주요 금융 기관·플랫폼 바로가기 및 이번 주 국내·외 핵심 경제 이벤트를 실시간으로 확인합니다.
+                                </p>
+                            </div>
+
+                            <!-- 주요 기관 & 금융 플랫폼 바로가기 (7개 링크) -->
+                            <div class="quick-tags-row" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.12);">
+                                <span class="tags-label" style="font-size: 12.5px; font-weight: 700; color: #cbd5e1;">🏛️ 주요 기관 &amp; 금융 플랫폼 바로가기:</span>
+                                <a href="https://www.fsc.go.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 금융위원회 🔗
+                                </a>
+                                <a href="https://www.fss.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 금융감독원 🔗
+                                </a>
+                                <a href="https://www.bok.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #34d399; font-weight: 500;">
+                                    🏛️ 한국은행 🔗
+                                </a>
+                                <a href="https://saveticker.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(168, 85, 247, 0.12); border-color: #a855f7; color: #c084fc; font-weight: 500;">
+                                    💡 SAVE (세이브) 🔗
+                                </a>
+                                <a href="https://seibro.or.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(56, 189, 248, 0.12); border-color: #38bdf8; color: #38bdf8; font-weight: 500;">
+                                    📊 SEIBro (세이브로) 🔗
+                                </a>
+                                <a href="https://kr.investing.com" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.12); border-color: #f59e0b; color: #fbbf24; font-weight: 500;">
+                                    📈 Investing (인베스팅) 🔗
+                                </a>
+                                <a href="https://www.yna.co.kr" target="_blank" rel="noopener noreferrer" class="tag-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #f87171; font-weight: 500;">
+                                    📰 연합뉴스 🔗
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 📅 주요 경제 이벤트 캘린더 카드 -->
+                        <div class="calendar-event-card" id="calendarEventCard">
+                            <div class="calendar-card-header">
+                                <div class="calendar-title-row">
+                                    <span class="calendar-icon">📅</span>
+                                    <h3 class="calendar-title" style="color: #f97316 !important;">이번 주 주요 경제 이벤트</h3>
+                                    <span class="calendar-period" id="calendarPeriodLabel">로딩 중...</span>
+                                </div>
+                                <div class="calendar-category-tabs" id="calendarCategoryTabs">
+                                    <button class="cal-tab active" onclick="filterCalendarEvents('ALL')">전체</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('미국 경제지표')">🇺🇸 미국 지표</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 경제지표')">🇰🇷 국내 지표</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('빅테크 실적')">🏢 빅테크 실적</button>
+                                    <button class="cal-tab" onclick="filterCalendarEvents('국내 주요 실적')">🇰🇷 국내 실적</button>
+                                </div>
+                            </div>
+                            <div class="calendar-events-list" id="calendarEventsList">
+                                <div class="calendar-loading">📡 경제 이벤트 일정을 불러오는 중...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1186,6 +1220,10 @@
         <button class="mobile-nav-btn" id="mNavForwardTest" onclick="switchAssetType('FORWARD_TEST')">
             <span class="m-nav-icon">🧪</span>
             <span class="m-nav-label">Forward Test</span>
+        </button>
+        <button class="mobile-nav-btn" id="mNavEventLink" onclick="switchAssetType('EVENT_LINK')">
+            <span class="m-nav-icon">📅</span>
+            <span class="m-nav-label">Event/Link</span>
         </button>
     </nav>
 

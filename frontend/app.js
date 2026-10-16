@@ -406,11 +406,13 @@ function switchAssetType(assetType) {
     const portfolioView = document.getElementById('portfolioDashboardView');
     const qaView = document.getElementById('qaDashboardView');
     const ftSection = document.getElementById('forwardTestSection');
+    const eventLinkView = document.getElementById('eventLinkDashboardView');
     const stockGrid = document.getElementById('stockGrid');
     const navActionsGroup = document.getElementById('navActionsGroup');
     const toolbarActions = document.getElementById('portfolioActionToolbar');
 
     if (ftSection) ftSection.style.display = 'none';
+    if (eventLinkView) eventLinkView.style.display = 'none';
 
     if (assetType === 'PORTFOLIO') {
         const mBtn = document.getElementById('mNavPortfolio');
@@ -420,6 +422,7 @@ function switchAssetType(assetType) {
 
         if (portfolioView) portfolioView.style.display = 'block';
         if (qaView) qaView.style.display = 'none';
+        if (eventLinkView) eventLinkView.style.display = 'none';
         if (summarySec) summarySec.style.display = '';
         if (stockGrid) stockGrid.style.display = 'grid';
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
@@ -447,8 +450,28 @@ function switchAssetType(assetType) {
         if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'none';
         if (qaView) qaView.style.display = 'block';
+        if (eventLinkView) eventLinkView.style.display = 'none';
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'none';
+        // F9B: Q&A 진입 시 loadUpcomingCalendar() 호출 완전 제거
+        return;
+    }
+
+    if (assetType === 'EVENT_LINK') {
+        currentAssetType = 'EVENT_LINK';
+        const btn = document.getElementById('navEventLink');
+        const mBtn = document.getElementById('mNavEventLink');
+        if (btn) btn.classList.add('active');
+        if (mBtn) mBtn.classList.add('active');
+        if (portfolioView) portfolioView.style.display = 'none';
+        if (qaView) qaView.style.display = 'none';
+        if (eventLinkView) eventLinkView.style.display = 'block';
+        if (summarySec) summarySec.style.display = 'none';
+        if (stockGrid) stockGrid.style.display = 'none';
+        if (ftSection) ftSection.style.display = 'none';
+        if (navActionsGroup) navActionsGroup.style.display = 'flex';
+        if (toolbarActions) toolbarActions.style.display = 'none';
+        // F9B: Event & Link 진입 시에만 Lazy Load
         loadUpcomingCalendar();
         return;
     }
@@ -461,6 +484,7 @@ function switchAssetType(assetType) {
         if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'block'; // keep parent visible
         if (qaView) qaView.style.display = 'none';
+        if (eventLinkView) eventLinkView.style.display = 'none';
         if (summarySec) summarySec.style.display = 'none';
         if (stockGrid) stockGrid.style.display = 'none';
         if (ftSection) ftSection.style.display = 'block';
@@ -476,6 +500,7 @@ function switchAssetType(assetType) {
         if (mBtn) mBtn.classList.add('active');
         if (portfolioView) portfolioView.style.display = 'block';
         if (qaView) qaView.style.display = 'none';
+        if (eventLinkView) eventLinkView.style.display = 'none';
         if (summarySec) summarySec.style.display = 'none';
         if (stockGrid) stockGrid.style.display = 'none';
         if (ftSection) ftSection.style.display = 'none';
@@ -506,6 +531,7 @@ function switchAssetType(assetType) {
     if (toolbarActions) toolbarActions.style.display = 'flex';
     if (portfolioView) portfolioView.style.display = 'block';
     if (qaView) qaView.style.display = 'none';
+    if (eventLinkView) eventLinkView.style.display = 'none';
 
     currentAssetType = assetType;
     activeAssetCategory = assetType;
@@ -563,6 +589,29 @@ function toggleCardAccordion(ticker) {
 }
 
 // AI Q&A Stock / ETF Identification Engine Handlers
+const DEFAULT_QA_SUMMARY = "이 종목의 수급, 기술적 상태, 재무현황, 기업가치, 주요 리스크를 종합적으로 분석해줘.";
+let lastAutoQaTicker = null;
+
+function runAutoQaSummary(force = false) {
+    if (!currentQaTarget || !currentQaTarget.is_identified || !currentQaTarget.code) return;
+    if (isQaSubmitting) return;
+
+    // 배지 직접 클릭(force === true)이 아닌 자동 실행인 경우 동일 종목 중복 실행 방지
+    if (!force && lastAutoQaTicker === currentQaTarget.code) return;
+
+    lastAutoQaTicker = currentQaTarget.code;
+    submitQaQuestion({ questionOverride: DEFAULT_QA_SUMMARY, isAutoSummary: true });
+}
+window.runAutoQaSummary = runAutoQaSummary;
+
+function handleTargetBadgeClick(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!currentQaTarget || currentQaTarget.is_identified !== true) return;
+    if (isQaSubmitting) return;
+    runAutoQaSummary(true);
+}
+window.handleTargetBadgeClick = handleTargetBadgeClick;
+
 let currentQaTarget = { name: "삼성전자", code: "005930", market: "KOSPI", asset_type: "STOCK", manager: "", is_identified: true };
 let qaSearchDebounceTimer = null;
 
@@ -584,6 +633,17 @@ function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager
             badge.style.borderColor = "#38bdf8";
             badge.style.color = "#38bdf8";
         }
+
+        // F9D-R: 실제 선택 후 is_identified === true일 때만 클릭 가능 상태로 활성화
+        if (currentQaTarget.is_identified === true) {
+            badge.style.cursor = 'pointer';
+            badge.setAttribute('title', '클릭하면 종합 리포트를 다시 조회합니다.');
+            badge.onclick = handleTargetBadgeClick;
+        } else {
+            badge.style.cursor = 'default';
+            badge.removeAttribute('title');
+            badge.onclick = null;
+        }
     }
     const title = document.getElementById('ansTargetTitle');
     if (title) {
@@ -601,6 +661,9 @@ function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager
     // 선택 완료 후 검색 입력창 초기화
     const inputEl = document.getElementById('qaTickerInput');
     if (inputEl) inputEl.value = '';
+
+    // F9D: 종목/ETF 확정 선택 즉시 기본 근거 기반 종합리포트 자동 실행
+    runAutoQaSummary(false);
 }
 
 function handleQaSearch(val) {
@@ -623,6 +686,9 @@ function handleQaSearch(val) {
         badge.innerHTML = `⏳ 검색 선택 중...`;
         badge.style.borderColor = "#f59e0b";
         badge.style.color = "#f59e0b";
+        badge.style.cursor = 'default';
+        badge.removeAttribute('title');
+        badge.onclick = null;
     }
 
     qaSearchDebounceTimer = setTimeout(async () => {
@@ -720,25 +786,41 @@ document.addEventListener('click', (e) => {
     }
 });
 
-function selectQuickPrompt(promptText) {
-    const txtArea = document.getElementById('qaQuestionText');
-    if (txtArea) {
-        txtArea.value = promptText;
-        txtArea.focus();
-    }
-}
+let isQaSubmitting = false;
 
-async function submitQaQuestion() {
-    // 🛡️ CRITICAL GUARDRAIL: 확실하게 종목이 식별되지 않으면 질문 전송 차단
-    if (!currentQaTarget || !currentQaTarget.is_identified) {
-        alert('⚠️ 질문 대상 종목/ETF가 명확히 확정 선택되지 않았습니다!\n\n검색어 입력 후 하단 후보 목록에서 정확한 종목/ETF를 클릭하여 선택해주세요.');
+function selectQuickPrompt(promptText) {
+    if (isQaSubmitting) return;
+
+    if (!currentQaTarget || !currentQaTarget.is_identified || !currentQaTarget.code) {
+        alert('먼저 분석할 종목 또는 ETF를 선택하세요.');
         const inputEl = document.getElementById('qaTickerInput');
         if (inputEl) inputEl.focus();
         return;
     }
 
     const txtArea = document.getElementById('qaQuestionText');
-    const question = txtArea ? txtArea.value.trim() : '';
+    if (txtArea) {
+        txtArea.value = promptText;
+    }
+    submitQaQuestion();
+}
+
+async function submitQaQuestion(options = {}) {
+    if (isQaSubmitting) return;
+
+    // 🛡️ CRITICAL GUARDRAIL: 확실하게 종목이 식별되지 않으면 질문 전송 차단
+    if (!currentQaTarget || !currentQaTarget.is_identified || !currentQaTarget.code) {
+        alert('먼저 분석할 종목 또는 ETF를 선택하세요.');
+        const inputEl = document.getElementById('qaTickerInput');
+        if (inputEl) inputEl.focus();
+        return;
+    }
+
+    const questionOverride = options && options.questionOverride;
+    const isAutoSummary = options && options.isAutoSummary;
+
+    const txtArea = document.getElementById('qaQuestionText');
+    const question = questionOverride || (txtArea ? txtArea.value.trim() : '');
     if (!question) {
         alert('질문을 입력해주거나 추천 질문을 선택해주세요.');
         return;
@@ -752,20 +834,52 @@ async function submitQaQuestion() {
         detailLabel = currentQaTarget.asset_type === 'ETF' ? `[ETF] ${currentQaTarget.name} (${currentQaTarget.code}) | 운용사: ${currentQaTarget.manager}` : `[${currentQaTarget.market}] ${currentQaTarget.name} (${currentQaTarget.code})`;
     }
 
-    document.getElementById('ansTargetTitle').innerText = `${detailLabel} Q&A 근거 기반 종합 리포트`;
-    document.getElementById('ansText').innerText = `'${question}' 질문에 대한 근거 수집 및 분석을 진행 중입니다...`;
+    const ansTitle = document.getElementById('ansTargetTitle');
+    if (ansTitle) ansTitle.innerText = `${detailLabel} Q&A 근거 기반 종합 리포트`;
+    const ansText = document.getElementById('ansText');
+    if (ansText) {
+        if (isAutoSummary) {
+            ansText.innerText = `'${currentQaTarget.name}' 종합 분석(수급·기술·재무·기업가치·리스크) 근거 수집 및 분석을 진행 중입니다...`;
+        } else {
+            ansText.innerText = `'${question}' 질문에 대한 근거 수집 및 분석을 진행 중입니다...`;
+        }
+    }
 
     const appDataRowEl = document.getElementById('appDataRow');
     if (appDataRowEl) {
         appDataRowEl.innerHTML = `<span class="app-data-badge">📱 [앱 포트폴리오] 조회 중...</span>`;
     }
 
-    // STEP 3 뉴스, STEP 4 공식자료, STEP 6 종합 답변 병렬 처리
-    await Promise.all([
-        fetchAndRenderQaNews(currentQaTarget.code, currentQaTarget.name, question),
-        fetchAndRenderOfficialDocs(currentQaTarget.code, currentQaTarget.name, question, currentQaTarget.asset_type, currentQaTarget.manager || ''),
-        fetchAndRenderGroundedAnswer(currentQaTarget.code, currentQaTarget.name, question, currentQaTarget.asset_type, currentQaTarget.manager || '')
-    ]);
+    // F9D: 리포트 카드 로딩 상태 즉시 노출
+    const ansCard = document.getElementById('qaAnswerCard');
+    if (ansCard) ansCard.style.display = 'block';
+
+    // 로딩 상태 및 중복 submit 방지
+    isQaSubmitting = true;
+    const submitBtn = document.getElementById('btnQaSubmit');
+    const origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span>⏳</span><span>분석 중...</span>`;
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
+    }
+    const quickPromptRow = document.querySelector('.quick-prompts-row');
+    if (quickPromptRow) quickPromptRow.style.pointerEvents = 'none';
+
+    try {
+        // F9C: /api/qna/answer 단일 호출로 통합 (News/DART 중복 호출 완전 제거)
+        await fetchAndRenderGroundedAnswer(currentQaTarget.code, currentQaTarget.name, question, currentQaTarget.asset_type, currentQaTarget.manager || '');
+    } finally {
+        isQaSubmitting = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origBtnHtml;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+        }
+        if (quickPromptRow) quickPromptRow.style.pointerEvents = 'auto';
+    }
 }
 
 async function fetchAndRenderQaNews(ticker, name, query) {
@@ -792,9 +906,17 @@ async function fetchAndRenderQaNews(ticker, name, query) {
     }
 }
 
-function renderQaNewsItems(items) {
+function renderQaNewsSection(items) {
+    const sectionEl = document.getElementById('qaNewsSection');
     const container = document.getElementById('qaNewsContainer');
     if (!container) return;
+
+    if (sectionEl) sectionEl.style.display = 'block';
+
+    if (!items || items.length === 0) {
+        container.innerHTML = `<div style="padding: 18px 12px; font-size: 13px; color: #94a3b8; text-align: center; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.08); border-radius: 8px;">현재 확인된 최신 뉴스가 없습니다.</div>`;
+        return;
+    }
 
     let html = '';
     items.forEach(item => {
@@ -805,24 +927,28 @@ function renderQaNewsItems(items) {
             <div class="news-card-item">
                 <div class="news-card-header">
                     <div class="news-tags-group">
-                        <span class="news-cat-badge cat-${item.category}">${item.category}</span>
+                        <span class="news-cat-badge cat-${item.category || '일반'}">${item.category || '일반'}</span>
                         ${dupeBadge}
                     </div>
                     <span class="news-imp-badge">${impIcon}</span>
                 </div>
                 <div class="news-card-title">
-                    <a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a>
+                    <a href="${item.url || '#'}" target="_blank" rel="noopener noreferrer">${item.title}</a>
                 </div>
                 <div class="news-card-summary">${item.summary || '상세 내용 없음'}</div>
                 <div class="news-card-footer">
-                    <span>출처: ${item.source}</span>
-                    <span>발행일: ${item.pub_date}</span>
+                    <span>출처: ${item.source || '금융뉴스'}</span>
+                    <span>발행일: ${item.pub_date || '-'}</span>
                 </div>
             </div>
         `;
     });
 
     container.innerHTML = html;
+}
+
+function renderQaNewsItems(items) {
+    renderQaNewsSection(items);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1028,6 +1154,12 @@ async function fetchAndRenderGroundedAnswer(ticker, name, query, assetType = 'ST
         if (!resp.ok) throw new Error("Q&A 종합 답변 API 호출 실패");
         const data = await resp.json();
 
+        // F9B: 응답 성공 시에만 리포트 카드 노출
+        const ansCard = document.getElementById('qaAnswerCard');
+        if (ansCard) {
+            ansCard.style.display = 'block';
+        }
+
         // 0. STEP 8 앱 보유 포트폴리오 데이터 배지
         if (appDataRowEl && data.app_user_data) {
             const ud = data.app_user_data;
@@ -1113,12 +1245,19 @@ async function fetchAndRenderGroundedAnswer(ticker, name, query, assetType = 'ST
             renderCitationItems(data.citations);
             attachInlineCitationsToAnswer(data.citations);
         }
+
+        // F9C: 단일 응답에서 news_items 및 official_items 렌더링
+        renderQaNewsSection(data.news_items || []);
+        if (data.official_items && data.official_items.length > 0) {
+            renderOfficialDocItems(data.official_items, data.intent);
+        }
     } catch (e) {
         console.error("Grounded Answer Fetch Error:", e);
         if (ansTextEl) ansTextEl.innerText = "현재 확인 가능한 신뢰할 수 있는 자료만으로는 판단하기 어렵습니다.";
         if (appDataRowEl) {
             appDataRowEl.innerHTML = `<span class="app-data-item unowned">📱 [앱 데이터] 일시적 조회 지연 (미보유 또는 통신 지연)</span>`;
         }
+        renderQaNewsSection([]);
     }
 }
 
