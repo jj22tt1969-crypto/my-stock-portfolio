@@ -615,34 +615,147 @@ window.handleTargetBadgeClick = handleTargetBadgeClick;
 let currentQaTarget = { name: "삼성전자", code: "005930", market: "KOSPI", asset_type: "STOCK", manager: "", is_identified: true };
 let qaSearchDebounceTimer = null;
 
+// F10B-3: Q&A 선택 종목 초기화 / Close 핸들러
+function clearQaTargetContext(e) {
+    if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+    }
+
+    // 1. Target 상태 초기화 (미식별 상태)
+    currentQaTarget = { name: "", code: "", market: "", asset_type: "", manager: "", is_identified: false };
+    lastAutoQaTicker = null; // F10B-3: 동일 종목 재선택 시 자동분석 duplicate guard 해제
+
+    // 2. Target Badge 초기화 (종목 미선택 초기 상태)
+    const badge = document.getElementById('qaTargetBadge');
+    if (badge) {
+        badge.innerHTML = `<span class="qa-badge-text">🔍 분석할 종목을 검색하세요</span>`;
+        badge.style.borderColor = "#475569";
+        badge.style.color = "#94a3b8";
+        badge.style.cursor = "default";
+        badge.removeAttribute("title");
+        badge.onclick = null;
+        badge.classList.remove('interactive');
+        badge.classList.add('empty');
+    }
+
+    // 3. 검색창, 질문창, 후보군 리스트 초기화
+    const tickerInput = document.getElementById('qaTickerInput');
+    if (tickerInput) tickerInput.value = '';
+    const questionText = document.getElementById('qaQuestionText');
+    if (questionText) questionText.value = '';
+    const candidateList = document.getElementById('qaCandidateList');
+    if (candidateList) candidateList.style.display = 'none';
+
+    // 4. 리포트 카드 숨김 및 모든 내부 상태 초기화
+    const ansCard = document.getElementById('qaAnswerCard');
+    if (ansCard) ansCard.style.display = 'none';
+
+    const ansTitle = document.getElementById('ansTargetTitle');
+    if (ansTitle) ansTitle.innerText = '종목 분석 리포트';
+
+    const ansText = document.getElementById('ansText');
+    if (ansText) ansText.innerText = '';
+
+    const ansFacts = document.getElementById('ansFacts');
+    if (ansFacts) ansFacts.innerHTML = '';
+
+    const ansAnalysis = document.getElementById('ansAnalysis');
+    if (ansAnalysis) ansAnalysis.innerHTML = '';
+
+    const ansCaution = document.getElementById('ansCaution');
+    if (ansCaution) ansCaution.innerText = '';
+
+    const ansOpinion = document.getElementById('ansActionOpinion');
+    if (ansOpinion) ansOpinion.innerText = '관망';
+
+    const ansConf = document.getElementById('ansConfidence');
+    if (ansConf) {
+        ansConf.innerText = '대기';
+        ansConf.className = 'conf-badge';
+    }
+
+    const appDataRow = document.getElementById('appDataRow');
+    if (appDataRow) {
+        appDataRow.innerHTML = `<span class="app-data-badge">📱 [앱 포트폴리오] 조회 대기</span>`;
+    }
+
+    const crossValBadge = document.getElementById('crossValStatusBadge');
+    if (crossValBadge) {
+        crossValBadge.className = 'cross-val-status-badge status-insufficient';
+        crossValBadge.innerHTML = '🛡️ 종목을 선택하면 교차 검증이 진행됩니다.';
+    }
+
+    // 5. 뉴스, 공시, 인용 컨테이너 완전 초기화
+    const newsSection = document.getElementById('qaNewsSection');
+    if (newsSection) newsSection.style.display = 'none';
+    const newsContainer = document.getElementById('qaNewsContainer');
+    if (newsContainer) newsContainer.innerHTML = '';
+
+    const officialContainer = document.getElementById('qaOfficialContainer');
+    if (officialContainer) officialContainer.innerHTML = '';
+
+    const citationContainer = document.getElementById('qaCitationContainer');
+    if (citationContainer) citationContainer.innerHTML = '';
+
+    // 6. Submit 진행 상태 해제 (안전장치)
+    isQaSubmitting = false;
+    const submitBtn = document.getElementById('btnQaSubmit');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `⚡ AI 질문하기`;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+    }
+    const quickPromptRow = document.querySelector('.quick-prompts-row');
+    if (quickPromptRow) quickPromptRow.style.pointerEvents = 'auto';
+}
+window.clearQaTargetContext = clearQaTargetContext;
+
 function setQaContext(name, code, market = "KOSPI", assetType = "STOCK", manager = "") {
     currentQaTarget = { name, code, market, asset_type: assetType, manager, is_identified: true };
 
     const badge = document.getElementById('qaTargetBadge');
     if (badge) {
+        let labelHtml = '';
+        let borderColor = '#38bdf8';
+        let color = '#38bdf8';
+
         if (code === 'MARKET') {
-            badge.innerHTML = `🌐 <strong>[MACRO] ${name}</strong>`;
-            badge.style.borderColor = "#fbbf24";
-            badge.style.color = "#f59e0b";
+            labelHtml = `🌐 <strong>[MACRO] ${name}</strong>`;
+            borderColor = "#fbbf24";
+            color = "#f59e0b";
         } else if (assetType === 'ETF') {
-            badge.innerHTML = `🧺 <strong>[ETF] ${name}</strong> (${code}) | 운용사: ${manager || '기타'}`;
-            badge.style.borderColor = "#a855f7";
-            badge.style.color = "#c084fc";
+            labelHtml = `🧺 <strong>[ETF] ${name}</strong> (${code}) | 운용사: ${manager || '기타'}`;
+            borderColor = "#a855f7";
+            color = "#c084fc";
         } else {
-            badge.innerHTML = `📈 <strong>[${market}] ${name}</strong> (${code})`;
-            badge.style.borderColor = "#38bdf8";
-            badge.style.color = "#38bdf8";
+            labelHtml = `📈 <strong>[${market}] ${name}</strong> (${code})`;
+            borderColor = "#38bdf8";
+            color = "#38bdf8";
         }
+
+        // F10B-3: 종목 확정 시 Close 버튼(×) 포함 렌더링
+        badge.innerHTML = `
+            <span class="qa-badge-text">${labelHtml}</span>
+            <button type="button" class="qa-target-close-btn" onclick="clearQaTargetContext(event)" title="종목 선택 해제 (초기화)" aria-label="종목 선택 해제">×</button>
+        `;
+        badge.style.borderColor = borderColor;
+        badge.style.color = color;
 
         // F9D-R: 실제 선택 후 is_identified === true일 때만 클릭 가능 상태로 활성화
         if (currentQaTarget.is_identified === true) {
             badge.style.cursor = 'pointer';
             badge.setAttribute('title', '클릭하면 종합 리포트를 다시 조회합니다.');
             badge.onclick = handleTargetBadgeClick;
+            badge.classList.remove('empty');
+            badge.classList.add('interactive');
         } else {
             badge.style.cursor = 'default';
             badge.removeAttribute('title');
             badge.onclick = null;
+            badge.classList.remove('interactive');
+            badge.classList.add('empty');
         }
     }
     const title = document.getElementById('ansTargetTitle');
@@ -676,19 +789,32 @@ function handleQaSearch(val) {
         if (listEl) listEl.style.display = 'none';
         if (!currentQaTarget.is_identified && currentQaTarget.name) {
             setQaContext(currentQaTarget.name, currentQaTarget.code, currentQaTarget.market, currentQaTarget.asset_type, currentQaTarget.manager);
+        } else if (!currentQaTarget.is_identified) {
+            // F10B-3: 종목이 해제된 상태에서 검색어를 지웠을 때는 초기 미선택 상태 유지
+            if (badge) {
+                badge.innerHTML = `<span class="qa-badge-text">🔍 분석할 종목을 검색하세요</span>`;
+                badge.style.borderColor = "#475569";
+                badge.style.color = "#94a3b8";
+                badge.style.cursor = "default";
+                badge.removeAttribute("title");
+                badge.onclick = null;
+                badge.classList.remove('interactive');
+                badge.classList.add('empty');
+            }
         }
         return;
     }
 
-    // 검색어 변경 시 식별 미확정 상태로 전환 (Guardrail)
+    // 검색어 변경 시 식별 미확정 상태로 전환 (Guardrail - Close 버튼 숨김)
     currentQaTarget.is_identified = false;
     if (badge) {
-        badge.innerHTML = `⏳ 검색 선택 중...`;
+        badge.innerHTML = `<span class="qa-badge-text">⏳ 검색 선택 중...</span>`;
         badge.style.borderColor = "#f59e0b";
         badge.style.color = "#f59e0b";
         badge.style.cursor = 'default';
         badge.removeAttribute('title');
         badge.onclick = null;
+        badge.classList.remove('interactive');
     }
 
     qaSearchDebounceTimer = setTimeout(async () => {
@@ -700,7 +826,7 @@ function handleQaSearch(val) {
                     listEl.style.display = 'block';
                 }
                 if (badge) {
-                    badge.innerHTML = `⚠️ 검색 오류`;
+                    badge.innerHTML = `<span class="qa-badge-text">⚠️ 검색 오류</span>`;
                     badge.style.borderColor = "#ef4444";
                     badge.style.color = "#ef4444";
                 }
@@ -715,7 +841,7 @@ function handleQaSearch(val) {
                 listEl.style.display = 'block';
             }
             if (badge) {
-                badge.innerHTML = `⚠️ 네트워크 오류`;
+                badge.innerHTML = `<span class="qa-badge-text">⚠️ 네트워크 오류</span>`;
                 badge.style.borderColor = "#ef4444";
                 badge.style.color = "#ef4444";
             }
@@ -740,7 +866,7 @@ function renderCandidateList(candidates) {
         listEl.innerHTML = `<div class="candidate-empty" style="padding: 12px; font-size: 12px; color: #94a3b8; text-align: center;">🔍 일치하는 종목/ETF 결과가 없습니다.</div>`;
         listEl.style.display = 'block';
         if (badge) {
-            badge.innerHTML = `⚠️ 검색 결과 없음`;
+            badge.innerHTML = `<span class="qa-badge-text">⚠️ 검색 결과 없음</span>`;
             badge.style.borderColor = "#64748b";
             badge.style.color = "#94a3b8";
         }
@@ -748,7 +874,7 @@ function renderCandidateList(candidates) {
     }
 
     if (badge) {
-        badge.innerHTML = `🔍 결과 (${uniqueCandidates.length}건) - 종목 선택 필요`;
+        badge.innerHTML = `<span class="qa-badge-text">🔍 결과 (${uniqueCandidates.length}건) - 종목 선택 필요</span>`;
         badge.style.borderColor = "#38bdf8";
         badge.style.color = "#38bdf8";
     }

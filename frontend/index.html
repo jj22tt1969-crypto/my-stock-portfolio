@@ -521,7 +521,10 @@
                                 <span class="context-label">📌 질문 대상 종목/ETF:</span>
                                 <div class="context-search-box" style="position: relative;">
                                     <input type="text" id="qaTickerInput" placeholder="종목명 또는 코드 검색 (예: 삼성전자, SK하이닉스, TIGER 미국S&P500)" oninput="handleQaSearch(this.value)" autocomplete="off">
-                                    <span class="context-badge" id="qaTargetBadge">삼성전자 (005930) | KOSPI</span>
+                                    <span class="context-badge interactive" id="qaTargetBadge" onclick="handleTargetBadgeClick(event)" title="클릭하면 종합 리포트를 다시 조회합니다." style="cursor: pointer;">
+                                        <span class="qa-badge-text">📈 <strong>[KOSPI] 삼성전자</strong> (005930)</span>
+                                        <button type="button" class="qa-target-close-btn" onclick="clearQaTargetContext(event)" title="종목 선택 해제 (초기화)" aria-label="종목 선택 해제">×</button>
+                                    </span>
                                     <div id="qaCandidateList" class="qa-candidate-list" style="display: none;"></div>
                                 </div>
                             </div>
