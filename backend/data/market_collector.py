@@ -170,94 +170,114 @@ def fetch_market_indices() -> dict:
 
 def fetch_stock_news(ticker: str, stock_name: str, count: int = 5, query: str = "") -> dict:
     """
-    종목 주요 뉴스 수집 (네이버 증권 뉴스 iframe 파싱)
+    F10C: 종목 주요 뉴스 수집
+    1차 Source: Naver Mobile Stock News API (m.stock.naver.com/api/news/stock/{ticker})
+    Fallback: Google News RSS (when:1d -> when:7d -> when:30d)
     """
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     news_items = []
     
     try:
         import urllib3
+        import html
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
-        # 1. 네이버 증권 종목 뉴스 iframe 파싱 (MARKET이 아닌 경우에만)
-        if ticker != "MARKET":
-            url = f"https://finance.naver.com/item/news_news.naver?code={ticker}&page=1&sm=title_entity_id.basic"
-            resp = requests.get(url, headers=HEADERS, timeout=5, verify=False)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                rows = soup.select("table.type5 tr")
-                
-                for row in rows:
-                    title_tag = row.select_one("td.title a")
-                    info_tag = row.select_one("td.info")
-                    date_tag = row.select_one("td.date")
-                    
-                    if title_tag:
-                        title = title_tag.text.strip()
-                        if not title or title == "제목":
-                            continue
-                        href = title_tag.get("href", "")
-                        link = "https://finance.naver.com" + href if href.startswith("/") else href
-                        publisher = info_tag.text.strip() if info_tag else "네이버증권"
-                        pub_date = date_tag.text.strip() if date_tag else now_str[:10]
-                        
-                        # 사용자 요청: 실시간 뉴스는 당일 정보만 제공
-                        today_str = datetime.now().strftime("%Y.%m.%d")
-                        if not pub_date.startswith(today_str):
-                            continue
-                            
-                        news_items.append({
-                            "title": title,
-                            "link": link,
-                            "url": link,      # citation_engine이 url 필드 우선 사용
-                            "publisher": publisher,
-                            "pub_date": pub_date
-                        })
-                        
-                    if len(news_items) >= count:
-                        break
+        # 1. 1차 Source: 네이버 모바일 종목 뉴스 API (F10C: 구형 410 iframe 대체)
+        if ticker != "MARKET" and ticker:
+            try:
+                api_url = f"https://m.stock.naver.com/api/news/stock/{ticker}?pageSize=20&page=1"
+                resp = requests.get(api_url, headers=HEADERS, timeout=5, verify=False)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        for cluster in data:
+                            if isinstance(cluster, dict) and "items" in cluster:
+                                for item in cluster["items"]:
+                                    title_raw = item.get("title", "") or item.get("titleFull", "")
+                                    title = html.unescape(re.sub(r'<.*?>', '', title_raw)).strip()
+                                    if not title:
+                                        continue
+                                    body_raw = item.get("body", "")
+                                    body = html.unescape(re.sub(r'<.*?>', '', body_raw)).strip()
+                                    publisher = item.get("officeName", "네이버증권")
+                                    raw_dt = str(item.get("datetime", ""))
+                                    link = item.get("mobileNewsUrl") or f"https://n.news.naver.com/mnews/article/{item.get('officeId')}/{item.get('articleId')}"
+                                    
+                                    news_items.append({
+                                        "title": title,
+                                        "body": body,
+                                        "link": link,
+                                        "url": link,
+                                        "publisher": publisher,
+                                        "pub_date": raw_dt,
+                                        "source": "Naver Mobile News"
+                                    })
+            except Exception as naver_err:
+                logger.debug(f"Naver mobile news fetch error for {ticker}: {naver_err}")
 
-        # 2. Fallback: 네이버 통합 뉴스 RSS 검색 (증권 뉴스 부족 시)
-        if len(news_items) == 0 and stock_name:
+        # 2. Fallback: Google News RSS 단계적 검색 (네이버 유효 기사 부족 또는 MARKET 질의 시)
+        clean_name = re.sub(r"(\(주\)|주식회사|㈜)", "", stock_name).strip() if stock_name else ""
+        norm_name = re.sub(r"\s+", "", clean_name).lower() if clean_name else ""
+        
+        valid_naver_count = 0
+        if clean_name and ticker != "MARKET":
+            for it in news_items:
+                t_lower = it.get("title", "").lower()
+                b_lower = it.get("body", "").lower()
+                if (clean_name.lower() in t_lower or (norm_name and norm_name in re.sub(r"\s+", "", t_lower)) or
+                    clean_name.lower() in b_lower or (norm_name and norm_name in re.sub(r"\s+", "", b_lower))):
+                    valid_naver_count += 1
+        else:
+            valid_naver_count = len(news_items)
+
+        if valid_naver_count < count and stock_name:
             if ticker == "MARKET":
-                # 질문이 너무 길면 검색이 잘 안되므로, query는 제외하고 시황 관련 키워드만 사용하거나, query를 짧게 자릅니다.
                 short_query = query[:15] if query else ""
-                search_str = f"{short_query} (시황 OR 증시 OR 매크로 OR 경제) when:1d"
-                query_encoded = urllib.parse.quote(search_str.strip())
+                search_terms = [f"{short_query} (시황 OR 증시 OR 매크로 OR 경제) when:1d".strip()]
             else:
-                query_encoded = urllib.parse.quote(stock_name + " 주식 when:1d")
-            rss_url = f"https://news.google.com/rss/search?q={query_encoded}&hl=ko&gl=KR&ceid=KR:ko"
-            rss_resp = requests.get(rss_url, headers=HEADERS, timeout=5, verify=False)
-            if rss_resp.status_code == 200:
-                rss_soup = BeautifulSoup(rss_resp.text, 'xml')
-                items = rss_soup.select("item")
-                for item in items[:count]:
-                    t = item.select_one("title")
-                    l = item.select_one("link")
-                    d = item.select_one("pubDate")
-                    s = item.select_one("source")
-                    if t:
-                        link_str = l.text.strip() if l else "#"
-                        pub_date_str = d.text.strip()[:16] if d else now_str[:10]
-                        
-                        # 당일 뉴스만 필터링 (RSS 날짜는 RFC822 포맷: Mon, 31 Aug 2026)
-                        today = datetime.now()
-                        today_day = str(today.day)
-                        today_month_abbr = today.strftime("%b")
-                        is_today = (
-                            today_month_abbr in pub_date_str and
-                            (f" {today_day} " in pub_date_str or f", {today_day} " in pub_date_str)
-                        )
-                        if not is_today:
-                            continue
-                        
-                        news_items.append({
-                            "title": t.text.strip(),
-                            "link": link_str,
-                            "url": link_str,   # citation_engine이 url 필드 우선 사용
-                            "publisher": s.text.strip() if s else "주요 언론사",
-                            "pub_date": pub_date_str
-                        })
+                search_terms = [
+                    f'"{clean_name}" when:1d',
+                    f'"{clean_name}" when:7d',
+                    f'"{clean_name}" when:30d',
+                ]
+
+            for term in search_terms:
+                query_encoded = urllib.parse.quote(term)
+                rss_url = f"https://news.google.com/rss/search?q={query_encoded}&hl=ko&gl=KR&ceid=KR:ko"
+                try:
+                    rss_resp = requests.get(rss_url, headers=HEADERS, timeout=5, verify=False)
+                    if rss_resp.status_code == 200:
+                        rss_soup = BeautifulSoup(rss_resp.text, 'xml')
+                        items = rss_soup.select("item")
+                        added_from_term = 0
+                        for item in items:
+                            t = item.select_one("title")
+                            l = item.select_one("link")
+                            d = item.select_one("pubDate")
+                            s = item.select_one("source")
+                            if t:
+                                title = html.unescape(t.text.strip())
+                                link_str = l.text.strip() if l else "#"
+                                pub_date_str = d.text.strip() if d else now_str[:10]
+                                pub_name = s.text.strip() if s else "주요 언론사"
+                                
+                                news_items.append({
+                                    "title": title,
+                                    "body": title,
+                                    "link": link_str,
+                                    "url": link_str,
+                                    "publisher": pub_name,
+                                    "pub_date": pub_date_str,
+                                    "source": "Google News"
+                                })
+                                added_from_term += 1
+                        # 해당 기간에서 기사를 충분히 확보했으면 상위 기간 검색 생략
+                        if added_from_term >= count:
+                            break
+                except Exception as rss_err:
+                    logger.debug(f"Google RSS fetch error for {term}: {rss_err}")
+                    break
+
     except Exception as e:
         logger.warning(f"News fetch failed for {stock_name}({ticker}): {e}")
 
@@ -265,7 +285,7 @@ def fetch_stock_news(ticker: str, stock_name: str, count: int = 5, query: str = 
         return {
             "status": "데이터 없음",
             "updated_at": now_str,
-            "source": "Naver Finance News",
+            "source": "Naver Mobile News / Google RSS",
             "ticker": ticker,
             "stock_name": stock_name,
             "count": 0,
@@ -275,7 +295,7 @@ def fetch_stock_news(ticker: str, stock_name: str, count: int = 5, query: str = 
     return {
         "status": "정상",
         "updated_at": now_str,
-        "source": "Naver Finance News",
+        "source": "Naver Mobile News / Google RSS",
         "ticker": ticker,
         "stock_name": stock_name,
         "count": len(news_items),
