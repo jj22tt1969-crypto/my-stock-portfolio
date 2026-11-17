@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 from fastapi import FastAPI, Query, HTTPException, Body
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -50,6 +51,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(db.DatabaseUnavailableError)
+async def db_unavailable_exception_handler(request, exc: db.DatabaseUnavailableError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": {
+                "status": "error",
+                "error_code": "DB_UNAVAILABLE",
+                "db_source": getattr(exc, "db_source", "POSTGRESQL"),
+                "message": str(exc)
+            }
+        }
+    )
 
 @app.get("/api/health")
 def get_server_health():
@@ -382,8 +398,19 @@ def get_portfolio(asset_type: str = Query("STOCK", description="자산분류 ('S
         return {
             "status": "success",
             "asset_type": target_asset_type,
+            "db_source": data.get("db_source", db.get_db_source()),
             "data": data
         }
+    except db.DatabaseUnavailableError as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "error",
+                "error_code": "DB_UNAVAILABLE",
+                "db_source": getattr(e, "db_source", "POSTGRESQL"),
+                "message": str(e)
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -393,6 +420,16 @@ def get_portfolio_live_prices(asset_type: str = Query("STOCK", description="자�
     try:
         data = pe.get_portfolio_live_prices(asset_type=asset_type)
         return data
+    except db.DatabaseUnavailableError as e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "error",
+                "error_code": "DB_UNAVAILABLE",
+                "db_source": getattr(e, "db_source", "POSTGRESQL"),
+                "message": str(e)
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -13,13 +13,31 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio.db")
 
+
+class DatabaseUnavailableError(RuntimeError):
+    """운영 DATABASE_URL(PostgreSQL) 연결 실패 시 빈 SQLite로 Silent Fallback하지 않고 발생시키는 명시적 예외"""
+    def __init__(self, message: str, db_source: str = "POSTGRESQL"):
+        super().__init__(message)
+        self.error_code = "DB_UNAVAILABLE"
+        self.db_source = db_source
+
+
+def get_db_source() -> str:
+    """현재 환경변수 기준 설정된 DB Source ('POSTGRESQL' 또는 'SQLITE_LOCAL') 반환"""
+    database_url = (os.getenv("DATABASE_URL") or "").strip()
+    return "POSTGRESQL" if database_url else "SQLITE_LOCAL"
+
+
 def get_connection():
     """
-    DB 커넥션 생성 함수:
-    1. DATABASE_URL 환경변수가 존재할 경우 Supabase PostgreSQL 연결 시도
-    2. 연결 실패(DNS 에러, 타임아웃, 접속불가) 또는 DATABASE_URL 부재 시 기존 SQLite(portfolio.db)로 100% 안전 Fallback
+    DB 커넥션 생성 함수 (Production Fail-Closed 정책):
+    1. DATABASE_URL 환경변수가 설정되어 있는 경우:
+       - Supabase/PostgreSQL 연결 성공 -> (conn, "POSTGRESQL") 반환
+       - 연결 실패 -> 빈 SQLite로의 Silent Fallback 절대 금지, DatabaseUnavailableError 발생
+    2. DATABASE_URL이 설정되지 않은 로컬 개발 환경에서만:
+       - backend/data/portfolio.db SQLite 연결 허용 -> (conn, "SQLITE") 반환
     """
-    database_url = os.getenv("DATABASE_URL")
+    database_url = (os.getenv("DATABASE_URL") or "").strip()
     if database_url:
         try:
             import psycopg2
@@ -28,9 +46,11 @@ def get_connection():
             # Row 딕셔너리처럼 접근 가능하도록 extras.RealDictCursor 등록
             return conn, "POSTGRESQL"
         except Exception as e:
-            logger.warning(f"[DB Layer] Supabase PostgreSQL 연결 실패 ({e}). 로컬 SQLite(portfolio.db)로 안전하게 Fallback합니다.")
+            err_msg = f"DB_UNAVAILABLE: Supabase PostgreSQL 연결 실패 ({e}). 운영 DATABASE_URL 설정 시 빈 SQLite Fallback은 금지됩니다."
+            logger.error(f"[DB Layer] {err_msg}")
+            raise DatabaseUnavailableError(err_msg, db_source="POSTGRESQL") from e
 
-    # SQLite fallback
+    # DATABASE_URL이 없는 로컬 개발 환경에서만 SQLite fallback 허용
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -43,7 +63,11 @@ def get_cursor(conn, db_type):
     return conn.cursor()
 
 def init_db():
-    conn, db_type = get_connection()
+    try:
+        conn, db_type = get_connection()
+    except DatabaseUnavailableError as e:
+        logger.error(f"[DB Layer] init_db skipped due to DB_UNAVAILABLE (Fail-Closed): {e}")
+        return
     cursor = get_cursor(conn, db_type)
     
     if db_type == "POSTGRESQL":

@@ -78,11 +78,12 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
     사용자의 포트폴리오 분석 (asset_type: 'STOCK' 또는 'ETF' 지원, 30초 메모리 캐시 적용)
     """
     target_asset_type = asset_type.upper() if asset_type else "STOCK"
+    current_db_source = db.get_db_source()
     now_ts = time.time()
 
     if target_asset_type in _PORTFOLIO_ANALYSIS_CACHE:
         cached_ts, cached_res = _PORTFOLIO_ANALYSIS_CACHE[target_asset_type]
-        if now_ts - cached_ts < _PORTFOLIO_CACHE_TTL:
+        if (now_ts - cached_ts < _PORTFOLIO_CACHE_TTL) and cached_res.get("db_source") == current_db_source:
             return cached_res
 
     stocks = db.get_all_stocks(asset_type=target_asset_type)
@@ -90,6 +91,7 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
     if not stocks:
         empty_res = {
             "portfolio_empty": True,
+            "db_source": current_db_source,
             "message": "등록된 포트폴리오 종목이 없습니다. 종목을 추가해보세요.",
             "summary": {
                 "total_invested": 0,
@@ -283,6 +285,7 @@ def analyze_portfolio(asset_type: str = "STOCK") -> Dict[str, Any]:
 
     res = {
         "portfolio_empty": False,
+        "db_source": current_db_source,
         "summary": {
             "total_invested": round(total_invested, 0),
             "total_eval": round(total_eval, 0),
@@ -320,9 +323,10 @@ def get_portfolio_live_prices(asset_type: str = "STOCK") -> Dict[str, Any]:
     - 180일 일봉 파싱 및 복잡한 기술 지표 분석 없이 0.01초 내에 현재가 수치만 반환하여 10배 이상 빠름.
     """
     target_asset_type = asset_type.upper() if asset_type else "STOCK"
+    current_db_source = db.get_db_source()
     stocks = db.get_all_stocks(asset_type=target_asset_type)
     if not stocks:
-        return {"status": "success", "summary": {}, "items": []}
+        return {"status": "success", "db_source": current_db_source, "summary": {}, "items": []}
 
     from concurrent.futures import ThreadPoolExecutor
 
@@ -371,6 +375,7 @@ def get_portfolio_live_prices(asset_type: str = "STOCK") -> Dict[str, Any]:
     return {
         "status": "success",
         "asset_type": target_asset_type,
+        "db_source": current_db_source,
         "summary": {
             "total_invested": round(total_invested, 0),
             "total_eval": round(total_eval, 0),
