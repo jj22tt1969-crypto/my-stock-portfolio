@@ -5225,4 +5225,20 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     }
 }
 
+/* 🎯 QNA_RECOMMEND_ACTION_F11A: 추천 결과 닫기 & Forward Test 연동 스타일 */
+.rec-close-btn:hover {
+    color: #f8fafc !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+.btn-rec-forward {
+    transition: all 0.18s ease;
+}
+.btn-rec-forward:hover {
+    background: rgba(2, 132, 199, 0.45) !important;
+    border-color: #38bdf8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+
 
