@@ -490,7 +490,11 @@ function switchAssetType(assetType) {
         if (ftSection) ftSection.style.display = 'block';
         if (navActionsGroup) navActionsGroup.style.display = 'flex';
         if (toolbarActions) toolbarActions.style.display = 'none';
-        loadForwardTestDashboard();
+        // 🧪 Forward Test 진입 시: 성숙한 신호 자동 평가(POST) -> 대시보드 갱신(GET) 순차 실행
+        (async () => {
+            await syncForwardTestOutcomes();
+            await loadForwardTestDashboard();
+        })();
         return;
     }
 
@@ -4870,6 +4874,28 @@ function closeSingleQuoteResult() {
 // =========================================================
 // 🧪 7차 Forward Test 전진검증 UI 대시보드 로직
 // =========================================================
+let isForwardEvaluationRunning = false;
+
+/**
+ * 🧪 Forward Test 성숙 신호 자동 동기화
+ * - In-flight Guard (isForwardEvaluationRunning) 적용으로 동일 시점 중복 요청 및 탭 연타 방지
+ * - Fail-safe: 서버 오류나 네트워크 단절 시에도 대시보드 조회가 중단되지 않음
+ */
+async function syncForwardTestOutcomes() {
+    if (isForwardEvaluationRunning) return;
+    isForwardEvaluationRunning = true;
+    try {
+        const resp = await fetch('/api/forward-test/evaluate', { method: 'POST' });
+        if (!resp.ok) {
+            console.warn(`[ForwardTest] Auto-sync evaluate returned status ${resp.status}`);
+        }
+    } catch (e) {
+        console.warn('[ForwardTest] Auto-sync evaluate failed (fail-safe proceeding to dashboard):', e);
+    } finally {
+        isForwardEvaluationRunning = false;
+    }
+}
+
 async function loadForwardTestDashboard() {
     try {
         const resp = await fetch('/api/forward-test/dashboard');
@@ -5314,6 +5340,11 @@ function renderFundamentalShadowSection(fStats, horizon) {
 }
 
 async function triggerForwardTestEvaluation() {
+    if (isForwardEvaluationRunning) {
+        alert("이미 성과 추적이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+    }
+    isForwardEvaluationRunning = true;
     try {
         const resp = await fetch('/api/forward-test/evaluate', { method: 'POST' });
         if (!resp.ok) return;
@@ -5322,6 +5353,8 @@ async function triggerForwardTestEvaluation() {
         loadForwardTestDashboard();
     } catch (e) {
         console.error(e);
+    } finally {
+        isForwardEvaluationRunning = false;
     }
 }
 

@@ -430,7 +430,7 @@ def evaluate_forward_outcomes() -> Dict[str, Any]:
             up_dict["status_20d"] = 'COMPLETED'
 
         # max_gain & max_drawdown (D+20까지 성숙한 CASE에만 계산)
-        if is_20d_completed and days_after >= 20 and (row.get("max_drawdown") is None or "status_20d" in up_dict):
+        if is_20d_completed and days_after >= 20 and (row["max_drawdown"] is None or "status_20d" in up_dict):
             p_list = [base_price] + [float(x) for x in after_df.iloc[:20]["close_price"]]
             max_p = max(p_list)
             max_gain_val = round(((max_p - base_price) / base_price) * 100.0, 2)
