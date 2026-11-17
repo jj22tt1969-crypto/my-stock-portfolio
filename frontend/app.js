@@ -5138,7 +5138,15 @@ function renderFundamentalShadowSection(fStats, horizon) {
         if (validCnt < 5) {
             bannerEl.style.display = 'block';
             if (sampleTextEl) {
-                sampleTextEl.innerText = `현재 유효 표본 ${validCnt}건 — 아직 성과 판단 불가`;
+                sampleTextEl.innerHTML = `
+                    <div style="font-size: 14px; font-weight: 700; color: #f8fafc; margin-bottom: 4px;">
+                        재무 Snapshot ${validCnt}건 축적 중
+                    </div>
+                    <div style="font-size: 12.5px; color: #94a3b8; font-weight: 600; line-height: 1.5;">
+                        성과 완료 표본: D+5 ${comp['5D'] || 0}건 · D+10 ${comp['10D'] || 0}건 · D+20 ${comp['20D'] || 0}건<br>
+                        <span style="color: #fbbf24; font-size: 11.5px; font-weight: 700;">아직 성과 판단 불가</span>
+                    </div>
+                `;
             }
         } else {
             bannerEl.style.display = 'none';
