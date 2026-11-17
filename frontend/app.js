@@ -92,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initApp();
     initMobileKeyboardHandler();
     registerServiceWorker();
+    initMobileExitHandler();
 });
 
 function registerServiceWorker() {
@@ -6389,3 +6390,127 @@ async function refreshMobileApp() {
     }
 }
 window.refreshMobileApp = refreshMobileApp;
+
+// ============================================================================
+// 📱 F11B-B: 모바일 PWA Android 뒤로가기 앱 종료 확인 UX (Single-Trap Pattern)
+// ============================================================================
+let isExitModalActive = false;
+let isAppExiting = false;
+
+function isMobileExitContext() {
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isTouchScreen = ('ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
+    const isNarrowWidth = window.innerWidth <= 768;
+    return isMobileUA || isStandalone || (isTouchScreen && isNarrowWidth);
+}
+
+function armExitTrap() {
+    if (!isMobileExitContext() || isAppExiting) return;
+    if (!history.state || history.state.page !== 'app_active') {
+        try {
+            history.pushState({ page: 'app_active' }, '');
+        } catch (e) {
+            console.warn('[F11B-B] pushState error:', e);
+        }
+    }
+}
+
+function showAppExitModal() {
+    const modal = document.getElementById('appExitModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        isExitModalActive = true;
+    }
+}
+
+function hideAppExitModal() {
+    const modal = document.getElementById('appExitModal');
+    if (modal) {
+        modal.style.display = 'none';
+        isExitModalActive = false;
+    }
+}
+
+function handleMobilePopState(event) {
+    if (!isMobileExitContext() || isAppExiting) {
+        return;
+    }
+
+    if (isExitModalActive) {
+        // 이미 종료 모달이 떠 있을 때 다시 뒤로가기를 누르면 트랩 유지
+        armExitTrap();
+        return;
+    }
+
+    showAppExitModal();
+}
+
+function cancelAppExit() {
+    hideAppExitModal();
+    // 취소: 현재 메뉴/화면 상태 100% 유지하며 트랩 1회 재충전
+    armExitTrap();
+}
+
+function confirmAppExit() {
+    isAppExiting = true;
+    hideAppExitModal();
+
+    // 1. PWA standalone 창 닫기 시도
+    try {
+        window.close();
+    } catch (e) {
+        console.warn('[F11B-B] window.close() prevented:', e);
+    }
+
+    // 2. 브라우저 history 뒤로가기 시도
+    try {
+        window.history.back();
+    } catch (e) {
+        console.warn('[F11B-B] history.back() error:', e);
+    }
+
+    // 3. 브라우저 보안 제약으로 닫히지 않을 경우 안전 종료 안내 오버레이 표시
+    setTimeout(() => {
+        const existingOverlay = document.getElementById('appExitedOverlay');
+        if (!existingOverlay) {
+            const overlay = document.createElement('div');
+            overlay.id = 'appExitedOverlay';
+            overlay.className = 'app-exit-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0f172a;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#f8fafc;padding:24px;text-align:center;box-sizing:border-box;';
+            overlay.innerHTML = `
+                <div style="font-size:36px;margin-bottom:12px;">👋</div>
+                <h3 style="font-size:18px;font-weight:800;margin:0 0 8px 0;color:#38bdf8;">앱이 종료되었습니다</h3>
+                <p style="font-size:14px;color:#94a3b8;margin:0 0 20px 0;line-height:1.5;">홈 화면으로 이동하거나 브라우저 탭을 닫아주세요.</p>
+                <button type="button" onclick="window.location.reload()" style="padding:10px 20px;border-radius:8px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#cbd5e1;font-size:14px;font-weight:700;cursor:pointer;">앱 다시 시작</button>
+            `;
+            document.body.appendChild(overlay);
+        }
+    }, 300);
+}
+
+function initMobileExitHandler() {
+    if (!isMobileExitContext()) {
+        return;
+    }
+
+    // 초기 트랩 장전
+    armExitTrap();
+
+    // 첫 인터랙션(터치/클릭) 시 트랩 장전 보조 (브라우저 사용자 제스처 요구 대응)
+    window.addEventListener('touchstart', armExitTrap, { once: true, passive: true });
+    window.addEventListener('click', armExitTrap, { once: true, passive: true });
+
+    // popstate 이벤트 바인딩
+    window.removeEventListener('popstate', handleMobilePopState);
+    window.addEventListener('popstate', handleMobilePopState);
+}
+
+// 전역 window 바인딩
+window.initMobileExitHandler = initMobileExitHandler;
+window.cancelAppExit = cancelAppExit;
+window.confirmAppExit = confirmAppExit;
+window.showAppExitModal = showAppExitModal;
+window.hideAppExitModal = hideAppExitModal;
+

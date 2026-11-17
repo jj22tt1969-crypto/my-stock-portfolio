@@ -5240,5 +5240,112 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
 }
 
+/* 📱 F11B-B: 모바일 앱 종료 확인 모달 스타일 */
+.app-exit-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.app-exit-dialog {
+    width: 100%;
+    max-width: 320px;
+    border-radius: 16px;
+    background: #1e293b;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.85);
+    padding: 24px 20px;
+    text-align: center;
+    box-sizing: border-box;
+    animation: appExitFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes appExitFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.app-exit-icon {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+
+.app-exit-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0 0 8px 0;
+}
+
+.app-exit-desc {
+    font-size: 14px;
+    color: #cbd5e1;
+    margin: 0 0 22px 0;
+    line-height: 1.5;
+}
+
+.app-exit-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-exit-cancel {
+    flex: 1;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.btn-exit-cancel:hover, .btn-exit-cancel:active {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.btn-exit-confirm {
+    flex: 1;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    transition: all 0.18s ease;
+}
+
+.btn-exit-confirm:hover, .btn-exit-confirm:active {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5);
+    transform: translateY(-1px);
+}
+
+
 
 

@@ -15,7 +15,7 @@
     <!-- Google Fonts & Chart.js CDN -->
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/style.css?v=20261015_f7r4b">
+    <link rel="stylesheet" href="/style.css?v=20261117_f11bb">
 </head>
 <body>
     <div class="app-container">
@@ -1205,6 +1205,19 @@
         </div>
     </div>
 
+    <!-- 7. 모바일 앱 종료 확인 모달 (F11B-B) -->
+    <div id="appExitModal" class="app-exit-overlay" style="display: none;">
+        <div class="app-exit-dialog">
+            <div class="app-exit-icon">📱</div>
+            <h3 class="app-exit-title">앱 종료 확인</h3>
+            <p class="app-exit-desc">앱을 종료하시겠습니까?</p>
+            <div class="app-exit-actions">
+                <button type="button" id="btnExitCancel" class="btn-exit-cancel" onclick="cancelAppExit()">취소</button>
+                <button type="button" id="btnExitConfirm" class="btn-exit-confirm" onclick="confirmAppExit()">종료</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Bottom Navigation Bar (< 768px) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
         <button class="mobile-nav-btn" id="mNavPortfolio" onclick="switchAssetType('PORTFOLIO')">
@@ -1246,7 +1259,7 @@
         <button class="btn-pwa-reload" onclick="reloadPwaApp()">새로고침 적용</button>
     </div>
 
-    <script src="/app.js?v=20261015_f7r4b"></script>
+    <script src="/app.js?v=20261117_f11bb"></script>
     <script>
         // Sync market index values to mirror ticker items for seamless loop (0 duplicate IDs)
         document.addEventListener('DOMContentLoaded', function() {
