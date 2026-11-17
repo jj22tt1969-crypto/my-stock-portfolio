@@ -1242,6 +1242,40 @@ input:checked + .slider:before {
     transform: scale(0.95);
 }
 
+/* =========================================================
+   🧪 Forward Test Selected Target Close Button
+   ========================================================= */
+.ft-target-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    opacity: 0.8;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.ft-target-close-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    transform: scale(1.1);
+}
+
+.ft-target-close-btn:active {
+    transform: scale(0.95);
+}
+
 .quick-tags-row, .quick-prompts-row {
     display: flex;
     align-items: center;
@@ -4585,6 +4619,11 @@ button, input, select, textarea, .nav-item, .market-item, .tag-btn, .prompt-chip
         font-size: 13.5px !important;
         font-weight: 800 !important;
         border-radius: 10px !important;
+    }
+    .ft-target-close-btn {
+        min-width: 32px !important;
+        min-height: 32px !important;
+        font-size: 20px !important;
     }
     #ftCoreSignalGrid, #ftAssetTypeGrid {
         grid-template-columns: 1fr !important;

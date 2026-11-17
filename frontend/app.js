@@ -5334,6 +5334,58 @@ let ftCurrentStock = null;
 let ftSearchDebounceTimer = null;
 
 /**
+ * 🧪 Forward Test 선택 종목 카드 닫기 및 초기화 (UX 개선)
+ * - 현재 선택된 종목 상태(ftCurrentStock)만 리셋
+ * - 선택 종목 카드(ftAnalysisPanel) 숨김 및 초기상태 복귀
+ * - 검색 입력창(ftSearchInput) 및 등록 안내메시지(ftRegisterMsg) 초기화
+ * - 이미 등록된 forward_test_signals 기록은 절대 삭제하지 않음 (DB 영향 0)
+ * - 추적 이력 목록 및 성과(D+5/10/20) 결과 유지 (API DELETE 호출 금지)
+ * - 같은 종목 재선택 가능
+ */
+function ftClearSelectedStock(e) {
+    if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+    }
+
+    // 1. 현재 선택 종목 상태 clear (DB/API 호출 없음)
+    ftCurrentStock = null;
+
+    // 2. 검색 입력창 및 드롭다운 초기화
+    const input = document.getElementById('ftSearchInput');
+    if (input) input.value = '';
+    const dropdown = document.getElementById('ftSearchDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+
+    // 3. 분석 결과 카드 숨김 및 로딩/메시지 초기화
+    const panel = document.getElementById('ftAnalysisPanel');
+    if (panel) panel.style.display = 'none';
+
+    const loading = document.getElementById('ftAnalysisLoading');
+    if (loading) loading.style.display = 'none';
+
+    const msg = document.getElementById('ftRegisterMsg');
+    if (msg) {
+        msg.style.display = 'none';
+        msg.innerHTML = '';
+    }
+
+    // 4. 분석 패널 내부 텍스트 초기화 (재선택 시 이전 잔존 방지)
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+    setEl('ftAnalysisName', '');
+    setEl('ftAnalysisTicker', '');
+    setEl('ftAnalysisAssetType', '');
+    setEl('ftAnalysisPrice', '');
+    setEl('ftAnalysisAction', '');
+    setEl('ftAnalysisFCS', '');
+    setEl('ftAnalysisRSI', '');
+    setEl('ftAnalysisSmart', '');
+    setEl('ftAnalysisMA', '');
+    setEl('ftAnalysisTiming', '');
+}
+window.ftClearSelectedStock = ftClearSelectedStock;
+
+/**
  * 검색 인풋 디바운스 처리 — 기존 /api/stock/search API 재사용
  */
 function ftOnSearchInput(query) {
@@ -5561,6 +5613,7 @@ document.addEventListener('click', function (e) {
 window.ftOnSearchInput = ftOnSearchInput;
 window.ftSelectStock = ftSelectStock;
 window.ftCloseDropdown = ftCloseDropdown;
+window.ftClearSelectedStock = ftClearSelectedStock;
 window.ftRegisterTracking = ftRegisterTracking;
 window.loadForwardTestDashboard = loadForwardTestDashboard;
 window.triggerForwardTestEvaluation = triggerForwardTestEvaluation;
